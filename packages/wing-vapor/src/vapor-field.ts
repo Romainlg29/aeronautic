@@ -9,8 +9,17 @@ import {
   VORTEX_SPACING,
   type FlightState,
 } from "./aerodynamics";
+import { Vector3 } from "three";
 import { AIR_GAMMA, moist_air, type MoistAir } from "./atmosphere";
 import { CONDENSATION_MIN_RATIO, condensate } from "./condensation";
+import {
+  nearest_along,
+  straight_trails,
+  trail_point,
+  type TrailHistory,
+  type TrailLayout,
+  type TrailPaths,
+} from "./trails";
 import type { VaporAir, VaporAirframe, VaporFlight, VaporLook } from "./types";
 import {
   SHAPE_STATIONS,
@@ -163,6 +172,9 @@ export type VaporField = {
   tip_reach_m: number;
   tip_bound_m: number;
 
+  // How far along the air one trail point is from the next
+  trail_spacing_m: number;
+
   // The leading-edge vortex: where it starts, its circulation per metre aft
   // of there, the edge's length, its core and height per metre of local
   // semispan, where it bursts, and how wide it can fog
@@ -214,6 +226,9 @@ export type VaporGeometry = {
   field: VaporField;
   shape: WingShape;
   path: EdgePath;
+
+  // The tip vortices' centrelines, laid along the flight path
+  trails: TrailPaths;
 };
 
 /**
@@ -243,6 +258,33 @@ const smoothstep = (low: number, high: number, value: number): number => {
  * @returns 1 - the pressure ratio, or 1 if nothing in reach condenses
  */
 const condensing_deficit = (air: MoistAir, humidity_scale: number): number => {
+  // The same day asks the same question every frame
+  const key = `${air.temperature_k},${air.pressure_pa},${air.mixing_ratio},${humidity_scale}`;
+
+  if (key === condensing_memo.key) {
+    return condensing_memo.deficit;
+  }
+
+  const deficit = solve_condensing_deficit(air, humidity_scale);
+
+  condensing_memo.key = key;
+  condensing_memo.deficit = deficit;
+
+  return deficit;
+};
+
+const condensing_memo = { key: "", deficit: 1 };
+
+/**
+ * The bisection `condensing_deficit` remembers.
+ * @param air The free stream
+ * @param humidity_scale How much moister
+ * @returns 1 - the pressure ratio, or 1 if nothing in reach condenses
+ */
+const solve_condensing_deficit = (
+  air: MoistAir,
+  humidity_scale: number,
+): number => {
   let low = CONDENSATION_MIN_RATIO;
   let high = 1;
 
@@ -289,17 +331,39 @@ const vortex_deficit = (
  * @returns The deficit
  */
 export const tip_deficit = (
-  { field }: VaporGeometry,
+  { field, trails }: VaporGeometry,
+  x: number,
+  y: number,
+  z: number,
+): number =>
+  side_deficit(field, trails.positive, trails.spacing_m, 1, x, y, z) +
+  side_deficit(field, trails.negative, trails.spacing_m, -1, x, y, z);
+
+/**
+ * One tip vortex's deficit at one point.
+ * @param field The field
+ * @param points Its trail's points
+ * @param spacing_m How far apart they are
+ * @param side +1 or -1, which tip
+ * @param x Aft
+ * @param y Up
+ * @param z Out along the span
+ * @returns The deficit
+ */
+const side_deficit = (
+  field: VaporField,
+  points: Float32Array,
+  spacing_m: number,
+  side: number,
   x: number,
   y: number,
   z: number,
 ): number => {
-  const span = Math.abs(z);
   const tip_le = field.tip_leading_m;
   const tip_te = tip_le + field.tip_chord_m;
   const tip_y = field.tip_height_m;
 
-  const along = (x - tip_te) * field.cos_alpha + (y - tip_y) * field.sin_alpha;
+  const along = nearest_along(points, spacing_m, trail_layout(field), x, y, z);
 
   if (along < 0) {
     // Forming along the tip chord, from nothing at the leading edge
@@ -309,7 +373,7 @@ export const tip_deficit = (
     );
     const ax = Math.min(Math.max(x, tip_le), tip_te);
     const r2 =
-      (x - ax) ** 2 + (y - tip_y) ** 2 + (span - field.semispan_m) ** 2;
+      (x - ax) ** 2 + (y - tip_y) ** 2 + (z - side * field.semispan_m) ** 2;
 
     return vortex_deficit(
       field,
@@ -319,13 +383,8 @@ export const tip_deficit = (
     );
   }
 
-  const rolled = 1 - Math.exp(-along / (ROLLUP_SPANS * 2 * field.semispan_m));
-
-  const ax = tip_te + along * field.cos_alpha;
-  const ay = tip_y + along * (field.sin_alpha - field.tip_descent);
-  const az = field.semispan_m * (1 - (1 - VORTEX_SPACING) * rolled);
-
-  const r2 = (x - ax) ** 2 + (y - ay) ** 2 + (span - az) ** 2;
+  const at = trail_point(points, spacing_m, along, scratch_trail);
+  const r2 = (x - at.x) ** 2 + (y - at.y) ** 2 + (z - at.z) ** 2;
 
   return vortex_deficit(
     field,
@@ -334,6 +393,24 @@ export const tip_deficit = (
     field.tip_core2_m2 + field.tip_growth_m * along,
   );
 };
+
+/**
+ * How the tip vortices are laid, from a field.
+ * @param field The field
+ * @returns The layout
+ */
+export const trail_layout = (field: VaporField): TrailLayout => ({
+  tip_x: field.tip_leading_m + field.tip_chord_m,
+  tip_y: field.tip_height_m,
+  semispan_m: field.semispan_m,
+  cos_alpha: field.cos_alpha,
+  sin_alpha: field.sin_alpha,
+  descent: field.tip_descent,
+  rollup_m: ROLLUP_SPANS * 2 * field.semispan_m,
+  length_m: Math.max(field.tip_reach_m, 1),
+});
+
+const scratch_trail = new Vector3();
 
 /**
  * The leading-edge vortex's deficit at one point.
@@ -774,6 +851,8 @@ export const vapor_deficit = (
  * @param look How uneven the moisture is
  * @param shape The wing as a table, if it was captured; by default the
  *   airframe's trapezoid
+ * @param history The aircraft's path through the air, for the trails to
+ *   follow; without one they run straight back along the free stream
  * @returns The state
  */
 export const vapor_state = (
@@ -782,6 +861,7 @@ export const vapor_state = (
   conditions: VaporAir,
   look: Pick<VaporLook, "humidity_spread">,
   shape: WingShape = trapezoid_shape(airframe),
+  history?: TrailHistory,
 ): VaporState => {
   const air = moist_air(
     conditions.altitude_m,
@@ -854,6 +934,7 @@ export const vapor_state = (
     tip_descent,
     tip_reach_m: 0,
     tip_bound_m: 0,
+    trail_spacing_m: 1,
 
     edge_apex_m,
     edge_gradient:
@@ -878,7 +959,14 @@ export const vapor_state = (
     cone_bound_m: 0,
   };
 
-  const geometry: VaporGeometry = { field, shape, path };
+  // Straight for now: the tips' bounds below set how long they are, and they
+  // are laid along the history once that is known
+  const geometry: VaporGeometry = {
+    field,
+    shape,
+    path,
+    trails: straight_trails(trail_layout(field)),
+  };
 
   // The wing's extent outboard of the body, for the boxes
   let wing_front = Infinity;
@@ -921,16 +1009,39 @@ export const vapor_state = (
         MAX_TRAIL_M,
       );
 
-      const tip_le = field.tip_leading_m;
-      const tip_y = field.tip_height_m;
-      const end_x =
-        tip_le + field.tip_chord_m + field.tip_reach_m * field.cos_alpha;
-      const end_y =
-        tip_y + field.tip_reach_m * (field.sin_alpha - field.tip_descent);
-      const b = field.tip_bound_m;
+      const layout = trail_layout(field);
 
-      mins.push([tip_le - b, Math.min(tip_y, end_y) - b, -semispan - b]);
-      maxs.push([end_x + b, Math.max(tip_y, end_y) + b, semispan + b]);
+      geometry.trails = history
+        ? history.paths(layout)
+        : straight_trails(layout);
+
+      // Round the tips, and every point of both trails
+      const b = field.tip_bound_m;
+      const low: [number, number, number] = [
+        field.tip_leading_m - b,
+        field.tip_height_m - b,
+        -semispan - b,
+      ];
+      const high: [number, number, number] = [
+        field.tip_leading_m + field.tip_chord_m + b,
+        field.tip_height_m + b,
+        semispan + b,
+      ];
+
+      for (const points of [
+        geometry.trails.positive,
+        geometry.trails.negative,
+      ]) {
+        for (let index = 0; index < points.length; index += 3) {
+          for (let axis = 0; axis < 3; axis++) {
+            low[axis] = Math.min(low[axis], points[index + axis] - b);
+            high[axis] = Math.max(high[axis], points[index + axis] + b);
+          }
+        }
+      }
+
+      mins.push(low);
+      maxs.push(high);
     }
   }
 
@@ -1106,7 +1217,18 @@ export const vapor_state = (
     }
   }
 
-  return { air, flight: state, field, shape, path, bounds, visible };
+  field.trail_spacing_m = geometry.trails.spacing_m;
+
+  return {
+    air,
+    flight: state,
+    field,
+    shape,
+    path,
+    trails: geometry.trails,
+    bounds,
+    visible,
+  };
 };
 
 /**

@@ -27,14 +27,17 @@ import {
 import { vapor_constants, vapor_state, type VaporState } from "./vapor-field";
 import {
   create_shape_texture,
+  create_trail_texture,
   create_vapor_material,
   create_vapor_table,
   create_vapor_uniforms,
   write_shape_texture,
+  write_trail_texture,
   write_vapor_field,
   write_vapor_table,
   type VaporUniforms,
 } from "./vapor-material";
+import { TrailHistory } from "./trails";
 import { trapezoid_shape, type WingShape } from "./wing-shape";
 
 // One aircraft's vapour, drawn as one mesh in the scene
@@ -101,6 +104,17 @@ const unit_scale = new Vector3(1, 1, 1);
 let seeds = 0;
 
 /**
+ * Whether a change would change nothing.
+ * @param current What there is
+ * @param change What is asked for
+ * @returns Whether every field asked for already has that value
+ */
+const unchanged = <T extends object>(current: T, change: Partial<T>) =>
+  (Object.keys(change) as (keyof T)[]).every(
+    (key) => current[key] === change[key],
+  );
+
+/**
  * One aircraft's wing vapour: tip and leading-edge vortices, the sheet over
  * the wing, and the vapour cone.
  *
@@ -131,6 +145,10 @@ export class WingVapor {
   private _frame_options: WingVaporFrame = {};
   private readonly _table: DataTexture;
   private readonly _shape_texture: DataTexture;
+  private readonly _trail_texture: DataTexture;
+
+  // The aircraft's path through the air, for the trails to follow
+  private readonly _history = new TrailHistory();
   private _state: VaporState;
   private _table_key = "";
 
@@ -156,6 +174,7 @@ export class WingVapor {
 
     this._table = create_vapor_table();
     this._shape_texture = create_shape_texture();
+    this._trail_texture = create_trail_texture();
     this._captured = options.shape ?? null;
 
     const mesh = new Mesh(
@@ -164,6 +183,7 @@ export class WingVapor {
         uniforms: this.uniforms,
         table: this._table,
         shape: this._shape_texture,
+        trails: this._trail_texture,
         effects: this._effects,
       }),
     );
@@ -218,6 +238,8 @@ export class WingVapor {
    * @param flight The airspeed, the angle of attack, or both
    */
   update_flight(flight: Partial<VaporFlight>) {
+    if (unchanged(this._flight, flight)) return;
+
     this._flight = { ...this._flight, ...flight };
     this._state = this.refresh();
   }
@@ -228,6 +250,8 @@ export class WingVapor {
    * @param air The altitude, the temperature offset or the humidity
    */
   update_air(air: Partial<VaporAir>) {
+    if (unchanged(this._air, air)) return;
+
     this._air = { ...this._air, ...air };
     this._state = this.refresh();
   }
@@ -286,6 +310,8 @@ export class WingVapor {
    * @param look What to change
    */
   update_look(look: Partial<VaporLook>) {
+    if (unchanged(this._look, look)) return;
+
     this._look = { ...this._look, ...look };
     this.write_look();
     this._state = this.refresh();
@@ -314,6 +340,7 @@ export class WingVapor {
       uniforms: this.uniforms,
       table: this._table,
       shape: this._shape_texture,
+      trails: this._trail_texture,
       effects: next,
     });
 
@@ -336,6 +363,7 @@ export class WingVapor {
     this.mesh.material.dispose();
     this._table.dispose();
     this._shape_texture.dispose();
+    this._trail_texture.dispose();
   }
 
   /**
@@ -355,7 +383,10 @@ export class WingVapor {
       this._air,
       this._look,
       this._shape,
+      this._history,
     );
+
+    write_trail_texture(this._trail_texture, state.trails);
 
     if (rebuilt) {
       write_shape_texture(this._shape_texture, state.shape, state.path);
@@ -363,8 +394,15 @@ export class WingVapor {
 
     write_vapor_field(this.uniforms, state.field, vapor_constants(state.field));
 
-    this.uniforms.box_min.value.set(...state.bounds.min);
-    this.uniforms.box_max.value.set(...state.bounds.max);
+    // Nothing that can fog: a box of no size, which draws nothing. The mesh
+    // stays in the scene, so its frames still lay the trails' history
+    if (state.visible) {
+      this.uniforms.box_min.value.set(...state.bounds.min);
+      this.uniforms.box_max.value.set(...state.bounds.max);
+    } else {
+      this.uniforms.box_min.value.set(0, 0, 0);
+      this.uniforms.box_max.value.set(0, 0, 0);
+    }
 
     // The table only changes with the day, and the humidity's spread
     const key = [
@@ -381,9 +419,6 @@ export class WingVapor {
         condensation_table(state.air, this._look.humidity_spread),
       );
     }
-
-    // Nothing that can fog, nothing drawn: not even the box
-    this.mesh.visible = state.visible;
 
     return state;
   }
@@ -460,12 +495,31 @@ export class WingVapor {
     this._frame_number = renderer.info.frame;
 
     const now = performance.now();
-
-    if (this._last_ms >= 0) {
-      this.uniforms.time.value +=
-        Math.min(MAX_DELTA_S, (now - this._last_ms) / 1000) * this.time_scale;
-    }
+    const delta_s =
+      this._last_ms >= 0 ? ((now - this._last_ms) / 1000) * this.time_scale : 0;
 
     this._last_ms = now;
+    this.uniforms.time.value += Math.min(MAX_DELTA_S, delta_s);
+
+    // One more frame of flight through the air, and the trails laid back
+    // along it, in the frame the aircraft has now
+    this.mesh.matrixWorld.decompose(
+      scratch_position,
+      scratch_rotation,
+      scratch_scale,
+    );
+
+    const field = this._state.field;
+
+    this._history.advance(
+      delta_s,
+      scratch_rotation,
+      field.speed_m_s,
+      field.cos_alpha,
+      field.sin_alpha,
+      field.tip_reach_m,
+    );
+
+    this._state = this.refresh();
   }
 }

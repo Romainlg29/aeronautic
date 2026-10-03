@@ -2,8 +2,10 @@ import {
   ClampToEdgeWrapping,
   DataTexture,
   DataUtils,
+  FloatType,
   HalfFloatType,
   LinearFilter,
+  NearestFilter,
   RGBAFormat,
   Vector3,
 } from "three";
@@ -55,6 +57,7 @@ import { SHAPE_ROWS, vapor_field, type VaporFieldNodes } from "./tsl/field";
 import { patchiness } from "./tsl/noise";
 import type { VaporEffects } from "./types";
 import type { EdgePath, VaporConstants, VaporField } from "./vapor-field";
+import { TRAIL_POINTS, type TrailPaths } from "./trails";
 import { SHAPE_STATIONS, type WingShape } from "./wing-shape";
 
 // The vapour, drawn as one box round everything that can fog
@@ -110,6 +113,7 @@ const FIELD_KEYS: (keyof (VaporField & VaporConstants))[] = [
   "tip_descent",
   "tip_reach_m",
   "tip_bound_m",
+  "trail_spacing_m",
   "edge_apex_m",
   "edge_gradient",
   "edge_length_m",
@@ -342,6 +346,54 @@ export const write_shape_texture = (
 };
 
 /**
+ * Make the texture the tip vortices' trails ride in, a row each, to be filled
+ * every frame with `write_trail_texture`. Full floats, read texel by texel:
+ * a trail runs hundreds of metres, and half floats would put its points a
+ * quarter of a metre apart from where they are.
+ * @returns The texture
+ */
+export const create_trail_texture = (): DataTexture => {
+  const trails = new DataTexture(
+    new Float32Array(TRAIL_POINTS * 2 * 4),
+    TRAIL_POINTS,
+    2,
+    RGBAFormat,
+    FloatType,
+  );
+
+  trails.magFilter = NearestFilter;
+  trails.minFilter = NearestFilter;
+  trails.generateMipmaps = false;
+  trails.name = "WingVaporTrails";
+
+  return trails;
+};
+
+/**
+ * Write both trails into their texture.
+ * @param texture The texture
+ * @param trails The trails
+ */
+export const write_trail_texture = (
+  texture: DataTexture,
+  trails: TrailPaths,
+) => {
+  const data = texture.image.data as Float32Array;
+
+  [trails.positive, trails.negative].forEach((points, row) => {
+    for (let index = 0; index < TRAIL_POINTS; index++) {
+      const offset = (row * TRAIL_POINTS + index) * 4;
+
+      data[offset] = points[index * 3];
+      data[offset + 1] = points[index * 3 + 1];
+      data[offset + 2] = points[index * 3 + 2];
+    }
+  });
+
+  texture.needsUpdate = true;
+};
+
+/**
  * What is compiled into one vapour material.
  */
 export type VaporMaterialOptions = {
@@ -350,6 +402,9 @@ export type VaporMaterialOptions = {
 
   // The wing's tables, from `create_shape_texture`
   shape: DataTexture;
+
+  // The tip vortices' trails, from `create_trail_texture`
+  trails: DataTexture;
 
   effects: VaporEffects;
 };
@@ -392,7 +447,7 @@ const henyey_greenstein = (cosine: F, g: F): F => {
 export const create_vapor_material = (
   options: VaporMaterialOptions,
 ): MeshBasicNodeMaterial => {
-  const { uniforms: u, table, shape, effects } = options;
+  const { uniforms: u, table, shape, trails, effects } = options;
   const f = u.field as unknown as VaporFieldNodes;
 
   const box_min = u.box_min as unknown as V3;
@@ -482,7 +537,7 @@ export const create_vapor_material = (
         });
 
         const point = camera.add(direction.mul(t)).toVar();
-        const sample = vapor_field(f, shape, point, effects).toVar();
+        const sample = vapor_field(f, shape, trails, point, effects).toVar();
 
         const footprint = t.mul(PIXEL_STEP).toVar();
 

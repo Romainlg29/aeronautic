@@ -3,6 +3,9 @@ import {
   clamp,
   exp,
   float,
+  floor,
+  int,
+  ivec2,
   length,
   log,
   max,
@@ -14,12 +17,13 @@ import {
   smoothstep,
   sqrt,
   texture,
+  textureLoad,
   vec2,
   vec3,
 } from "three/tsl";
 import type { Texture } from "three";
 import type { Node } from "three/webgpu";
-import { VORTEX_SPACING } from "../aerodynamics";
+import { TRAIL_POINTS } from "../trails";
 import { SHAPE_STATIONS } from "../wing-shape";
 import {
   BURST_LENGTH,
@@ -28,7 +32,6 @@ import {
   CONE_SHOCK_LEAN,
   NOSE_RADIUS,
   NOSE_REACH,
-  ROLLUP_SPANS,
   ROOT_FADE,
   SHOCK_WIDTH,
   type VaporConstants,
@@ -82,6 +85,9 @@ const FAR = 1e5;
 // so their distances are not quite Euclidean
 const BOUND_SAFETY = 0.85;
 
+// And for the tips' trails, which bend
+const TRAIL_SAFETY = 0.5;
+
 /**
  * A Scully vortex's pressure deficit.
  * @param f The field
@@ -125,37 +131,79 @@ const karman_tsien = (incompressible: F, beta: F, kt: F): F =>
   incompressible.div(max(beta.add(kt.mul(incompressible)), beta.mul(0.5)));
 
 /**
- * A tip vortex at one point: its deficit, and how far the point is outside
- * the tube it can fog in, and how fine a step it needs there.
+ * A point along one trail, between its points.
+ * @param trails The trails' texture, a row each
+ * @param row Which trail
+ * @param along How far along it, metres
+ * @param spacing How far apart its points are
+ * @returns The point
+ */
+const trail_at = (trails: Texture, row: number, along: F, spacing: F): V3 => {
+  const position = clamp(along.div(max(spacing, 1e-6)), 0, TRAIL_POINTS - 1);
+  const index = min(floor(position), TRAIL_POINTS - 2);
+  const t = position.sub(index);
+
+  const a = textureLoad(trails, ivec2(int(index), int(row))).xyz;
+  const b = textureLoad(trails, ivec2(int(index).add(1), int(row))).xyz;
+
+  return mix(a, b, t) as unknown as V3;
+};
+
+/**
+ * One tip vortex at one point: its deficit, how far the point is outside the
+ * tube it can fog in, and how fine a step it needs there.
  * @param f The field
- * @param p The point, z folded
+ * @param trails The trails' texture
+ * @param p The point, not folded
+ * @param side +1 or -1, which tip
  * @returns The deficit, the distance and the step
  */
-export const tip_vortex = (f: VaporFieldNodes, p: V3): V3 => {
+const tip_side = (
+  f: VaporFieldNodes,
+  trails: Texture,
+  p: V3,
+  side: 1 | -1,
+): V3 => {
+  const row = side > 0 ? 0 : 1;
+
   const tip_le = f.tip_leading_m;
   const tip_te = tip_le.add(f.tip_chord_m);
   const tip_y = f.tip_height_m;
+  const length_m = f.trail_spacing_m.mul(TRAIL_POINTS - 1);
 
+  // Onto the straight trail, then twice onto the trail's own tangent, as
+  // `nearest_along` does
   const along = p.x
     .sub(tip_te)
     .mul(f.cos_alpha)
-    .add(p.y.sub(tip_y).mul(f.sin_alpha));
+    .add(p.y.sub(tip_y).mul(f.sin_alpha))
+    .toVar();
 
   const ahead = along.lessThan(0);
+
+  for (let step = 0; step < 2; step++) {
+    const here = clamp(along, 0, length_m);
+    const at = trail_at(trails, row, here, f.trail_spacing_m);
+    const next = trail_at(
+      trails,
+      row,
+      min(here.add(f.trail_spacing_m), length_m),
+      f.trail_spacing_m,
+    );
+    const tangent = next.sub(at).normalize();
+
+    along.assign(
+      select(ahead, along, max(here.add(p.sub(at).dot(tangent)), 0)),
+    );
+  }
+
   const trailed = max(along, 0);
 
-  const rolled = exp(
-    trailed.negate().div(f.semispan_m.mul(2 * ROLLUP_SPANS)),
-  ).oneMinus();
-
-  const axis = vec3(
-    select(
-      ahead,
-      clamp(p.x, tip_le, tip_te),
-      tip_te.add(trailed.mul(f.cos_alpha)),
-    ),
-    tip_y.add(trailed.mul(f.sin_alpha.sub(f.tip_descent))),
-    f.semispan_m.mul(rolled.mul(VORTEX_SPACING - 1).add(1)),
+  // Ahead of the trailing edge the vortex is forming along the tip chord
+  const axis = select(
+    ahead,
+    vec3(clamp(p.x, tip_le, tip_te), tip_y, f.semispan_m.mul(side)),
+    trail_at(trails, row, trailed, f.trail_spacing_m),
   );
 
   const offset = p.sub(axis);
@@ -176,15 +224,39 @@ export const tip_vortex = (f: VaporFieldNodes, p: V3): V3 => {
     core2,
   );
 
-  const outside = sqrt(radius2)
-    .sub(f.tip_bound_m)
-    .add(max(along.sub(f.tip_reach_m), 0))
-    .mul(BOUND_SAFETY);
+  // A curved trail's nearest point is found in two steps, which can land
+  // past it for a point well off the curve: the distance is trusted only by
+  // half, and never for more than a few tube widths at once
+  const outside = min(
+    sqrt(radius2)
+      .sub(f.tip_bound_m)
+      .add(max(along.sub(f.tip_reach_m), 0))
+      .mul(TRAIL_SAFETY),
+    f.tip_bound_m.mul(4).add(1),
+  );
 
   return vec3(
     deficit,
     select(f.tip_bound_m.greaterThan(0), outside, float(FAR)),
     clamp(sqrt(core2).mul(0.4), 0.03, 1.5),
+  );
+};
+
+/**
+ * Both tip vortices at one point, each along its own trail.
+ * @param f The field
+ * @param trails The trails' texture
+ * @param p The point, not folded
+ * @returns The deficit, the distance outside either tube and the step
+ */
+export const tip_vortex = (f: VaporFieldNodes, trails: Texture, p: V3): V3 => {
+  const positive = tip_side(f, trails, p, 1);
+  const negative = tip_side(f, trails, p, -1);
+
+  return vec3(
+    positive.x.add(negative.x),
+    min(positive.y, negative.y),
+    select(positive.y.lessThan(negative.y), positive.z, negative.z),
   );
 };
 
@@ -436,6 +508,7 @@ export const vapor_cone = (f: VaporFieldNodes, p: V3): V3 => {
  * The whole field at one point.
  * @param f The field
  * @param shape The wing's tables, as `create_shape_texture` makes them
+ * @param trails The tip vortices' trails, as `create_trail_texture` makes them
  * @param point The point, z not folded
  * @param effects Which parts are compiled in
  * @returns The deficit, how far the point is from anything that can fog, and
@@ -444,6 +517,7 @@ export const vapor_cone = (f: VaporFieldNodes, p: V3): V3 => {
 export const vapor_field = (
   f: VaporFieldNodes,
   shape: Texture,
+  trails: Texture,
   point: V3,
   effects: VaporEffects,
 ): V3 => {
@@ -452,7 +526,7 @@ export const vapor_field = (
   const parts: V3[] = [];
 
   if (effects.tip_vortices) {
-    parts.push(tip_vortex(f, folded));
+    parts.push(tip_vortex(f, trails, point));
   }
 
   if (effects.leading_edge_vortices) {
