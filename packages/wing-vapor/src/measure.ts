@@ -67,6 +67,15 @@ const BODY_THICKNESS = 2.5;
 // left the wing for the body's nose: tan 84 degrees, more swept than any wing
 const BODY_LEAP = 9.5;
 
+// Inboard of a nacelle, the wing resumes where its leading edge would have
+// been: no more swept than this past it, tan 72 degrees, where a body's nose
+// is far ahead
+const RESUME_LEAP = 3;
+
+// And with about the chord it had, within a factor of e^0.4, 1.5: the side
+// of a body is far longer
+const RESUME_CHORD = 0.4;
+
 // The outer wing the straight fits are made over, as shares of the semispan:
 // clear of the body inboard, and of whatever the tip carries outboard
 const OUTER_FROM = 0.5;
@@ -83,6 +92,12 @@ const MIN_SECOND_STATIONS = 4;
 // The fewest pixels along the chord a canard's or a tailplane's section
 // needs, to be one rather than a stray edge
 const MIN_SECOND_PIXELS = 3;
+
+// Stations either side a feature of the planform must reach past to be the
+// wing's own: an engine's nacelle or a store's pylon, narrower than nine
+// stations (a seventh of the semispan), juts out of the leading or trailing
+// edge and is not the wing the air lifts on
+const POD_STATIONS = 4;
 
 // A biconvex section's median thickness over its maximum: a quarter of the
 // chord either side of the middle is thicker than three quarters of the most
@@ -229,6 +244,56 @@ const fit_line = (xs: number[], ys: number[]): [number, number] => {
 };
 
 /**
+ * Take the narrow bumps out of one edge along the span: a morphological
+ * opening, which shaves off whatever juts out over fewer than
+ * `2 POD_STATIONS + 1` stations and keeps anything wider. A crank or a strake
+ * runs on to the root or the tip, so it is kept: the ends are padded with
+ * their own values.
+ * @param edge The edge at every station, NaN where nothing was seen
+ * @param from The first station that is wing
+ * @param outward Which way a pod juts: -1 forward, for the leading edge, or
+ *   1 aft, for the trailing
+ * @returns The edge without its pods
+ */
+const without_pods = (
+  edge: number[],
+  from: number,
+  outward: -1 | 1,
+): number[] => {
+  const last = edge.length - 1;
+  const at = (station: number) =>
+    edge[Math.min(Math.max(station, from), last)] * outward;
+
+  // Erode, then dilate, over the same window
+  const sweep = (read: (station: number) => number, pick: typeof Math.min) =>
+    edge.map((value, station) => {
+      if (station < from || Number.isNaN(value)) return value * outward;
+
+      let picked = read(station);
+
+      for (let offset = -POD_STATIONS; offset <= POD_STATIONS; offset++) {
+        const other = read(station + offset);
+
+        if (!Number.isNaN(other)) picked = pick(picked, other);
+      }
+
+      return picked;
+    });
+
+  const eroded = sweep(at, Math.min);
+  const opened = sweep(
+    (station) => eroded[Math.min(Math.max(station, from), last)],
+    Math.max,
+  );
+
+  return opened.map((value, station) =>
+    station < from || Number.isNaN(edge[station])
+      ? edge[station]
+      : value * outward,
+  );
+};
+
+/**
  * Measure the wing and the body from six depth views.
  * @param views The views, in the airframe's canonical frame
  * @returns The fitted dials and the wing's table
@@ -273,8 +338,10 @@ export const measure_airframe = (views: AirframeViews): MeasuredAirframe => {
 
   const outer_spans = outer.map(({ station }) => span_of(station));
 
-  const ratio = (column: Column) =>
-    column.thickness / Math.max(column.trailing - column.leading, top.cell_m);
+  const chord = (column: Column) =>
+    Math.max(column.trailing - column.leading, top.cell_m);
+
+  const ratio = (column: Column) => column.thickness / chord(column);
 
   const wing_ratio = median(outer.map(({ column }) => ratio(column)));
 
@@ -290,6 +357,21 @@ export const measure_airframe = (views: AirframeViews): MeasuredAirframe => {
   // and thick for their chord, and the body is always inboard
   const outer_station = Math.floor(OUTER_FROM * (SHAPE_STATIONS - 1));
 
+  // Whether a station breaks from the wing outboard of it, so many stations
+  // out
+  const breaks = (column: Column, from: Column | null) =>
+    ratio(column) > BODY_THICKNESS * wing_ratio ||
+    (from !== null && (from.leading - column.leading) / step_m > BODY_LEAP);
+
+  // Whether the wing resumes at a station inboard of a break: as thin, as
+  // long and where its leading edge would have been. A tailplane seen past
+  // the body's side is none of those
+  const resumes_at = (column: Column, from: Column, stations: number) =>
+    ratio(column) <= BODY_THICKNESS * wing_ratio &&
+    Math.abs(from.leading - column.leading) <=
+      RESUME_LEAP * step_m * stations &&
+    Math.abs(Math.log(chord(column) / chord(from))) < RESUME_CHORD;
+
   for (let station = outer_station; station >= 0; station--) {
     const column = columns[station];
 
@@ -297,17 +379,34 @@ export const measure_airframe = (views: AirframeViews): MeasuredAirframe => {
       continue;
     }
 
-    const leap = outboard ? (outboard.leading - column.leading) / step_m : 0;
+    if (!breaks(column, outboard)) {
+      outboard = column;
+      continue;
+    }
 
-    const body =
-      ratio(column) > BODY_THICKNESS * wing_ratio || leap > BODY_LEAP;
+    // A nacelle breaks from the wing too, but the wing carries on inboard of
+    // it, as it never does inboard of the body
+    let resumes = -1;
 
-    if (body) {
+    for (
+      let inboard = station - 1;
+      inboard >= Math.max(station - 2 * POD_STATIONS, 0);
+      inboard--
+    ) {
+      const next = columns[inboard];
+
+      if (next && outboard && resumes_at(next, outboard, station - inboard)) {
+        resumes = inboard;
+        break;
+      }
+    }
+
+    if (resumes < 0) {
       root_station = station + 1;
       break;
     }
 
-    outboard = column;
+    station = resumes + 1;
   }
 
   root_station = Math.min(root_station, SHAPE_STATIONS - 2);
@@ -323,6 +422,32 @@ export const measure_airframe = (views: AirframeViews): MeasuredAirframe => {
         station >= root_station &&
         station <= OUTER_TO * (SHAPE_STATIONS - 1),
     ) as { column: Column; station: number }[];
+
+  // Nacelles and pods, cut off the edges they jut from
+  const leading = without_pods(
+    columns.map((column) => column?.leading ?? NaN),
+    root_station,
+    -1,
+  );
+  const trailing = without_pods(
+    columns.map((column) => column?.trailing ?? NaN),
+    root_station,
+    1,
+  );
+
+  for (const [station, column] of columns.entries()) {
+    if (column && station >= root_station) {
+      columns[station] = {
+        ...column,
+        leading: leading[station],
+        trailing: trailing[station],
+      };
+    }
+  }
+
+  for (const entry of [...outer, ...wing]) {
+    entry.column = columns[entry.station] as Column;
+  }
 
   const wing_spans = wing.map(({ station }) => span_of(station));
 

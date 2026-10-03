@@ -296,6 +296,43 @@ describe("measure_airframe", () => {
     expect(Math.atan(slope(3.5, 5.5)) / DEG).toBeLessThan(50);
   });
 
+  it("cuts an engine's nacelle off the wing it hangs from", () => {
+    // A straight wing, 2.4 m chord, a nacelle at 4 m out jutting 2.5 m
+    // ahead of it and 1 m behind
+    const wing = new Mesh(
+      planform_wing(
+        12,
+        () => 0,
+        () => 2.4,
+        0.14,
+      ),
+    );
+    const model = new Group().add(wing, round_body(-6, 18, 1));
+
+    for (const side of [1, -1]) {
+      const nacelle = round_body(-2.5, 5.9, 0.6);
+
+      nacelle.position.z = side * 4;
+      model.add(nacelle);
+    }
+
+    const { airframe, shape } = measure_airframe(
+      capture_views(model, { forward: [-1, 0, 0] }),
+    );
+
+    for (const span of [3.5, 4, 4.5]) {
+      const station = shape_station(shape, span);
+
+      expect(Math.abs(station.leading_m)).toBeLessThan(0.3);
+      expect(Math.abs(station.leading_m + station.chord_m - 2.4)).toBeLessThan(
+        0.3,
+      );
+    }
+
+    expect(Math.abs(airframe.root_chord_m - 2.4)).toBeLessThan(0.3);
+    expect(airframe.root_span_m).toBeLessThan(1.8);
+  });
+
   it("measures the docs' fighter as it was measured by hand", async () => {
     const fighter = await load_fighter();
     const { airframe, shape } = measure_airframe(
