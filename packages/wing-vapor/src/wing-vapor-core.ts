@@ -397,7 +397,7 @@ export class WingVapor {
       this._history,
     );
 
-    write_trail_texture(this._trail_texture, state.trails);
+    write_trail_texture(this._trail_texture, state.trails, state.second_trails);
 
     if (rebuilt) {
       write_shape_texture(this._shape_texture, state.shape, state.path);

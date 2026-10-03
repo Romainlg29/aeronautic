@@ -223,6 +223,42 @@ describe("measure_airframe", () => {
 
     expect(Math.abs(at.leading_m - -0.8)).toBeLessThan(0.25);
     expect(Math.abs(at.chord_m - 2.5)).toBeLessThan(0.3);
+
+    // And the tailplane is measured as one: behind, 2.5 m out, its tip's
+    // leading edge 5.75 m aft
+    const tail = shape.secondary;
+
+    expect(tail?.kind).toBe("tail");
+    expect(Math.abs((tail?.semispan_m ?? 0) - 2.5)).toBeLessThan(0.25);
+    expect(Math.abs((tail?.tip_leading_m ?? 0) - 5.75)).toBeLessThan(0.3);
+  });
+
+  it("tells a canard from a tailplane", () => {
+    // A delta, and a canard 4 m ahead of its root out to 2 m
+    const model = new Group().add(
+      new Mesh(
+        planform_wing(
+          5,
+          (span) => -3 + span * 1.2,
+          () => 4,
+        ),
+      ),
+      new Mesh(
+        planform_wing(
+          2,
+          (span) => -7 + span * 0.8,
+          (span) => -5.5 + span * 0.3,
+        ),
+      ),
+      round_body(-10, 15, 0.7),
+    );
+
+    const { shape } = measure_airframe(
+      capture_views(model, { forward: [-1, 0, 0] }),
+    );
+
+    expect(shape.secondary?.kind).toBe("canard");
+    expect(Math.abs((shape.secondary?.semispan_m ?? 0) - 2)).toBeLessThan(0.25);
   });
 
   it("follows a cranked leading edge station by station", () => {
@@ -256,7 +292,7 @@ describe("measure_airframe", () => {
 
   it("measures the docs' fighter as it was measured by hand", async () => {
     const fighter = await load_fighter();
-    const { airframe } = measure_airframe(
+    const { airframe, shape } = measure_airframe(
       capture_views(fighter, { filter: fighter_filter }),
     );
     const by_hand = default_vapor_airframe();
@@ -280,5 +316,8 @@ describe("measure_airframe", () => {
     expect(airframe.root_span_m).toBeGreaterThan(1);
     expect(airframe.root_span_m).toBeLessThan(2.6);
     expect(Math.abs(airframe.nose_m - by_hand.nose_m)).toBeLessThan(0.3);
+
+    // A tailless delta: nothing ahead of or behind its wing lifts
+    expect(shape.secondary ?? null).toBeNull();
   }, 30_000);
 });

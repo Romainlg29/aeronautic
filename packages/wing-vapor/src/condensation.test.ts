@@ -5,6 +5,7 @@ import {
   cloud_extinction,
   condensate,
   condensation_table,
+  moistest,
   saturation_ratio,
 } from "./condensation";
 
@@ -78,6 +79,21 @@ describe("condensation_table", () => {
       expect(table[texel * 4]).toBeLessThanOrEqual(table[texel * 4 + 1]);
       expect(table[texel * 4 + 2]).toBeGreaterThanOrEqual(table[texel * 4 + 1]);
     }
+  });
+});
+
+describe("moistest", () => {
+  it("keeps the moistest patches short of saturation", () => {
+    const air = moist_air(0, 0.97, 10);
+
+    expect(air.relative_humidity * moistest(air, 0.06)).toBeLessThan(1);
+    expect(moistest(moist_air(0, 0.5, 10), 0.06)).toBeCloseTo(1.06);
+  });
+
+  it("condenses nothing in unexpanded air, however humid the day", () => {
+    const air = moist_air(0, 0.99, 10);
+
+    expect(condensate(1, air, moistest(air, 0.1)).liquid).toBe(0);
   });
 });
 

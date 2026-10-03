@@ -10,6 +10,7 @@ import {
   lattice_loading,
   SHAPE_STATIONS,
   station_span,
+  type SecondarySurface,
   type WingShape,
 } from "./wing-shape";
 
@@ -73,6 +74,14 @@ const OUTER_TO = 0.92;
 // standing on the section, a fin or a store, and not the section
 const SECTION_DEPTH = 3;
 
+// The fewest stations out from the body a canard or a tailplane needs, to be
+// one rather than a stray: a few tenths of a metre on a fighter
+const MIN_SECOND_STATIONS = 4;
+
+// The fewest pixels along the chord a canard's or a tailplane's section
+// needs, to be one rather than a stray edge
+const MIN_SECOND_PIXELS = 3;
+
 // A biconvex section's median thickness over its maximum: a quarter of the
 // chord either side of the middle is thicker than three quarters of the most
 const MEDIAN_THICKNESS = 0.75;
@@ -85,6 +94,10 @@ type Column = {
   trailing: number;
   thickness: number;
   mid: number;
+
+  // The next longest run along the chord, if any: a canard's or a
+  // tailplane's section at the same station
+  second: { leading: number; trailing: number; mid: number } | null;
 };
 
 /**
@@ -133,20 +146,20 @@ const read_column = (top: DepthView, span: number): Column | null => {
 
   // A tailplane or a canard shares the wing's stations, with clear air
   // between them along the chord: the wing is the longest unbroken run
-  let run = section.slice(0, 1);
-  let longest = run;
+  const runs: (typeof section)[] = [section.slice(0, 1)];
 
   for (let index = 1; index < section.length; index++) {
     if (section[index].x - section[index - 1].x > top.cell_m * 1.5) {
-      run = [];
+      runs.push([]);
     }
 
-    run.push(section[index]);
-
-    if (run.length > longest.length) {
-      longest = run;
-    }
+    runs[runs.length - 1].push(section[index]);
   }
+
+  runs.sort((a, b) => b.length - a.length);
+
+  const longest = runs[0];
+  const next = runs[1];
 
   const leading = longest[0].x;
   const trailing = longest[longest.length - 1].x + top.cell_m;
@@ -158,6 +171,14 @@ const read_column = (top: DepthView, span: number): Column | null => {
     trailing,
     thickness: median(depths) / MEDIAN_THICKNESS,
     mid: median(mids),
+    second:
+      next && next.length >= MIN_SECOND_PIXELS
+        ? {
+            leading: next[0].x,
+            trailing: next[next.length - 1].x + top.cell_m,
+            mid: median(next.map(({ mid }) => mid)),
+          }
+        : null,
   };
 };
 
@@ -263,7 +284,11 @@ export const measure_airframe = (views: AirframeViews): MeasuredAirframe => {
 
   const step_m = semispan / (SHAPE_STATIONS - 1);
 
-  for (let station = SHAPE_STATIONS - 1; station >= 0; station--) {
+  // From the outer wing, not the tip: a tip's own sections are odd, small
+  // and thick for their chord, and the body is always inboard
+  const outer_station = Math.floor(OUTER_FROM * (SHAPE_STATIONS - 1));
+
+  for (let station = outer_station; station >= 0; station--) {
     const column = columns[station];
 
     if (!column) {
@@ -358,6 +383,7 @@ export const measure_airframe = (views: AirframeViews): MeasuredAirframe => {
   }
 
   shape.loading.set(lattice_loading(shape));
+  shape.secondary = measure_secondary(columns, root_station, semispan);
 
   const body = measure_body(top, root_span);
   const tip = SHAPE_STATIONS - 1;
@@ -380,6 +406,65 @@ export const measure_airframe = (views: AirframeViews): MeasuredAirframe => {
 };
 
 /**
+ * A canard or a tailplane: the second run along the chord, station after
+ * station out from the body, until it stops.
+ * @param columns Every station's column
+ * @param root_station Where the wing leaves the body
+ * @param semispan The wing's semispan
+ * @returns The surface, or null if there is none
+ */
+const measure_secondary = (
+  columns: (Column | null)[],
+  root_station: number,
+  semispan: number,
+): SecondarySurface | null => {
+  const step = semispan / (SHAPE_STATIONS - 1);
+
+  let tip = -1;
+  let area = 0;
+  let ahead = 0;
+
+  for (let station = root_station; station < SHAPE_STATIONS; station++) {
+    const second = columns[station]?.second;
+    const wing = columns[station];
+
+    if (!second || !wing) {
+      break;
+    }
+
+    tip = station;
+    area += (second.trailing - second.leading) * step;
+    ahead += second.leading < wing.leading ? 1 : -1;
+  }
+
+  if (tip < root_station + MIN_SECOND_STATIONS - 1) {
+    return null;
+  }
+
+  // Its outermost section, and the one inboard of it, for a steadier tip
+  const outer = columns[tip]!.second!;
+  const inner = columns[Math.max(tip - 1, root_station)]!.second!;
+  const semispan_m = (tip + 0.5) * step;
+
+  // Carried on through the body, as the wing's area is
+  const root_chord = columns[root_station]!.second!;
+
+  area += (root_chord.trailing - root_chord.leading) * root_station * step;
+
+  return {
+    kind: ahead > 0 ? "canard" : "tail",
+    semispan_m,
+    tip_leading_m: (outer.leading + inner.leading) / 2,
+    tip_chord_m: Math.max(
+      (outer.trailing - outer.leading + inner.trailing - inner.leading) / 2,
+      step,
+    ),
+    tip_height_m: (outer.mid + inner.mid) / 2,
+    area_m2: area * 2,
+  };
+};
+
+/**
  * The two wings' columns at one station, averaged.
  * @param right One wing's
  * @param left The other's
@@ -393,11 +478,21 @@ const average_columns = (
     return right ?? left;
   }
 
+  const second =
+    right.second && left.second
+      ? {
+          leading: (right.second.leading + left.second.leading) / 2,
+          trailing: (right.second.trailing + left.second.trailing) / 2,
+          mid: (right.second.mid + left.second.mid) / 2,
+        }
+      : (right.second ?? left.second);
+
   return {
     leading: (right.leading + left.leading) / 2,
     trailing: (right.trailing + left.trailing) / 2,
     thickness: (right.thickness + left.thickness) / 2,
     mid: (right.mid + left.mid) / 2,
+    second,
   };
 };
 

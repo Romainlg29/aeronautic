@@ -1,4 +1,5 @@
 import {
+  If,
   abs,
   clamp,
   exp,
@@ -150,10 +151,65 @@ const trail_at = (trails: Texture, row: number, along: F, spacing: F): V3 => {
 };
 
 /**
+ * One lifting surface's tips, as nodes.
+ */
+type TipNodes = {
+  leading: F;
+  chord: F;
+  height: F;
+  semispan: F;
+  circulation: F;
+  core2: F;
+  growth: F;
+  reach: F;
+  bound: F;
+  spacing: F;
+
+  // Its first row in the trails' texture: +z there, -z the next
+  row: number;
+};
+
+/**
+ * The wing's tips, or a canard's or a tailplane's, from the uniforms.
+ * @param f The field
+ * @param which Which surface
+ * @returns Its tips
+ */
+const tip_nodes = (f: VaporFieldNodes, which: "wing" | "second"): TipNodes =>
+  which === "wing"
+    ? {
+        leading: f.tip_leading_m,
+        chord: f.tip_chord_m,
+        height: f.tip_height_m,
+        semispan: f.semispan_m,
+        circulation: f.tip_circulation,
+        core2: f.tip_core2_m2,
+        growth: f.tip_growth_m,
+        reach: f.tip_reach_m,
+        bound: f.tip_bound_m,
+        spacing: f.trail_spacing_m,
+        row: 0,
+      }
+    : {
+        leading: f.second_tip_leading_m,
+        chord: f.second_tip_chord_m,
+        height: f.second_tip_height_m,
+        semispan: f.second_semispan_m,
+        circulation: f.second_circulation,
+        core2: f.second_core2_m2,
+        growth: f.second_growth_m,
+        reach: f.second_reach_m,
+        bound: f.second_bound_m,
+        spacing: f.second_spacing_m,
+        row: 2,
+      };
+
+/**
  * One tip vortex at one point: its deficit, how far the point is outside the
  * tube it can fog in, and how fine a step it needs there.
  * @param f The field
  * @param trails The trails' texture
+ * @param tip The surface whose tip it is
  * @param p The point, not folded
  * @param side +1 or -1, which tip
  * @returns The deficit, the distance and the step
@@ -161,15 +217,16 @@ const trail_at = (trails: Texture, row: number, along: F, spacing: F): V3 => {
 const tip_side = (
   f: VaporFieldNodes,
   trails: Texture,
+  tip: TipNodes,
   p: V3,
   side: 1 | -1,
 ): V3 => {
-  const row = side > 0 ? 0 : 1;
+  const row = tip.row + (side > 0 ? 0 : 1);
 
-  const tip_le = f.tip_leading_m;
-  const tip_te = tip_le.add(f.tip_chord_m);
-  const tip_y = f.tip_height_m;
-  const length_m = f.trail_spacing_m.mul(TRAIL_POINTS - 1);
+  const tip_le = tip.leading;
+  const tip_te = tip_le.add(tip.chord);
+  const tip_y = tip.height;
+  const length_m = tip.spacing.mul(TRAIL_POINTS - 1);
 
   // Onto the straight trail, then twice onto the trail's own tangent, as
   // `nearest_along` does
@@ -183,12 +240,12 @@ const tip_side = (
 
   for (let step = 0; step < 2; step++) {
     const here = clamp(along, 0, length_m);
-    const at = trail_at(trails, row, here, f.trail_spacing_m);
+    const at = trail_at(trails, row, here, tip.spacing);
     const next = trail_at(
       trails,
       row,
-      min(here.add(f.trail_spacing_m), length_m),
-      f.trail_spacing_m,
+      min(here.add(tip.spacing), length_m),
+      tip.spacing,
     );
     const tangent = next.sub(at).normalize();
 
@@ -202,8 +259,8 @@ const tip_side = (
   // Ahead of the trailing edge the vortex is forming along the tip chord
   const axis = select(
     ahead,
-    vec3(clamp(p.x, tip_le, tip_te), tip_y, f.semispan_m.mul(side)),
-    trail_at(trails, row, trailed, f.trail_spacing_m),
+    vec3(clamp(p.x, tip_le, tip_te), tip_y, tip.semispan.mul(side)),
+    trail_at(trails, row, trailed, tip.spacing),
   );
 
   const offset = p.sub(axis);
@@ -211,15 +268,15 @@ const tip_side = (
 
   const formed = select(
     ahead,
-    clamp(p.x.sub(tip_le).div(f.tip_chord_m), 0, 1),
+    clamp(p.x.sub(tip_le).div(tip.chord), 0, 1),
     float(1),
   );
 
-  const core2 = f.tip_core2_m2.add(f.tip_growth_m.mul(trailed));
+  const core2 = tip.core2.add(tip.growth.mul(trailed));
 
   const deficit = vortex_deficit(
     f,
-    f.tip_circulation.mul(formed),
+    tip.circulation.mul(formed),
     radius2,
     core2,
   );
@@ -229,35 +286,52 @@ const tip_side = (
   // half, and never for more than a few tube widths at once
   const outside = min(
     sqrt(radius2)
-      .sub(f.tip_bound_m)
-      .add(max(along.sub(f.tip_reach_m), 0))
+      .sub(tip.bound)
+      .add(max(along.sub(tip.reach), 0))
       .mul(TRAIL_SAFETY),
-    f.tip_bound_m.mul(4).add(1),
+    tip.bound.mul(4).add(1),
   );
 
   return vec3(
     deficit,
-    select(f.tip_bound_m.greaterThan(0), outside, float(FAR)),
+    select(tip.bound.greaterThan(0), outside, float(FAR)),
     clamp(sqrt(core2).mul(0.4), 0.03, 1.5),
   );
 };
 
 /**
- * Both tip vortices at one point, each along its own trail.
+ * Every tip vortex at one point, each along its own trail: the wing's, and a
+ * canard's or a tailplane's.
  * @param f The field
  * @param trails The trails' texture
  * @param p The point, not folded
- * @returns The deficit, the distance outside either tube and the step
+ * @returns The deficit, the distance outside the nearest tube and the step
  */
 export const tip_vortex = (f: VaporFieldNodes, trails: Texture, p: V3): V3 => {
-  const positive = tip_side(f, trails, p, 1);
-  const negative = tip_side(f, trails, p, -1);
+  const deficit = float(0).toVar();
+  const outside = float(FAR).toVar();
+  const step = float(FAR).toVar();
 
-  return vec3(
-    positive.x.add(negative.x),
-    min(positive.y, negative.y),
-    select(positive.y.lessThan(negative.y), positive.z, negative.z),
-  );
+  const add = (which: "wing" | "second") => {
+    const tip = tip_nodes(f, which);
+
+    for (const side of [1, -1] as const) {
+      const part = tip_side(f, trails, tip, p, side).toVar();
+
+      deficit.addAssign(part.x);
+      step.assign(select(part.y.lessThan(outside), part.z, step));
+      outside.assign(min(outside, part.y));
+    }
+  };
+
+  add("wing");
+
+  // Only an aircraft with a canard or a tailplane whose tips fog pays for them
+  If(f.second_bound_m.greaterThan(0), () => {
+    add("second");
+  });
+
+  return vec3(deficit, outside, step);
 };
 
 /**
@@ -519,7 +593,10 @@ export const vapor_field = (
   shape: Texture,
   trails: Texture,
   point: V3,
-  effects: VaporEffects,
+  effects: Pick<
+    VaporEffects,
+    "tip_vortices" | "leading_edge_vortices" | "wing" | "cone"
+  >,
 ): V3 => {
   const folded = vec3(point.x, point.y, abs(point.z));
 

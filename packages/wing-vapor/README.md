@@ -116,6 +116,11 @@ From them it measures:
   nose, or the section gets far thicker for its chord;
 - **the spanwise loading**, from a Weissinger vortex lattice on the measured
   planform;
+- **a canard or a tailplane**: the second run along the chord, ahead of the
+  wing or behind it. Its own tips shed their own vortices, along their own
+  trails. A canard carries about 1.2 times its share of the area in lift, which
+  comes off the wing, so it trails vapor in a hard pull. A tailplane only trims,
+  at about 0.15 times its area's share, and rarely fogs;
 - **the body**, as the round body of the same largest cross-section, for the
   cone.
 
@@ -203,6 +208,16 @@ circulation) and every part of the field.
 
 The physics is all on the CPU too, in `vapor-field.ts`, where it is tested.
 The shader mirrors it node for node.
+
+### Self-shadowing
+
+At every sample that holds water, three looks at the field towards the sun
+(0.4, 1.4 and 4 m out) give the optical depth the sunlight crossed to get
+there. The sun's light is split as clouds' is. The droplets' forward peak is
+dimmed by e^−τ. What has scattered many times diffuses round the cloud, and is
+dimmed only by e^−τ/4. That gives a thick cone its grey underside. The shadow
+samples leave out the tip vortices: a tube a metre across shades almost
+nothing. `effects.self_shadow` turns it off.
 
 ### Trails that follow the flight
 

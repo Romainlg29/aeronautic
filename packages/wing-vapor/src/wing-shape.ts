@@ -43,6 +43,30 @@ export type WingShape = {
   // The spanwise loading c_l c over its mean across the semispan: an
   // elliptic wing's is 4/π √(1 - η²)
   loading: Float32Array;
+
+  // A canard ahead of the wing or a tailplane behind it, if the capture
+  // found one: its own tips shed their own vortices
+  secondary?: SecondarySurface | null;
+};
+
+/**
+ * A second lifting surface, as the vapour sees it: where its tips are and
+ * how big it is.
+ */
+export type SecondarySurface = {
+  // Ahead of the wing, and lifting hard; or behind it, trimming lightly
+  kind: "canard" | "tail";
+
+  // Centreline to its tip
+  semispan_m: number;
+
+  // Its tip's leading edge, chord and height
+  tip_leading_m: number;
+  tip_chord_m: number;
+  tip_height_m: number;
+
+  // Both sides, through the body
+  area_m2: number;
 };
 
 /**

@@ -37,6 +37,7 @@ type Design = {
   wing: Planform;
   thickness_m: number;
   tail?: Planform;
+  canard?: Planform;
   fin?: Planform;
   body: { nose: number; length: number; radius: number };
 };
@@ -60,6 +61,30 @@ const DESIGNS: Record<string, Design> = {
       [0, 4.8],
     ],
     body: { nose: -10, length: 15, radius: 0.8 },
+  },
+  canard_delta: {
+    label: "Canard delta",
+    // A 53 degree delta, and an all-moving canard well ahead of it
+    wing: [
+      [0, -3],
+      [5.4, 4.2],
+      [5.4, 4.9],
+      [0, 4.9],
+    ],
+    thickness_m: 0.22,
+    canard: [
+      [0, -6.4],
+      [2.6, -4.6],
+      [2.6, -4],
+      [0, -4.3],
+    ],
+    fin: [
+      [0, 1.5],
+      [3, 4.2],
+      [3, 4.9],
+      [0, 5],
+    ],
+    body: { nose: -10.5, length: 15.5, radius: 0.8 },
   },
   swept: {
     label: "Swept wing, with a tail",
@@ -172,6 +197,10 @@ const build = (design: Design): Group => {
 
   if (design.tail) {
     model.add(surface(design.tail, design.thickness_m * 0.6));
+  }
+
+  if (design.canard) {
+    model.add(surface(design.canard, design.thickness_m * 0.6));
   }
 
   if (design.fin) {

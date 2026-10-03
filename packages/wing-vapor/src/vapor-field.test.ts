@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { angle_of_attack_for_load } from "./aerodynamics";
 import { moist_air } from "./atmosphere";
-import { shape_station } from "./wing-shape";
+import { shape_station, trapezoid_shape, type WingShape } from "./wing-shape";
 import {
   cone_pocket,
   vapor_deficit,
@@ -109,6 +109,48 @@ describe("vapor_state", () => {
         10,
       );
     }
+  });
+});
+
+describe("a second lifting surface", () => {
+  /**
+   * The default airframe with a second surface of a given kind.
+   * @param kind Canard or tailplane
+   * @returns The wing, with it
+   */
+  const with_second = (kind: "canard" | "tail"): WingShape => ({
+    ...trapezoid_shape(airframe),
+    secondary: {
+      kind,
+      semispan_m: 2.8,
+      tip_leading_m: kind === "canard" ? -6 : 7,
+      tip_chord_m: 0.9,
+      tip_height_m: 0.4,
+      area_m2: 7,
+    },
+  });
+
+  const state_with = (kind: "canard" | "tail") =>
+    vapor_state(airframe, pulling(150, 7), humid, look, with_second(kind))
+      .field;
+
+  it("trails a canard's tips in a hard pull", () => {
+    const field = state_with("canard");
+
+    expect(field.second_circulation).toBeGreaterThan(0);
+    expect(field.second_reach_m).toBeGreaterThan(5);
+  });
+
+  it("takes the canard's lift off the wing", () => {
+    expect(state_with("canard").tip_circulation).toBeLessThan(
+      vapor_state(airframe, pulling(150, 7), humid, look).field.tip_circulation,
+    );
+  });
+
+  it("loads a tailplane far more lightly than a canard", () => {
+    expect(state_with("tail").second_circulation).toBeLessThan(
+      state_with("canard").second_circulation / 4,
+    );
   });
 });
 

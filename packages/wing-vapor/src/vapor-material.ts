@@ -127,6 +127,17 @@ const FIELD_KEYS: (keyof (VaporField & VaporConstants))[] = [
   "tip_reach_m",
   "tip_bound_m",
   "trail_spacing_m",
+  "second_semispan_m",
+  "second_tip_leading_m",
+  "second_tip_chord_m",
+  "second_tip_height_m",
+  "second_circulation",
+  "second_core2_m2",
+  "second_growth_m",
+  "second_descent",
+  "second_reach_m",
+  "second_bound_m",
+  "second_spacing_m",
   "edge_apex_m",
   "edge_gradient",
   "edge_length_m",
@@ -368,7 +379,8 @@ export const write_shape_texture = (
 };
 
 /**
- * Make the texture the tip vortices' trails ride in, a row each, to be filled
+ * Make the texture the tip vortices' trails ride in, a row each, the wing's
+ * then a canard's or a tailplane's, to be filled
  * every frame with `write_trail_texture`. Full floats, read texel by texel:
  * a trail runs hundreds of metres, and half floats would put its points a
  * quarter of a metre apart from where they are.
@@ -376,9 +388,9 @@ export const write_shape_texture = (
  */
 export const create_trail_texture = (): DataTexture => {
   const trails = new DataTexture(
-    new Float32Array(TRAIL_POINTS * 2 * 4),
+    new Float32Array(TRAIL_POINTS * 4 * 4),
     TRAIL_POINTS,
-    2,
+    4,
     RGBAFormat,
     FloatType,
   );
@@ -392,25 +404,30 @@ export const create_trail_texture = (): DataTexture => {
 };
 
 /**
- * Write both trails into their texture.
+ * Write every trail into their texture: the wing's two, then a canard's or a
+ * tailplane's.
  * @param texture The texture
- * @param trails The trails
+ * @param trails The wing's trails
+ * @param second The second surface's
  */
 export const write_trail_texture = (
   texture: DataTexture,
   trails: TrailPaths,
+  second: TrailPaths,
 ) => {
   const data = texture.image.data as Float32Array;
 
-  [trails.positive, trails.negative].forEach((points, row) => {
-    for (let index = 0; index < TRAIL_POINTS; index++) {
-      const offset = (row * TRAIL_POINTS + index) * 4;
+  [trails.positive, trails.negative, second.positive, second.negative].forEach(
+    (points, row) => {
+      for (let index = 0; index < TRAIL_POINTS; index++) {
+        const offset = (row * TRAIL_POINTS + index) * 4;
 
-      data[offset] = points[index * 3];
-      data[offset + 1] = points[index * 3 + 1];
-      data[offset + 2] = points[index * 3 + 2];
-    }
-  });
+        data[offset] = points[index * 3];
+        data[offset + 1] = points[index * 3 + 1];
+        data[offset + 2] = points[index * 3 + 2];
+      }
+    },
+  );
 
   texture.needsUpdate = true;
 };
@@ -644,12 +661,14 @@ export const create_vapor_material = (
           if (effects.self_shadow) {
             If((u.detail as unknown as F).greaterThan(0.5), () => {
               for (const [distance, length] of SHADOW_SAMPLES) {
+                // Without the tips: a tube a metre across shades almost
+                // nothing, and its trail is the dearest part to look up
                 const toward = vapor_field(
                   f,
                   shape,
                   trails,
                   point.add(sun_ray.mul(distance)),
-                  effects,
+                  { ...effects, tip_vortices: false },
                 ).x;
 
                 shade.addAssign(

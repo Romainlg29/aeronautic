@@ -11,7 +11,7 @@ import {
 } from "./aerodynamics";
 import { Vector3 } from "three";
 import { AIR_GAMMA, moist_air, type MoistAir } from "./atmosphere";
-import { CONDENSATION_MIN_RATIO, condensate } from "./condensation";
+import { CONDENSATION_MIN_RATIO, condensate, moistest } from "./condensation";
 import {
   nearest_along,
   straight_trails,
@@ -52,6 +52,18 @@ import {
 // Everything is in the airframe's canonical frame: x aft, y up, z out along
 // the right wing, metres from the component's origin. The field is symmetric
 // left to right, so z is folded and one evaluation draws both wings
+
+// How hard a canard is loaded against the wing, area for area, and a
+// tailplane: a canard lifts, and is usually set to stall before the wing; a
+// tailplane trims, and carries a few per cent
+export const CANARD_LOADING = 1.2;
+export const TAIL_LOADING = 0.15;
+
+// The least deficit the bounds follow the field out to
+const BOUND_FLOOR = 0.003;
+
+// The most of the lift a second surface is given
+const MAX_SECOND_SHARE = 0.4;
 
 // The tip vortex's eddy viscosity over its circulation (Squire, Owen). What
 // spreads its core, and so what ends the trail
@@ -175,6 +187,20 @@ export type VaporField = {
   // How far along the air one trail point is from the next
   trail_spacing_m: number;
 
+  // The same for a canard's or a tailplane's tips, if there are any: where
+  // its tip is, and its vortex. A bound of zero means none fogs
+  second_semispan_m: number;
+  second_tip_leading_m: number;
+  second_tip_chord_m: number;
+  second_tip_height_m: number;
+  second_circulation: number;
+  second_core2_m2: number;
+  second_growth_m: number;
+  second_descent: number;
+  second_reach_m: number;
+  second_bound_m: number;
+  second_spacing_m: number;
+
   // The leading-edge vortex: where it starts, its circulation per metre aft
   // of there, the edge's length, its core and height per metre of local
   // semispan, where it bursts, and how wide it can fog
@@ -227,8 +253,10 @@ export type VaporGeometry = {
   shape: WingShape;
   path: EdgePath;
 
-  // The tip vortices' centrelines, laid along the flight path
+  // The tip vortices' centrelines, laid along the flight path: the wing's,
+  // and a canard's or a tailplane's
   trails: TrailPaths;
+  second_trails: TrailPaths;
 };
 
 /**
@@ -331,17 +359,87 @@ const vortex_deficit = (
  * @returns The deficit
  */
 export const tip_deficit = (
-  { field, trails }: VaporGeometry,
+  { field, trails, second_trails }: VaporGeometry,
   x: number,
   y: number,
   z: number,
-): number =>
-  side_deficit(field, trails.positive, trails.spacing_m, 1, x, y, z) +
-  side_deficit(field, trails.negative, trails.spacing_m, -1, x, y, z);
+): number => {
+  let deficit = 0;
+
+  for (const which of ["wing", "second"] as const) {
+    const tip = tip_source(field, which);
+    const paths = which === "wing" ? trails : second_trails;
+
+    if (tip.circulation <= 0) {
+      continue;
+    }
+
+    deficit +=
+      side_deficit(tip, paths.positive, paths.spacing_m, 1, x, y, z) +
+      side_deficit(tip, paths.negative, paths.spacing_m, -1, x, y, z);
+  }
+
+  return deficit;
+};
+
+/**
+ * One lifting surface's tips: where they are and what their vortices are.
+ */
+type TipSource = {
+  leading_m: number;
+  chord_m: number;
+  height_m: number;
+  semispan_m: number;
+  circulation: number;
+  core2_m2: number;
+  growth_m: number;
+  descent: number;
+  reach_m: number;
+  vortex_k: number;
+  cos_alpha: number;
+  sin_alpha: number;
+};
+
+/**
+ * The wing's tips, or a canard's or a tailplane's, from a field.
+ * @param field The field
+ * @param which Which surface
+ * @returns Its tips
+ */
+const tip_source = (field: VaporField, which: "wing" | "second"): TipSource =>
+  which === "wing"
+    ? {
+        leading_m: field.tip_leading_m,
+        chord_m: field.tip_chord_m,
+        height_m: field.tip_height_m,
+        semispan_m: field.semispan_m,
+        circulation: field.tip_circulation,
+        core2_m2: field.tip_core2_m2,
+        growth_m: field.tip_growth_m,
+        descent: field.tip_descent,
+        reach_m: field.tip_reach_m,
+        vortex_k: field.vortex_k,
+        cos_alpha: field.cos_alpha,
+        sin_alpha: field.sin_alpha,
+      }
+    : {
+        leading_m: field.second_tip_leading_m,
+        chord_m: field.second_tip_chord_m,
+        height_m: field.second_tip_height_m,
+        semispan_m: field.second_semispan_m,
+        circulation: field.second_circulation,
+        core2_m2: field.second_core2_m2,
+        growth_m: field.second_growth_m,
+        descent: field.second_descent,
+        reach_m: field.second_reach_m,
+        vortex_k: field.vortex_k,
+        cos_alpha: field.cos_alpha,
+        sin_alpha: field.sin_alpha,
+      };
 
 /**
  * One tip vortex's deficit at one point.
- * @param field The field
+ * @param tip The surface whose tip it is
  * @param points Its trail's points
  * @param spacing_m How far apart they are
  * @param side +1 or -1, which tip
@@ -351,7 +449,7 @@ export const tip_deficit = (
  * @returns The deficit
  */
 const side_deficit = (
-  field: VaporField,
+  tip: TipSource,
   points: Float32Array,
   spacing_m: number,
   side: number,
@@ -359,56 +457,61 @@ const side_deficit = (
   y: number,
   z: number,
 ): number => {
-  const tip_le = field.tip_leading_m;
-  const tip_te = tip_le + field.tip_chord_m;
-  const tip_y = field.tip_height_m;
+  const tip_le = tip.leading_m;
+  const tip_te = tip_le + tip.chord_m;
 
-  const along = nearest_along(points, spacing_m, trail_layout(field), x, y, z);
+  const along = nearest_along(points, spacing_m, source_layout(tip), x, y, z);
+
+  const deficit = (circulation: number, r2: number, core2: number) =>
+    (tip.vortex_k * circulation * circulation) / Math.max(r2 + core2, 1e-6);
 
   if (along < 0) {
     // Forming along the tip chord, from nothing at the leading edge
     const formed = Math.min(
-      Math.max((x - tip_le) / Math.max(field.tip_chord_m, 1e-3), 0),
+      Math.max((x - tip_le) / Math.max(tip.chord_m, 1e-3), 0),
       1,
     );
     const ax = Math.min(Math.max(x, tip_le), tip_te);
     const r2 =
-      (x - ax) ** 2 + (y - tip_y) ** 2 + (z - side * field.semispan_m) ** 2;
+      (x - ax) ** 2 +
+      (y - tip.height_m) ** 2 +
+      (z - side * tip.semispan_m) ** 2;
 
-    return vortex_deficit(
-      field,
-      field.tip_circulation * formed,
-      r2,
-      field.tip_core2_m2,
-    );
+    return deficit(tip.circulation * formed, r2, tip.core2_m2);
   }
 
   const at = trail_point(points, spacing_m, along, scratch_trail);
   const r2 = (x - at.x) ** 2 + (y - at.y) ** 2 + (z - at.z) ** 2;
 
-  return vortex_deficit(
-    field,
-    field.tip_circulation,
-    r2,
-    field.tip_core2_m2 + field.tip_growth_m * along,
-  );
+  return deficit(tip.circulation, r2, tip.core2_m2 + tip.growth_m * along);
 };
+
+/**
+ * How one surface's tip vortices are laid.
+ * @param tip The surface's tips
+ * @returns The layout
+ */
+const source_layout = (tip: TipSource): TrailLayout => ({
+  tip_x: tip.leading_m + tip.chord_m,
+  tip_y: tip.height_m,
+  semispan_m: tip.semispan_m,
+  cos_alpha: tip.cos_alpha,
+  sin_alpha: tip.sin_alpha,
+  descent: tip.descent,
+  rollup_m: ROLLUP_SPANS * 2 * tip.semispan_m,
+  length_m: Math.max(tip.reach_m, 1),
+});
 
 /**
  * How the tip vortices are laid, from a field.
  * @param field The field
+ * @param which The wing's, or a canard's or a tailplane's
  * @returns The layout
  */
-export const trail_layout = (field: VaporField): TrailLayout => ({
-  tip_x: field.tip_leading_m + field.tip_chord_m,
-  tip_y: field.tip_height_m,
-  semispan_m: field.semispan_m,
-  cos_alpha: field.cos_alpha,
-  sin_alpha: field.sin_alpha,
-  descent: field.tip_descent,
-  rollup_m: ROLLUP_SPANS * 2 * field.semispan_m,
-  length_m: Math.max(field.tip_reach_m, 1),
-});
+export const trail_layout = (
+  field: VaporField,
+  which: "wing" | "second" = "wing",
+): TrailLayout => source_layout(tip_source(field, which));
 
 const scratch_trail = new Vector3();
 
@@ -924,18 +1027,41 @@ export const vapor_state = (
 
   const saturation_deficit = condensing_deficit(
     air,
-    1 + Math.max(look.humidity_spread, 0),
+    moistest(air, look.humidity_spread),
   );
 
-  const tip_core = airframe.tip_core_radius * span;
-  const tip_circulation = airframe.tip_core_share * state.tip_circulation;
+  // A canard carries a real share of the lift, near its area's share and
+  // more, being loaded harder; a tailplane trims, and carries little. The
+  // wing carries what a canard does not
+  const secondary = shape.secondary ?? null;
 
-  const tip_growth_m =
-    (4 * VORTEX_EDDY_VISCOSITY * state.tip_circulation) / speed;
+  const share = secondary
+    ? Math.min(
+        (secondary.area_m2 / Math.max(area_m2, 1e-3)) *
+          (secondary.kind === "canard" ? CANARD_LOADING : TAIL_LOADING),
+        MAX_SECOND_SHARE,
+      )
+    : 0;
+
+  const wing_share = secondary && secondary.kind === "canard" ? 1 - share : 1;
+
+  // Each surface's rolled-up circulation: its lift over ρ V π/4 of its span
+  const wing_circulation = state.tip_circulation * wing_share;
+  const second_span = secondary ? secondary.semispan_m * 2 : 1;
+  const second_circulation = secondary
+    ? (state.tip_circulation * share * span) / second_span
+    : 0;
+
+  const tip_core = airframe.tip_core_radius * span;
+  const tip_circulation = airframe.tip_core_share * wing_circulation;
+
+  const tip_growth_m = (4 * VORTEX_EDDY_VISCOSITY * wing_circulation) / speed;
 
   // A pair of vortices sinks each other at Γ / 2πb'
   const tip_descent =
-    state.tip_circulation / (2 * Math.PI * VORTEX_SPACING * span) / speed;
+    wing_circulation / (2 * Math.PI * VORTEX_SPACING * span) / speed;
+
+  const second_core = airframe.tip_core_radius * second_span;
 
   // The leading edge from where it leaves the body to the tip
   const edge_apex_m = shape_station(shape, shape.root_span_m).leading_m;
@@ -972,6 +1098,19 @@ export const vapor_state = (
     tip_bound_m: 0,
     trail_spacing_m: 1,
 
+    second_semispan_m: secondary?.semispan_m ?? 1,
+    second_tip_leading_m: secondary?.tip_leading_m ?? 0,
+    second_tip_chord_m: secondary?.tip_chord_m ?? 1,
+    second_tip_height_m: secondary?.tip_height_m ?? 0,
+    second_circulation: airframe.tip_core_share * second_circulation,
+    second_core2_m2: second_core * second_core,
+    second_growth_m: (4 * VORTEX_EDDY_VISCOSITY * second_circulation) / speed,
+    second_descent:
+      second_circulation / (2 * Math.PI * VORTEX_SPACING * second_span) / speed,
+    second_reach_m: 0,
+    second_bound_m: 0,
+    second_spacing_m: 1,
+
     edge_apex_m,
     edge_gradient:
       alpha > 0 && edge_length_m > 1e-3
@@ -1002,6 +1141,7 @@ export const vapor_state = (
     shape,
     path,
     trails: straight_trails(trail_layout(field)),
+    second_trails: straight_trails(trail_layout(field, "second")),
   };
 
   // The wing's extent outboard of the body, for the boxes
@@ -1028,57 +1168,67 @@ export const vapor_state = (
 
   // Each part's reach, where its deficit falls to what condenses: past that
   // it is clear air, and the march need not look
-  const needed = saturation_deficit;
+  // Floored for the bounds alone: on a day within a hair of saturation the
+  // last few thousandths only make a haze too thin to see, and following it
+  // out would make the boxes enormous
+  const needed = Math.max(saturation_deficit, BOUND_FLOOR);
 
   const mins: [number, number, number][] = [];
   const maxs: [number, number, number][] = [];
 
-  // Tip vortices
-  {
-    const well = vortex_k * tip_circulation * tip_circulation;
-    const widest = well / needed - field.tip_core2_m2;
+  // Tip vortices: the wing's, and a canard's or a tailplane's
+  for (const which of ["wing", "second"] as const) {
+    const tip = tip_source(field, which);
+    const well = vortex_k * tip.circulation * tip.circulation;
+    const widest = well / needed - tip.core2_m2;
 
-    if (needed < 1 && widest > 0) {
-      field.tip_bound_m = Math.sqrt(widest) * 1.15 + 0.1;
-      field.tip_reach_m = Math.min(
-        widest / Math.max(tip_growth_m, 1e-9),
-        MAX_TRAIL_M,
-      );
+    if (!(needed < 1 && widest > 0 && tip.circulation > 0)) {
+      continue;
+    }
 
-      const layout = trail_layout(field);
+    const bound = Math.sqrt(widest) * 1.15 + 0.1;
+    const reach = Math.min(widest / Math.max(tip.growth_m, 1e-9), MAX_TRAIL_M);
 
-      geometry.trails = history
-        ? history.paths(layout)
-        : straight_trails(layout);
+    if (which === "wing") {
+      field.tip_bound_m = bound;
+      field.tip_reach_m = reach;
+    } else {
+      field.second_bound_m = bound;
+      field.second_reach_m = reach;
+    }
 
-      // Round the tips, and every point of both trails
-      const b = field.tip_bound_m;
-      const low: [number, number, number] = [
-        field.tip_leading_m - b,
-        field.tip_height_m - b,
-        -semispan - b,
-      ];
-      const high: [number, number, number] = [
-        field.tip_leading_m + field.tip_chord_m + b,
-        field.tip_height_m + b,
-        semispan + b,
-      ];
+    const layout = trail_layout(field, which);
+    const trails = history ? history.paths(layout) : straight_trails(layout);
 
-      for (const points of [
-        geometry.trails.positive,
-        geometry.trails.negative,
-      ]) {
-        for (let index = 0; index < points.length; index += 3) {
-          for (let axis = 0; axis < 3; axis++) {
-            low[axis] = Math.min(low[axis], points[index + axis] - b);
-            high[axis] = Math.max(high[axis], points[index + axis] + b);
-          }
+    if (which === "wing") {
+      geometry.trails = trails;
+    } else {
+      geometry.second_trails = trails;
+    }
+
+    // Round the tips, and every point of both trails
+    const low: [number, number, number] = [
+      tip.leading_m - bound,
+      tip.height_m - bound,
+      -tip.semispan_m - bound,
+    ];
+    const high: [number, number, number] = [
+      tip.leading_m + tip.chord_m + bound,
+      tip.height_m + bound,
+      tip.semispan_m + bound,
+    ];
+
+    for (const points of [trails.positive, trails.negative]) {
+      for (let index = 0; index < points.length; index += 3) {
+        for (let axis = 0; axis < 3; axis++) {
+          low[axis] = Math.min(low[axis], points[index + axis] - bound);
+          high[axis] = Math.max(high[axis], points[index + axis] + bound);
         }
       }
-
-      mins.push(low);
-      maxs.push(high);
     }
+
+    mins.push(low);
+    maxs.push(high);
   }
 
   // Leading-edge vortices: the deepest well anywhere along the unburst core.
@@ -1253,6 +1403,7 @@ export const vapor_state = (
   }
 
   field.trail_spacing_m = geometry.trails.spacing_m;
+  field.second_spacing_m = geometry.second_trails.spacing_m;
 
   return {
     air,
@@ -1261,6 +1412,7 @@ export const vapor_state = (
     shape,
     path,
     trails: geometry.trails,
+    second_trails: geometry.second_trails,
     bounds,
     visible,
   };

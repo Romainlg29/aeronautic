@@ -109,6 +109,25 @@ export const condensate = (
   };
 };
 
+// The moistest patch of air is held just short of saturation: moister than
+// that and the air itself would be a cloud, everywhere, aircraft or not
+export const MOISTEST_HUMIDITY = 0.995;
+
+/**
+ * How much moister than the day's average its moistest patches are.
+ * @param air The free stream
+ * @param spread How uneven the moisture is, as a share
+ * @returns The humidity scale, never past saturation
+ */
+export const moistest = (air: MoistAir, spread: number): number =>
+  Math.max(
+    Math.min(
+      1 + Math.max(spread, 0),
+      MOISTEST_HUMIDITY / Math.max(air.relative_humidity, 1e-3),
+    ),
+    1,
+  );
+
 /**
  * The pressure ratio a table entry stands for.
  * @param texel Which entry, 0 to `CONDENSATION_TEXELS - 1`
@@ -141,7 +160,7 @@ export const condensation_table = (
     target[texel * 4] = condensate(ratio, air, 1 - spread).water_kg_m3 * 1000;
     target[texel * 4 + 1] = day.water_kg_m3 * 1000;
     target[texel * 4 + 2] =
-      condensate(ratio, air, 1 + spread).water_kg_m3 * 1000;
+      condensate(ratio, air, moistest(air, spread)).water_kg_m3 * 1000;
     target[texel * 4 + 3] = air.temperature_k - day.temperature_k;
   }
 
