@@ -97,6 +97,8 @@ type StageProps = {
   overlay?: ReactNode;
   // An environment map, for a loaded model's metal
   reflections?: boolean;
+  // A daylit sky rather than the night the plumes are graded for
+  daylight?: boolean;
 };
 
 /**
@@ -112,6 +114,7 @@ export const Stage: FC<StageProps> = ({
   floor = -3,
   overlay,
   reflections = false,
+  daylight = false,
 }) => {
   const frame = useRef<HTMLDivElement>(null);
   const [visible, set_visible] = useState(false);
@@ -147,9 +150,17 @@ export const Stage: FC<StageProps> = ({
           return renderer;
         }}
       >
-        <color attach="background" args={["#05070b"]} />
-        <hemisphereLight args={["#8090b0", "#101010", 0.6]} />
-        <directionalLight position={[5, 10, 5]} intensity={1.2} />
+        <color
+          attach="background"
+          args={[daylight ? "#6f9fd8" : "#05070b"]}
+        />
+        <hemisphereLight
+          args={["#8090b0", "#101010", daylight ? 1.6 : 0.6]}
+        />
+        <directionalLight
+          position={[5, 10, 5]}
+          intensity={daylight ? 3 : 1.2}
+        />
         {floor !== null && (
           <gridHelper
             args={[200, 100, "#1c2230", "#121620"]}

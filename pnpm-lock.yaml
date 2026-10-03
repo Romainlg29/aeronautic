@@ -44,6 +44,9 @@ importers:
       r3f-afterburner:
         specifier: workspace:*
         version: link:../../packages/afterburner
+      r3f-wing-vapor:
+        specifier: workspace:*
+        version: link:../../packages/wing-vapor
       react:
         specifier: ^19.3.0
         version: 19.3.0

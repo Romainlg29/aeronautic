@@ -18,6 +18,7 @@ const EXAMPLES = {
   "nozzle-shapes": load(() => import("@/examples/nozzle-shapes")),
   "throttle-ref": load(() => import("@/examples/throttle-ref")),
   "rocket-mix": load(() => import("@/examples/rocket-mix")),
+  "wing-vapor": load(() => import("@/examples/wing-vapor")),
 } satisfies Record<string, ComponentType>;
 
 export type ExampleName = keyof typeof EXAMPLES;

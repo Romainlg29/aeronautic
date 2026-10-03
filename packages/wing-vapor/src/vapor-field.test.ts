@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { angle_of_attack_for_load } from "./aerodynamics";
 import { moist_air } from "./atmosphere";
 import {
-  area_curvature,
+  cone_pocket,
   vapor_deficit,
   vapor_state,
   wing_deficit,
@@ -178,10 +178,10 @@ describe("wing_deficit", () => {
   });
 });
 
-describe("area_curvature", () => {
-  it("expands over the shoulder and compresses at the ends", () => {
-    expect(area_curvature(0.5)).toBeCloseTo(1);
-    expect(area_curvature(0.05)).toBeLessThan(0);
-    expect(area_curvature(0.95)).toBeLessThan(0);
+describe("cone_pocket", () => {
+  it("builds from nothing to the shock", () => {
+    expect(cone_pocket(0.2, 0.9)).toBe(0);
+    expect(cone_pocket(0.7, 0.9)).toBeGreaterThan(cone_pocket(0.6, 0.9));
+    expect(cone_pocket(0.9, 0.9)).toBe(1);
   });
 });

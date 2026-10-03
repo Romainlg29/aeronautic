@@ -215,7 +215,7 @@ export const default_vapor_airframe = (): VaporAirframe => ({
 
   tip_core_radius: 0.02,
   tip_core_share: 0.35,
-  leading_edge_core_radius: 0.05,
+  leading_edge_core_radius: 0.02,
 });
 
 /**

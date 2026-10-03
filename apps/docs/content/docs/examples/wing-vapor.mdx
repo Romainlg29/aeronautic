@@ -1,0 +1,15 @@
+---
+title: Wing vapor
+description: "Tip and leading-edge vortices, shock vapor over the wing and the vapor cone, from `r3f-wing-vapor`, on the fighter."
+---
+
+<Example name="wing-vapor" />
+
+`r3f-wing-vapor` is the second package in this repository. Nothing in it is drawn to a shape: it works out the pressure field round the aircraft from its planform, its speed and its angle of attack, expands the day's moist air through it, and draws the cloud wherever that air passes its dew point. Pick a flight to see each phenomenon, and pull the humidity down to watch the cloud shrink to the deepest parts of the field and vanish.
+
+- **Hard pull.** The lift's circulation rolls up into a vortex at each tip, and the low pressure in its core trails a tube of vapor until its core has spread too far to stay below the dew point.
+- **High alpha.** The swept leading edge sheds a vortex over each wing. It bursts where the breakdown has reached, further up the wing the higher the angle of attack, and swells into a ragged cloud.
+- **Transonic pass.** Near Mach one the fuselage's expansion is felt far out, and the shock standing behind it ends the cloud in a hard edge: the vapor cone.
+- **Shock on the wing.** A supersonic pocket over the wing, ended by its shock. In drier air only the pocket fogs, and its aft edge is the shock.
+
+The aircraft is pitched up by its angle of attack, so the flight path is level and the trails stream straight back. The angle comes from the load through `angle_of_attack_for_load`, as it would from a flight model.

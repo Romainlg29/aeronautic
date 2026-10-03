@@ -27,6 +27,8 @@ const config: NextConfig = {
     resolveAlias: {
       "r3f-afterburner/tsl": "../../packages/afterburner/src/tsl/index.ts",
       "r3f-afterburner": "../../packages/afterburner/src/index.ts",
+      "r3f-wing-vapor/tsl": "../../packages/wing-vapor/src/tsl/index.ts",
+      "r3f-wing-vapor": "../../packages/wing-vapor/src/index.ts",
     },
   },
 };

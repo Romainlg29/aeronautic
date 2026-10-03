@@ -49,12 +49,16 @@ export const MAX_TRAIL_M = 400;
 
 // How high the leading-edge vortex rides over the wing, as a share of the
 // local semispan, per unit sine of the angle of attack
-export const LEADING_EDGE_VORTEX_HEIGHT = 0.6;
+export const LEADING_EDGE_VORTEX_HEIGHT = 1;
+
+// The upper surface's height under the vortex, in thickness times chord: a
+// biconvex section's at a quarter of its chord, where the core lies
+export const EDGE_SURFACE = 0.375;
 
 // How quickly a burst core swells, as a share of the edge's length, and by
 // how much: a burst vortex is several times fatter and far weaker
 export const BURST_LENGTH = 0.08;
-export const BURST_SWELL = 3;
+export const BURST_SWELL = 2;
 
 const DEGREE = Math.PI / 180;
 
@@ -62,13 +66,17 @@ const DEGREE = Math.PI / 180;
 // past it
 export const MAX_LOCAL_MACH = 1.4;
 
+// How far out from the body the wing's field builds up, as a share of the
+// semispan: the body's own flow, not the wing's, is what the root sits in
+export const ROOT_FADE = 0.12;
+
 // The leading edge's radius, as a share of the chord: what keeps thin-airfoil
 // theory's suction peak finite
 export const NOSE_RADIUS = 0.03;
 
 // How high a wing's pressure field reaches, in chords, at low speed. The
 // Prandtl–Glauert stretch carries it higher, 1/β, as Mach one nears
-export const WING_FIELD_HEIGHT = 0.15;
+export const WING_FIELD_HEIGHT = 0.1;
 
 // The least β the wing's height stretch uses: a pocket stays a pocket
 const WING_HEIGHT_MIN_BETA = 0.4;
@@ -92,6 +100,9 @@ export const CONE_REACH = 0.25;
 export const CONE_SHOCK_SUBSONIC = 0.55;
 export const CONE_SHOCK_SONIC = 0.92;
 export const CONE_SHOCK_LEAN = 0.08;
+
+// How long the pocket ahead of the cone's shock is, as a share of the body
+export const CONE_POCKET_LENGTH = 0.45;
 
 /**
  * Every number the shader needs to rebuild the field, worked out on the CPU.
@@ -323,7 +334,7 @@ export const edge_deficit = (
   const vy =
     field.wing_height_m +
     vz * field.tan_dihedral +
-    0.3 * field.thickness * chord +
+    EDGE_SURFACE * field.thickness * chord +
     field.edge_height * reach +
     past * (field.sin_alpha / Math.max(field.cos_alpha, 0.1));
 
@@ -423,7 +434,11 @@ export const wing_deficit = (
     Math.max(compressibility_beta(mach), WING_HEIGHT_MIN_BETA);
 
   const fade =
-    smoothstep(field.root_span_m / field.semispan_m, field.root_span_m / field.semispan_m + 0.04, eta) *
+    smoothstep(
+      field.root_span_m / field.semispan_m,
+      field.root_span_m / field.semispan_m + ROOT_FADE,
+      eta,
+    ) *
     (1 - smoothstep(0.9, 1, eta)) *
     smoothstep(-0.04, 0, xi) *
     (1 - smoothstep(1, 1.06, xi));
@@ -551,21 +566,24 @@ export const cone_deficit = (
   const r = Math.hypot(y - field.body_height_m, z);
   const radius = body_radius(field, xi);
 
-  // Out past the body, felt further the nearer Mach one
-  const beta = compressibility_beta(field.mach);
-  const reach = (CONE_REACH * field.body_length_m) / beta;
-  const lateral =
-    Math.log(1 + reach / Math.max(r, radius)) /
-    Math.log(1 + reach / Math.max(radius, 1e-3));
-
   const shock =
     field.cone_shock + (CONE_SHOCK_LEAN * r) / field.body_length_m;
   const ahead = 1 - smoothstep(shock - 0.01, shock + 0.01, xi);
 
-  const coefficient = karman_tsien(
-    -field.cone_strength * area_curvature(xi),
-    field.mach,
-  );
+  // A transonic pocket keeps expanding until the shock that ends it: the
+  // suction, and how far out it is felt, build towards the shock. Hence a
+  // cone opening aft, soft at its front and hard at its back
+  const pocket = cone_pocket(xi, shock);
+
+  // Out past the body, felt further the nearer Mach one
+  const beta = compressibility_beta(field.mach);
+  const reach =
+    ((CONE_REACH * field.body_length_m) / beta) * (0.2 + 0.8 * pocket);
+  const lateral =
+    Math.log(1 + reach / Math.max(r, radius)) /
+    Math.log(1 + reach / Math.max(radius, 1e-3));
+
+  const coefficient = karman_tsien(-field.cone_strength * pocket, field.mach);
 
   return (
     capped_deficit(
@@ -580,6 +598,16 @@ export const cone_deficit = (
 };
 
 /**
+ * How far the flow round the body has expanded, from the shoulder to the
+ * shock.
+ * @param xi Along the body, 0 to 1
+ * @param shock Where the shock stands, as a share of the body
+ * @returns 0 at the start of the pocket, 1 at the shock
+ */
+export const cone_pocket = (xi: number, shock: number): number =>
+  smoothstep(shock - CONE_POCKET_LENGTH, shock, xi);
+
+/**
  * A Sears–Haack body's radius: the least drag for its volume, and close to
  * what an area-ruled fighter's cross-sections add up to.
  * @param field The field
@@ -588,20 +616,6 @@ export const cone_deficit = (
  */
 const body_radius = (field: VaporField, xi: number): number =>
   field.body_radius_m * Math.pow(Math.max(4 * xi * (1 - xi), 0), 0.75);
-
-/**
- * How sharply the body's cross-section shrinks, minus A″, at one in the middle.
- * Slender-body theory's surface pressure goes as A″: suction where the area
- * curves over the shoulder, compression at the nose and the tail.
- * @param xi Along the body, 0 to 1
- * @returns -A″ over its value at the middle
- */
-export const area_curvature = (xi: number): number => {
-  const u = Math.max(4 * xi * (1 - xi), 1e-3);
-  const du = 4 - 8 * xi;
-
-  return (12 * Math.sqrt(u) - (0.75 * du * du) / Math.sqrt(u)) / 12;
-};
 
 /**
  * The whole field's deficit at one point.
@@ -785,7 +799,7 @@ export const vapor_state = (
       const top =
         field.wing_height_m +
         field.edge_height * end_reach +
-        field.thickness * field.root_chord_m +
+        EDGE_SURFACE * field.thickness * field.root_chord_m +
         trailing * (field.sin_alpha / Math.max(field.cos_alpha, 0.1));
 
       mins.push([
@@ -872,7 +886,7 @@ export const vapor_state = (
 
     if (needed < 1 && strongest > needed && field.cone_fade > 0) {
       // Out from the body's widest part until it no longer condenses
-      const xi = Math.min(0.5, field.cone_shock - 0.02);
+      const xi = field.cone_shock - 0.02;
       const x = xi * field.body_length_m - field.nose_m;
 
       let low = body_radius(field, xi);
@@ -922,4 +936,67 @@ export const vapor_state = (
   }
 
   return { air, flight: state, field, bounds, visible };
+};
+
+/**
+ * What the shader would otherwise work out at every sample: everything in the
+ * wing's and the cone's compressible corrections that only the Mach number
+ * sets.
+ */
+export type VaporConstants = {
+  // (γ/2) M², turning a pressure coefficient into a deficit
+  wing_scale: number;
+
+  // The normal flow's critical pressure, β and Kármán–Tsien's M²/2(1+β)
+  wing_sonic: number;
+  wing_beta: number;
+  wing_kt: number;
+
+  // The most deficit its pocket can reach
+  wing_cap: number;
+
+  // How high its field reaches, in chords
+  wing_reach: number;
+
+  // How far aft of its sonic point the shock has been pushed, as a share of
+  // what is left of the chord; and 1 once the normal flow is supersonic
+  wing_travel: number;
+  wing_supersonic: number;
+
+  // The same for the body
+  cone_scale: number;
+  cone_beta: number;
+  cone_kt: number;
+  cone_cap: number;
+
+  // How far out its field reaches, in metres
+  cone_reach_m: number;
+};
+
+/**
+ * Work out the shader's per-frame constants from a field.
+ * @param field The field
+ * @returns The constants
+ */
+export const vapor_constants = (field: VaporField): VaporConstants => {
+  const wing_mach = field.normal_mach;
+  const wing_beta = compressibility_beta(wing_mach);
+  const cone_beta = compressibility_beta(field.mach);
+
+  return {
+    wing_scale: (AIR_GAMMA / 2) * wing_mach * wing_mach,
+    wing_sonic: critical_pressure(wing_mach),
+    wing_beta,
+    wing_kt: (wing_mach * wing_mach) / (2 * (1 + wing_beta)),
+    wing_cap: most_deficit(wing_mach),
+    wing_reach: WING_FIELD_HEIGHT / Math.max(wing_beta, WING_HEIGHT_MIN_BETA),
+    wing_travel: SHOCK_TRAVEL * smoothstep(0.75, 1, wing_mach),
+    wing_supersonic: wing_mach >= 1 ? 1 : 0,
+
+    cone_scale: (AIR_GAMMA / 2) * field.mach * field.mach,
+    cone_beta,
+    cone_kt: (field.mach * field.mach) / (2 * (1 + cone_beta)),
+    cone_cap: most_deficit(field.mach),
+    cone_reach_m: (CONE_REACH * field.body_length_m) / cone_beta,
+  };
 };
