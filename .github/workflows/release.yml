@@ -9,6 +9,9 @@ name: Release
 # - npm trusted publishing (OIDC) publishes with provenance, so no npm token is
 #   stored anywhere, and the package is set to require 2FA and disallow tokens
 #
+# Once it's published, a GitHub release is created for the tag, with notes
+# generated from the PRs and commits since the previous one
+#
 # See CONTRIBUTING.md, "Releasing", for the one-time setup
 
 on:
@@ -72,3 +75,18 @@ jobs:
           npm pkg delete scripts devDependencies
           npm pack --dry-run
           npm publish --access public --provenance --ignore-scripts
+
+  # The GitHub release for the tag, once the package is on npm. A job of its
+  # own, so the one that can write to the repo never touches npm
+  github-release:
+    needs: publish
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes
