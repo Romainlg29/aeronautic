@@ -10,6 +10,7 @@ import {
 import {
   canonical_frame,
   capture_views,
+  collect_triangle_steps,
   collect_triangles,
   depth_views,
 } from "./capture";
@@ -99,5 +100,30 @@ describe("depth_views", () => {
     expect(
       collect_triangles(holder, { filter: (mesh) => mesh !== shown }).length,
     ).toBe(12 * 9);
+  });
+});
+
+describe("collect_triangle_steps", () => {
+  it("measures every mesh in the pose the model had when it began", () => {
+    // Two meshes, so there is a slice between them, in a model that rolls
+    // half way round between the slices, as one flying would
+    const model = new Group().add(
+      new Mesh(new BoxGeometry(1, 1, 1)),
+      new Mesh(new BoxGeometry(1, 1, 1).translate(0, 0, 4)),
+    );
+    const flying = new Group().add(model);
+
+    const still = collect_triangles(model);
+    const steps = collect_triangle_steps(model);
+
+    steps.next();
+    flying.rotation.x = Math.PI / 2;
+    flying.updateMatrixWorld(true);
+
+    let next = steps.next();
+
+    while (!next.done) next = steps.next();
+
+    expect(Array.from(next.value)).toEqual(Array.from(still));
   });
 });

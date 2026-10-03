@@ -148,32 +148,34 @@ export function* collect_triangle_steps(
 
   const keep = options.filter ?? ((mesh: Mesh) => is_shown(mesh, object));
 
-  // Gathered first: the scene may change between the slices, the list not
-  const meshes: Mesh[] = [];
+  // Gathered first, with where each one is: the model may move, turn or
+  // animate between the slices, and every mesh must be measured in the one
+  // pose it had when the capture began
+  const meshes: { mesh: Mesh; matrix: Matrix4 }[] = [];
 
   object.traverse((node) => {
     const mesh = node as Mesh;
 
     if (mesh.isMesh && keep(mesh)) {
-      meshes.push(mesh);
+      meshes.push({
+        mesh,
+        matrix: new Matrix4().multiplyMatrices(into, mesh.matrixWorld),
+      });
     }
   });
 
   const chunks: Float32Array[] = [];
   let total = 0;
 
-  const matrix = new Matrix4();
   const point = new Vector3();
 
-  for (const mesh of meshes) {
+  for (const { mesh, matrix } of meshes) {
     const geometry = mesh.geometry as BufferGeometry;
     const position = geometry.getAttribute("position");
 
     if (!position) {
       continue;
     }
-
-    matrix.multiplyMatrices(into, mesh.matrixWorld);
 
     const index = geometry.getIndex();
     const count = index ? index.count : position.count;
