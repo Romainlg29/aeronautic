@@ -13,17 +13,19 @@ import {
   sin,
   smoothstep,
   sqrt,
+  texture,
   vec2,
   vec3,
 } from "three/tsl";
+import type { Texture } from "three";
 import type { Node } from "three/webgpu";
-import { LEADING_EDGE_VORTEX_SPAN, VORTEX_SPACING } from "../aerodynamics";
+import { VORTEX_SPACING } from "../aerodynamics";
+import { SHAPE_STATIONS } from "../wing-shape";
 import {
   BURST_LENGTH,
   BURST_SWELL,
   CONE_POCKET_LENGTH,
   CONE_SHOCK_LEAN,
-  EDGE_SURFACE,
   NOSE_RADIUS,
   NOSE_REACH,
   ROLLUP_SPANS,
@@ -43,11 +45,35 @@ import type { VaporEffects } from "../types";
 
 type F = Node<"float">;
 type V3 = Node<"vec3">;
+type V4 = Node<"vec4">;
 
 /**
  * The field's numbers, as float nodes: uniforms, in the material.
  */
 export type VaporFieldNodes = { [K in keyof (VaporField & VaporConstants)]: F };
+
+// The wing's tables, as one texture's rows: the stations along the span, their
+// loading, and the leading-edge vortex's path. `create_shape_texture` makes it
+export const SHAPE_ROWS = 3;
+
+/**
+ * One row of the shape texture, between its texels.
+ * @param shape The texture
+ * @param share How far along the row, 0 to 1
+ * @param row Which row
+ * @returns The four channels
+ */
+const shape_row = (shape: Texture, share: F, row: number): V4 =>
+  texture(
+    shape,
+    vec2(
+      clamp(share, 0, 1)
+        .mul(SHAPE_STATIONS - 1)
+        .add(0.5)
+        .div(SHAPE_STATIONS),
+      (row + 0.5) / SHAPE_ROWS,
+    ),
+  ).level(float(0)) as unknown as V4;
 
 // Further than anything is from anything, for a part that is switched off
 const FAR = 1e5;
@@ -106,9 +132,9 @@ const karman_tsien = (incompressible: F, beta: F, kt: F): F =>
  * @returns The deficit, the distance and the step
  */
 export const tip_vortex = (f: VaporFieldNodes, p: V3): V3 => {
-  const tip_le = f.apex_m.add(f.semispan_m.mul(f.tan_sweep));
+  const tip_le = f.tip_leading_m;
   const tip_te = tip_le.add(f.tip_chord_m);
-  const tip_y = f.wing_height_m.add(f.semispan_m.mul(f.tan_dihedral));
+  const tip_y = f.tip_height_m;
 
   const along = p.x
     .sub(tip_te)
@@ -165,27 +191,24 @@ export const tip_vortex = (f: VaporFieldNodes, p: V3): V3 => {
 /**
  * A leading-edge vortex at one point.
  * @param f The field
+ * @param shape The wing's tables
  * @param p The point, z folded
  * @returns The deficit, the distance outside its tube and the step
  */
-export const edge_vortex = (f: VaporFieldNodes, p: V3): V3 => {
-  const apex_x = f.apex_m.add(f.root_span_m.mul(f.tan_sweep));
-  const along = p.x.sub(apex_x);
+export const edge_vortex = (f: VaporFieldNodes, shape: Texture, p: V3): V3 => {
+  const along = p.x.sub(f.edge_apex_m);
   const length_m = max(f.edge_length_m, 1e-3);
 
   const on_wing = clamp(along, 0, f.edge_length_m);
   const past = max(along.sub(f.edge_length_m), 0);
 
-  const reach = on_wing.div(f.tan_sweep);
+  // Where along the edge's own path: its core, the surface under it, and how
+  // far out the edge is there
+  const path = shape_row(shape, on_wing.div(length_m), 2);
+  const vz = path.x;
+  const reach = path.z;
 
-  const vz = f.root_span_m.add(reach.mul(LEADING_EDGE_VORTEX_SPAN));
-  const chord = f.root_chord_m.add(
-    f.tip_chord_m.sub(f.root_chord_m).mul(vz).div(f.semispan_m),
-  );
-
-  const vy = f.wing_height_m
-    .add(vz.mul(f.tan_dihedral))
-    .add(f.thickness.mul(chord).mul(EDGE_SURFACE))
+  const vy = path.y
     .add(f.edge_height.mul(reach))
     .add(past.mul(f.sin_alpha.div(max(f.cos_alpha, 0.1))));
 
@@ -231,35 +254,35 @@ export const edge_vortex = (f: VaporFieldNodes, p: V3): V3 => {
 /**
  * The wing's upper surface at one point.
  * @param f The field
+ * @param shape The wing's tables
  * @param p The point, z folded
  * @returns The deficit, the distance outside the layer it can fog in and the
  *   step
  */
-export const wing_sheet = (f: VaporFieldNodes, p: V3): V3 => {
+export const wing_sheet = (f: VaporFieldNodes, shape: Texture, p: V3): V3 => {
   const span = p.z;
   const eta = span.div(f.semispan_m);
 
-  const leading = f.apex_m.add(span.mul(f.tan_sweep));
-  const chord = max(
-    f.root_chord_m.add(f.tip_chord_m.sub(f.root_chord_m).mul(eta)),
-    0.05,
-  );
+  // The station: leading edge, chord, mid-plane and thickness; and its loading
+  const station = shape_row(shape, eta, 0);
+  const loading = shape_row(shape, eta, 1).x;
+
+  const leading = station.x;
+  const chord = max(station.y, 0.05);
+  const thickness = station.w;
 
   const xi = p.x.sub(leading).div(chord);
   const along = clamp(xi, 0, 1);
 
-  const mid = f.wing_height_m.add(span.mul(f.tan_dihedral));
-  const surface = mid.add(
-    f.thickness.mul(chord).mul(2).mul(along).mul(along.oneMinus()),
+  const surface = station.z.add(
+    thickness.mul(chord).mul(2).mul(along).mul(along.oneMinus()),
   );
 
   const height = p.y.sub(surface);
 
-  const section = f.section_lift_m
-    .mul(sqrt(max(eta.mul(eta).oneMinus(), 0)))
-    .div(chord);
+  const section = f.section_lift_m.mul(loading).div(chord);
 
-  const shape = (at: F): F =>
+  const lift_shape = (at: F): F =>
     mix(
       sqrt(at.oneMinus().div(at.add(NOSE_RADIUS))),
       at.oneMinus().mul(Math.PI),
@@ -270,8 +293,8 @@ export const wing_sheet = (f: VaporFieldNodes, p: V3): V3 => {
     karman_tsien(
       section
         .div(-Math.PI)
-        .mul(shape(at))
-        .sub(f.thickness.mul(1.3).mul(sin(at.mul(Math.PI))))
+        .mul(lift_shape(at))
+        .sub(thickness.mul(1.3).mul(sin(at.mul(Math.PI))))
         .div(f.cos2_sweep),
       f.wing_beta,
       f.wing_kt,
@@ -412,6 +435,7 @@ export const vapor_cone = (f: VaporFieldNodes, p: V3): V3 => {
 /**
  * The whole field at one point.
  * @param f The field
+ * @param shape The wing's tables, as `create_shape_texture` makes them
  * @param point The point, z not folded
  * @param effects Which parts are compiled in
  * @returns The deficit, how far the point is from anything that can fog, and
@@ -419,6 +443,7 @@ export const vapor_cone = (f: VaporFieldNodes, p: V3): V3 => {
  */
 export const vapor_field = (
   f: VaporFieldNodes,
+  shape: Texture,
   point: V3,
   effects: VaporEffects,
 ): V3 => {
@@ -431,11 +456,11 @@ export const vapor_field = (
   }
 
   if (effects.leading_edge_vortices) {
-    parts.push(edge_vortex(f, folded));
+    parts.push(edge_vortex(f, shape, folded));
   }
 
   if (effects.wing) {
-    parts.push(wing_sheet(f, folded));
+    parts.push(wing_sheet(f, shape, folded));
   }
 
   if (effects.cone) {

@@ -51,10 +51,11 @@ import {
   viewportDepthTexture,
 } from "three/tsl";
 import { CONDENSATION_MIN_RATIO, CONDENSATION_TEXELS } from "./condensation";
-import { vapor_field, type VaporFieldNodes } from "./tsl/field";
+import { SHAPE_ROWS, vapor_field, type VaporFieldNodes } from "./tsl/field";
 import { patchiness } from "./tsl/noise";
 import type { VaporEffects } from "./types";
-import type { VaporConstants, VaporField } from "./vapor-field";
+import type { EdgePath, VaporConstants, VaporField } from "./vapor-field";
+import { SHAPE_STATIONS, type WingShape } from "./wing-shape";
 
 // The vapour, drawn as one box round everything that can fog
 //
@@ -94,15 +95,11 @@ const FIELD_KEYS: (keyof (VaporField & VaporConstants))[] = [
   "sin_alpha",
   "vortex_k",
   "saturation_deficit",
-  "apex_m",
-  "wing_height_m",
-  "tan_dihedral",
-  "tan_sweep",
-  "root_chord_m",
-  "tip_chord_m",
   "semispan_m",
   "root_span_m",
-  "thickness",
+  "tip_leading_m",
+  "tip_chord_m",
+  "tip_height_m",
   "section_lift_m",
   "separation",
   "cos2_sweep",
@@ -113,6 +110,7 @@ const FIELD_KEYS: (keyof (VaporField & VaporConstants))[] = [
   "tip_descent",
   "tip_reach_m",
   "tip_bound_m",
+  "edge_apex_m",
   "edge_gradient",
   "edge_length_m",
   "edge_core",
@@ -278,11 +276,81 @@ export const write_vapor_table = (table: DataTexture, values: Float32Array) => {
 };
 
 /**
+ * Make the texture the wing's tables ride in, to be filled with
+ * `write_shape_texture`. Half floats, so it filters on every backend: a
+ * millimetre's resolution on a ten metre chord.
+ * @returns The texture
+ */
+export const create_shape_texture = (): DataTexture => {
+  const shape = new DataTexture(
+    new Uint16Array(SHAPE_STATIONS * SHAPE_ROWS * 4),
+    SHAPE_STATIONS,
+    SHAPE_ROWS,
+    RGBAFormat,
+    HalfFloatType,
+  );
+
+  shape.magFilter = LinearFilter;
+  shape.minFilter = LinearFilter;
+  shape.wrapS = ClampToEdgeWrapping;
+  shape.wrapT = ClampToEdgeWrapping;
+  shape.generateMipmaps = false;
+  shape.name = "WingVaporShape";
+
+  return shape;
+};
+
+/**
+ * Write a wing's tables into its texture: a row of stations (leading edge,
+ * chord, mid-plane, thickness), a row of loading, and a row of the
+ * leading-edge vortex's path (its span, the surface under it, its reach).
+ * @param texture The texture
+ * @param shape The wing
+ * @param path The leading-edge vortex's path along it
+ */
+export const write_shape_texture = (
+  texture: DataTexture,
+  shape: WingShape,
+  path: EdgePath,
+) => {
+  const data = texture.image.data as Uint16Array;
+
+  const put = (row: number, station: number, values: number[]) => {
+    const offset = (row * SHAPE_STATIONS + station) * 4;
+
+    for (let channel = 0; channel < 4; channel++) {
+      data[offset + channel] = DataUtils.toHalfFloat(values[channel] ?? 0);
+    }
+  };
+
+  for (let station = 0; station < SHAPE_STATIONS; station++) {
+    put(0, station, [
+      shape.leading_m[station],
+      shape.chord_m[station],
+      shape.mid_m[station],
+      shape.thickness[station],
+    ]);
+    put(1, station, [shape.loading[station]]);
+    put(2, station, [
+      path.span_m[station],
+      path.surface_m[station],
+      path.reach_m[station],
+    ]);
+  }
+
+  texture.needsUpdate = true;
+};
+
+/**
  * What is compiled into one vapour material.
  */
 export type VaporMaterialOptions = {
   uniforms: VaporUniforms;
   table: DataTexture;
+
+  // The wing's tables, from `create_shape_texture`
+  shape: DataTexture;
+
   effects: VaporEffects;
 };
 
@@ -324,7 +392,7 @@ const henyey_greenstein = (cosine: F, g: F): F => {
 export const create_vapor_material = (
   options: VaporMaterialOptions,
 ): MeshBasicNodeMaterial => {
-  const { uniforms: u, table, effects } = options;
+  const { uniforms: u, table, shape, effects } = options;
   const f = u.field as unknown as VaporFieldNodes;
 
   const box_min = u.box_min as unknown as V3;
@@ -414,7 +482,7 @@ export const create_vapor_material = (
         });
 
         const point = camera.add(direction.mul(t)).toVar();
-        const sample = vapor_field(f, point, effects).toVar();
+        const sample = vapor_field(f, shape, point, effects).toVar();
 
         const footprint = t.mul(PIXEL_STEP).toVar();
 

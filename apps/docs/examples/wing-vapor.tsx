@@ -7,7 +7,7 @@ import {
   type WingVaporCore,
 } from "r3f-wing-vapor";
 import { type FC, type RefObject, useEffect, useRef, useState } from "react";
-import { type Group, LoopOnce } from "three";
+import { type Group, LoopOnce, type Mesh, type Object3D } from "three";
 import { base_path } from "@/lib/shared";
 import { Stage } from "./stage";
 
@@ -51,6 +51,24 @@ type Scenario = keyof typeof SCENARIOS;
 const AIR = { altitude_m: 300, temperature_offset_k: 10 };
 
 type Flight = { mach: number; g: number; humidity: number };
+
+// Not the shape the air flies round: the gear and its doors, hanging down in
+// the model's rest pose, and the pylons
+const NOT_AIRFRAME =
+  /^(GEAR_|DOOR_|HINGE_Gear|CTRL_Gear|HINGE_Door|CTRL_Door|PYLON_|BAY_)/;
+
+/**
+ * Whether a mesh of the fighter is part of its airframe.
+ * @param mesh The mesh
+ * @returns Whether to measure it
+ */
+const airframe_only = (mesh: Mesh): boolean => {
+  for (let node: Object3D | null = mesh; node; node = node.parent) {
+    if (!node.visible || NOT_AIRFRAME.test(node.name)) return false;
+  }
+
+  return true;
+};
 
 /**
  * The fighter, pitched up by its angle of attack so it flies level, with the
@@ -125,9 +143,14 @@ const Fighter: FC<{
   return (
     <group ref={body}>
       <primitive object={scene} />
-      {/* Its stations are measured off the model's origin, which flies -Z */}
+      {/*
+        The wing and body are measured off the model itself, by six depth
+        views, in the frame of the model's origin, which flies -Z
+      */}
       <WingVapor
         ref={vapor}
+        capture={scene}
+        capture_filter={airframe_only}
         air={AIR}
         look={{ sun_direction: SUN }}
         forward={[0, 0, -1]}

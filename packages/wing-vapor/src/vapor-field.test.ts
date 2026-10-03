@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { angle_of_attack_for_load } from "./aerodynamics";
 import { moist_air } from "./atmosphere";
+import { shape_station } from "./wing-shape";
 import {
   cone_pocket,
   vapor_deficit,
   vapor_state,
   wing_deficit,
-  type VaporField,
+  type VaporGeometry,
 } from "./vapor-field";
 import {
   default_vapor_airframe,
@@ -89,27 +90,22 @@ describe("vapor_state", () => {
     const { min, max } = state.bounds;
 
     // A point well outside the box fogs nothing
-    const outside = vapor_deficit(
-      state.field,
-      max[0] + 5,
-      max[1] + 5,
-      max[2] + 5,
-    );
+    const outside = vapor_deficit(state, max[0] + 5, max[1] + 5, max[2] + 5);
 
     expect(outside).toBeLessThan(state.field.saturation_deficit);
     expect(min[0]).toBeLessThan(max[0]);
   });
 
   it("is the same on both wings", () => {
-    const { field } = vapor_state(airframe, pulling(250, 6), humid, look);
+    const state = vapor_state(airframe, pulling(250, 6), humid, look);
 
     for (const [x, y, z] of [
       [0, 0.5, 3],
       [6, 1, 6.5],
       [20, 2, 5],
     ]) {
-      expect(vapor_deficit(field, x, y, z)).toBeCloseTo(
-        vapor_deficit(field, x, y, -z),
+      expect(vapor_deficit(state, x, y, z)).toBeCloseTo(
+        vapor_deficit(state, x, y, -z),
         10,
       );
     }
@@ -119,24 +115,21 @@ describe("vapor_state", () => {
 describe("wing_deficit", () => {
   /**
    * The deficit just above the wing's surface, along one chord.
-   * @param field The field
+   * @param state The field and the wing's tables
    * @param span How far out
    * @returns The deficit at fifty stations, leading to trailing edge
    */
-  const along_chord = (field: VaporField, span: number) => {
-    const chord =
-      field.root_chord_m +
-      ((field.tip_chord_m - field.root_chord_m) * span) / field.semispan_m;
+  const along_chord = (state: VaporGeometry, span: number) => {
+    const station = shape_station(state.shape, span);
 
     return Array.from({ length: 50 }, (_, i) => {
       const xi = (i + 0.5) / 50;
 
       return wing_deficit(
-        field,
-        field.apex_m + span * field.tan_sweep + xi * chord,
-        field.wing_height_m +
-          span * field.tan_dihedral +
-          2 * field.thickness * chord * xi * (1 - xi) +
+        state,
+        station.leading_m + xi * station.chord_m,
+        station.mid_m +
+          2 * station.thickness * station.chord_m * xi * (1 - xi) +
           0.01,
         span,
       );
@@ -158,28 +151,26 @@ describe("wing_deficit", () => {
 
   it("ends in a shock once the flow over it goes supersonic", () => {
     const sound = moist_air(0, 0.9, 10).sound_m_s;
-    const { field } = vapor_state(
-      airframe,
-      pulling(0.97 * sound, 5),
-      humid,
-      look,
-    );
+    const state = vapor_state(airframe, pulling(0.97 * sound, 5), humid, look);
 
     // Somewhere aft of the nose, a quarter of the suction goes in one
     // fiftieth of the chord
-    expect(sharpest_drop(along_chord(field, 3))).toBeGreaterThan(0.25);
+    expect(sharpest_drop(along_chord(state, 3))).toBeGreaterThan(0.25);
   });
 
   it("recovers smoothly at low speed", () => {
-    const { field } = vapor_state(airframe, pulling(120, 3), humid, look);
+    const state = vapor_state(airframe, pulling(120, 3), humid, look);
 
-    expect(sharpest_drop(along_chord(field, 3))).toBeLessThan(0.08);
+    expect(sharpest_drop(along_chord(state, 3))).toBeLessThan(0.08);
   });
 
   it("is nothing under the wing", () => {
-    const { field } = vapor_state(airframe, pulling(250, 6), humid, look);
+    const state = vapor_state(airframe, pulling(250, 6), humid, look);
+    const station = shape_station(state.shape, 3);
 
-    expect(wing_deficit(field, 0, field.wing_height_m - 0.5, 3)).toBe(0);
+    expect(
+      wing_deficit(state, station.leading_m + 1, station.mid_m - 0.5, 3),
+    ).toBe(0);
   });
 });
 

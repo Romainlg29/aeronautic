@@ -9,7 +9,9 @@ import {
   Vector3,
 } from "three";
 import type { MeshBasicNodeMaterial } from "three/webgpu";
+import { canonical_frame, capture_views, type CaptureOptions } from "./capture";
 import { condensation_table } from "./condensation";
+import { measure_airframe, type MeasuredAirframe } from "./measure";
 import {
   default_vapor_air,
   default_vapor_airframe,
@@ -24,13 +26,16 @@ import {
 } from "./types";
 import { vapor_constants, vapor_state, type VaporState } from "./vapor-field";
 import {
+  create_shape_texture,
   create_vapor_material,
   create_vapor_table,
   create_vapor_uniforms,
+  write_shape_texture,
   write_vapor_field,
   write_vapor_table,
   type VaporUniforms,
 } from "./vapor-material";
+import { trapezoid_shape, type WingShape } from "./wing-shape";
 
 // One aircraft's vapour, drawn as one mesh in the scene
 //
@@ -72,6 +77,10 @@ export type WingVaporOptions = {
   object?: Object3D | null;
 
   frame?: WingVaporFrame;
+
+  // The wing as a table, from `capture_airframe`, in place of the airframe's
+  // trapezoid
+  shape?: WingShape | null;
 
   // The most iterations a pixel's march may take
   max_steps?: number;
@@ -119,9 +128,15 @@ export class WingVapor {
   private _effects: VaporEffects;
 
   private readonly _frame = new Matrix4();
+  private _frame_options: WingVaporFrame = {};
   private readonly _table: DataTexture;
+  private readonly _shape_texture: DataTexture;
   private _state: VaporState;
   private _table_key = "";
+
+  // The wing given as a table, if any, and the one being drawn
+  private _captured: WingShape | null;
+  private _shape: WingShape | null = null;
 
   private _frame_number = -1;
   private _last_ms = -1;
@@ -140,12 +155,15 @@ export class WingVapor {
     this.uniforms.max_steps.value = options.max_steps ?? 160;
 
     this._table = create_vapor_table();
+    this._shape_texture = create_shape_texture();
+    this._captured = options.shape ?? null;
 
     const mesh = new Mesh(
       new BoxGeometry(1, 1, 1),
       create_vapor_material({
         uniforms: this.uniforms,
         table: this._table,
+        shape: this._shape_texture,
         effects: this._effects,
       }),
     );
@@ -220,7 +238,47 @@ export class WingVapor {
    */
   update_airframe(airframe: Partial<VaporAirframe>) {
     this._airframe = { ...this._airframe, ...airframe };
+    this._shape = null;
     this._state = this.refresh();
+  }
+
+  /**
+   * Draw the wing from a table rather than the airframe's trapezoid, or go
+   * back to the trapezoid with null.
+   * @param shape The wing, as `capture_airframe` measures it
+   */
+  set_shape(shape: WingShape | null) {
+    this._captured = shape;
+    this._shape = null;
+    this._state = this.refresh();
+  }
+
+  /** The wing being drawn, as a table */
+  get shape(): Readonly<WingShape> {
+    return this._state.shape;
+  }
+
+  /**
+   * Measure a model from six depth views and fly that: its wing station by
+   * station, and its planform and body fitted into the airframe. What cannot
+   * be seen, the mass and how sharp the leading edge is, is kept.
+   *
+   * Tens of milliseconds for a few hundred thousand triangles. Hide the
+   * landing gear and the stores first, or leave them out with `filter`.
+   * @param object The model
+   * @param options Which meshes to keep and the resolution; the frame is
+   *   this vapour's own unless given
+   * @returns What was measured
+   */
+  capture(object: Object3D, options: CaptureOptions = {}): MeasuredAirframe {
+    const measured = measure_airframe(
+      capture_views(object, { ...this._frame_options, ...options }),
+    );
+
+    this._airframe = { ...this._airframe, ...measured.airframe };
+    this.set_shape(measured.shape);
+
+    return measured;
   }
 
   /**
@@ -255,6 +313,7 @@ export class WingVapor {
     this.mesh.material = create_vapor_material({
       uniforms: this.uniforms,
       table: this._table,
+      shape: this._shape_texture,
       effects: next,
     });
 
@@ -266,31 +325,8 @@ export class WingVapor {
    * @param frame Its origin, and which ways are forward and up
    */
   set_frame(frame: WingVaporFrame) {
-    const forward = scratch_vector.fromArray(frame.forward ?? [0, 0, -1]);
-
-    if (forward.lengthSq() === 0) {
-      forward.set(0, 0, -1);
-    }
-
-    const aft = forward.clone().normalize().negate();
-
-    const up = new Vector3().fromArray(frame.up ?? [0, 1, 0]);
-
-    // Square to the flight path, whatever was given
-    up.addScaledVector(aft, -up.dot(aft));
-
-    if (up.lengthSq() < 1e-8) {
-      up.set(0, 1, 0).addScaledVector(aft, -aft.y);
-    }
-
-    up.normalize();
-
-    const span = new Vector3().crossVectors(aft, up);
-
-    this._frame.makeBasis(aft, up, span);
-    this._frame.setPosition(
-      scratch_position.fromArray(frame.position ?? [0, 0, 0]),
-    );
+    this._frame_options = frame;
+    this._frame.copy(canonical_frame(frame));
   }
 
   /** Free the GPU resources. It cannot be used afterwards */
@@ -299,6 +335,7 @@ export class WingVapor {
     this.mesh.geometry.dispose();
     this.mesh.material.dispose();
     this._table.dispose();
+    this._shape_texture.dispose();
   }
 
   /**
@@ -306,12 +343,23 @@ export class WingVapor {
    * @returns The state
    */
   private refresh(): VaporState {
+    // The wing's table only changes with the airframe or a capture, and its
+    // lattice is the one thing here that is not free
+    const rebuilt = this._shape === null;
+
+    this._shape ??= this._captured ?? trapezoid_shape(this._airframe);
+
     const state = vapor_state(
       this._airframe,
       this._flight,
       this._air,
       this._look,
+      this._shape,
     );
+
+    if (rebuilt) {
+      write_shape_texture(this._shape_texture, state.shape, state.path);
+    }
 
     write_vapor_field(this.uniforms, state.field, vapor_constants(state.field));
 

@@ -9,6 +9,7 @@
     "nozzle-shapes",
     "throttle-and-aim",
     "rocket-mixture",
-    "wing-vapor"
+    "wing-vapor",
+    "any-shape"
   ]
 }

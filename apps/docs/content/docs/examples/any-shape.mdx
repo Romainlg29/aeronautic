@@ -1,0 +1,15 @@
+---
+title: Vapor on any shape
+description: "Aircraft measured from their own geometry by six depth views, and the vapor that follows from them."
+---
+
+<Example name="any-shape" />
+
+Nothing about these aircraft is typed in but their geometry: a few primitives each, a planform extruded into a wing, a cylinder for a body, a tail. `capture` takes six orthographic depth views of the model (from above and below, ahead and astern, and either side) and measures it from them.
+
+- **Every station of the wing**, across the span: its leading and trailing edges, its thickness and the height of its mid-plane. A double delta keeps its crank; a tailplane at the same stations is told apart from the wing by the clear air between them.
+- **Where the wing meets the body**, where the sections stop behaving like a wing: the leading edge leaps forward to the nose, or the section gets far thicker for its chord.
+- **The spanwise loading**, from a vortex lattice on the measured planform, so the lift is spread the way that planform spreads it.
+- **The body**, as the round body of the same largest cross-section, for the vapor cone.
+
+The capture runs once, in a few tens of milliseconds for a few hundred thousand triangles; after that only the flight changes. On a loaded model, leave out the landing gear and the stores with `capture_filter`: they are not the shape the air flies round.

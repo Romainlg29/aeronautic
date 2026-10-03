@@ -5,6 +5,31 @@ export {
   type WingVaporOptions,
 } from "./wing-vapor-core";
 export {
+  canonical_frame,
+  capture_views,
+  collect_triangles,
+  depth_views,
+  type AirframeViews,
+  type CaptureFrame,
+  type CaptureOptions,
+  type DepthView,
+} from "./capture";
+export {
+  capture_airframe,
+  measure_airframe,
+  type MeasuredAirframe,
+} from "./measure";
+export {
+  lattice_loading,
+  SHAPE_STATIONS,
+  shape_planform,
+  shape_station,
+  station_span,
+  trapezoid_shape,
+  type WingShape,
+  type WingStation,
+} from "./wing-shape";
+export {
   AIR_CP,
   AIR_GAMMA,
   AIR_GAS_CONSTANT,
@@ -43,14 +68,18 @@ export {
 } from "./aerodynamics";
 export {
   cone_deficit,
+  edge_at,
   edge_deficit,
+  edge_path,
   tip_deficit,
   vapor_constants,
   vapor_deficit,
   vapor_state,
   wing_deficit,
+  type EdgePath,
   type VaporConstants,
   type VaporField,
+  type VaporGeometry,
   type VaporState,
 } from "./vapor-field";
 export {

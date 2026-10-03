@@ -7,7 +7,7 @@ import {
   type FC,
   type Ref,
 } from "react";
-import type { Group, Object3D } from "three";
+import type { Group, Mesh, Object3D } from "three";
 import type {
   VaporAir,
   VaporAirframe,
@@ -99,6 +99,21 @@ export type WingVaporProps = Omit<ThreeElements["group"], "ref"> & {
   /** Which way is up for it. By default +Y */
   up?: readonly [number, number, number];
 
+  /**
+   * A model to measure the aircraft from, by six depth views: its wing
+   * station by station and its planform and body, in place of `airframe`'s
+   * shape. `airframe` still wins for whatever it gives. Captured once, when
+   * it changes
+   */
+  capture?: Object3D | null;
+
+  /**
+   * Which of its meshes to measure. By default every visible one: leave out
+   * the landing gear and the stores, which are not the shape the air flies
+   * round
+   */
+  capture_filter?: (mesh: Mesh) => boolean;
+
   /** The most iterations one pixel's march may take */
   max_steps?: number;
 
@@ -120,6 +135,8 @@ export const WingVapor: FC<WingVaporProps> = ({
   target,
   forward,
   up,
+  capture,
+  capture_filter,
   max_steps,
   ref,
   children,
@@ -159,9 +176,24 @@ export const WingVapor: FC<WingVaporProps> = ({
     }
   }, [vapor, target]);
 
+  // Kept in a ref: a filter written inline is a new function every render,
+  // and the capture should not run again for it
+  const filter = useRef(capture_filter);
+
+  filter.current = capture_filter;
+
+  // The capture first, then the airframe given over it
   useLayoutEffect(() => {
-    if (stable_airframe) vapor?.update_airframe(stable_airframe);
-  }, [vapor, stable_airframe]);
+    if (!vapor) return;
+
+    if (capture) {
+      vapor.capture(capture, { filter: filter.current });
+    } else {
+      vapor.set_shape(null);
+    }
+
+    if (stable_airframe) vapor.update_airframe(stable_airframe);
+  }, [vapor, capture, stable_airframe]);
 
   useLayoutEffect(() => {
     if (stable_flight) vapor?.update_flight(stable_flight);

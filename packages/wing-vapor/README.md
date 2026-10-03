@@ -82,6 +82,53 @@ for it.
 Without React, `WingVaporCore` is the same thing: add `vapor.mesh` to the scene
 and set `vapor.object` to the object it follows.
 
+## Any shape: capture it
+
+Rather than typing the planform in, let the package measure the model:
+
+```tsx
+const { scene } = useGLTF("/jet.glb");
+
+<group>
+  <primitive object={scene} />
+  <WingVapor
+    capture={scene}
+    // Not the shape the air flies round
+    capture_filter={(mesh) => !/Gear|Pylon|Missile/.test(mesh.name)}
+    flight={flight}
+    air={air}
+  />
+</group>;
+```
+
+`capture` takes six orthographic depth views of the model, from above and
+below, ahead and astern, and either side, at 128 pixels along its longest side.
+They're rasterised on the CPU, so they need no renderer and come out the same
+everywhere: tens of milliseconds for a few hundred thousand triangles, once.
+From them it measures:
+
+- **every station of the wing** across the span: its leading and trailing
+  edges, its thickness and its mid-plane's height. A cranked delta keeps its
+  crank. A tailplane or canard at the same stations is told apart from the wing
+  by the clear air between them, and a fin standing on the wing by how tall it
+  is;
+- **where the wing meets the body**: where the leading edge leaps forward to the
+  nose, or the section gets far thicker for its chord;
+- **the spanwise loading**, from a Weissinger vortex lattice on the measured
+  planform;
+- **the body**, as the round body of the same largest cross-section, for the
+  cone.
+
+The field reads the wing as that table, station by station, so the vapor sheet
+follows the real planform and the tip vortices leave from the real tips. The
+measured planform is also fitted with straight edges, into `airframe`, for the
+lift and breakdown correlations. The aircraft's mass and how sharp its leading
+edge is can't be seen in depth views, so they stay as given.
+
+Without React: `vapor.capture(model, options)`, or `capture_airframe(model,
+options)` for the measurement alone. Depth views only see the outside, which
+is what the air sees too: an intake duct changes nothing a cloud forms in.
+
 ## The dials
 
 They split four ways, the way the physics does. Every one is a physical
@@ -90,7 +137,8 @@ quantity in SI units.
 - **`airframe`**: the wing's planform (span, root and tip chords, leading-edge
   sweep, where its apex sits, dihedral, thickness, where it meets the body), the
   fuselage as a body of revolution for the cone, and the mass, for the load
-  factor. The defaults are the docs' delta fighter.
+  factor. The defaults are the docs' delta fighter. `capture` fills in all of
+  the shape for you.
 - **`flight`**: `airspeed_m_s` and `angle_of_attack_rad`.
 - **`air`**: `altitude_m`, `temperature_offset_k` and `relative_humidity`.
   Everything comes down to the humidity. The cooling a wing or a vortex makes

@@ -3,6 +3,7 @@
 export { hash_cell, patchiness, value_noise } from "./noise";
 export {
   edge_vortex,
+  SHAPE_ROWS,
   tip_vortex,
   vapor_cone,
   vapor_field,
@@ -10,9 +11,11 @@ export {
   type VaporFieldNodes,
 } from "./field";
 export {
+  create_shape_texture,
   create_vapor_material,
   create_vapor_table,
   create_vapor_uniforms,
+  write_shape_texture,
   write_vapor_field,
   write_vapor_table,
   type VaporMaterialOptions,
