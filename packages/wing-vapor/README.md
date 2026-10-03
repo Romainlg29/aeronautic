@@ -216,10 +216,15 @@ circulation) and every part of the field.
    swept edge, and the vortex lift goes with it: the stall.
 4. **The pressure field**, as four deficits that add:
    - Each **tip vortex** is a Scully vortex holding part of the circulation,
-     `Γ = L / ρ V b′`. It trails along the free stream, rolls inboard to π/4 of
-     the span, sinks under its own downwash, and its core spreads by turbulent
-     diffusion until its pressure well is too shallow to fog. So the trail is
-     longer for a heavier pull, a slower aircraft and moister air.
+     `Γ = L / ρ V b′`. It leaves the tip with a core a few per cent of the
+     tip's chord across, holding part of that circulation, and the wake sheet
+     rolls up into it over `0.28 AR / C_L` spans (Spreiter and Sacks): within
+     a span in a hard pull, several in a gentle one. So the trail starts as a
+     thread at the tip and swells as it rolls up. It trails along the free
+     stream, rolls inboard to π/4 of the span, sinks under its own downwash,
+     and its core spreads by turbulent diffusion until its pressure well is
+     too shallow to fog. So the trail is longer for a heavier pull, a slower
+     aircraft and moister air.
    - Each **leading-edge vortex** is conical, so its core pressure is the same
      all the way along until it bursts. There its core swells and the vapor
      fades into a ragged puff.

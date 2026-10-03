@@ -74,8 +74,19 @@ const MAX_SECOND_SHARE = 0.4;
 // spreads its core, and so what ends the trail
 export const VORTEX_EDDY_VISCOSITY = 2e-4;
 
-// How many spans behind the wing the sheet takes to roll up
-export const ROLLUP_SPANS = 1;
+// How far behind the wing the sheet takes to roll up into the tip vortices,
+// over the span: 0.28 AR / C_L for an elliptic wing (Spreiter and Sacks).
+// A hard pull rolls up within a span; a gentle one takes several. Held
+// within these
+export const ROLLUP_COEFFICIENT = 0.28;
+export const ROLLUP_SPANS: [number, number] = [0.5, 4];
+
+// The tip vortex as it leaves the trailing edge: its core a few per cent of
+// the tip's chord across, holding a share of what it will once the sheet
+// has rolled into it. So the trail starts as a thread at the tip and swells
+// as it rolls up, before its core's slow spread thins it again
+export const TIP_START_CORE = 0.05;
+export const TIP_START_SHARE = 0.4;
 
 // The longest a trail is drawn, in metres
 export const MAX_TRAIL_M = 400;
@@ -206,6 +217,12 @@ export type VaporField = {
   // metre, and how far and how wide it can fog
   tip_circulation: number;
   tip_core2_m2: number;
+
+  // Its core radius squared as it leaves the trailing edge, and how far
+  // behind it the sheet takes to roll up: the circulation and the core grow
+  // from their start to the rolled-up ones as 1 - e^(-s / roll-up)
+  tip_start2_m2: number;
+  tip_rollup_m: number;
   tip_growth_m: number;
   tip_descent: number;
   tip_reach_m: number;
@@ -222,6 +239,8 @@ export type VaporField = {
   second_tip_height_m: number;
   second_circulation: number;
   second_core2_m2: number;
+  second_start2_m2: number;
+  second_rollup_m: number;
   second_growth_m: number;
   second_descent: number;
   second_reach_m: number;
@@ -423,6 +442,8 @@ type TipSource = {
   semispan_m: number;
   circulation: number;
   core2_m2: number;
+  start2_m2: number;
+  rollup_m: number;
   growth_m: number;
   descent: number;
   reach_m: number;
@@ -451,6 +472,8 @@ const tip_source = (field: VaporField, which: "wing" | "second"): TipSource =>
         semispan_m: field.semispan_m,
         circulation: field.tip_circulation,
         core2_m2: field.tip_core2_m2,
+        start2_m2: field.tip_start2_m2,
+        rollup_m: field.tip_rollup_m,
         growth_m: field.tip_growth_m,
         descent: field.tip_descent,
         reach_m: field.tip_reach_m,
@@ -468,6 +491,8 @@ const tip_source = (field: VaporField, which: "wing" | "second"): TipSource =>
         semispan_m: field.second_semispan_m,
         circulation: field.second_circulation,
         core2_m2: field.second_core2_m2,
+        start2_m2: field.second_start2_m2,
+        rollup_m: field.second_rollup_m,
         growth_m: field.second_growth_m,
         descent: field.second_descent,
         reach_m: field.second_reach_m,
@@ -544,13 +569,20 @@ const side_deficit = (
       (y - tip.height_m) ** 2 +
       (z - side * tip.semispan_m) ** 2;
 
-    return deficit(circulation * formed, r2, tip.core2_m2);
+    return deficit(circulation * TIP_START_SHARE * formed, r2, tip.start2_m2);
   }
 
   const at = trail_point(points, spacing_m, along, scratch_trail);
   const r2 = (x - at.x) ** 2 + (y - at.y) ** 2 + (z - at.z) ** 2;
+  const rolled = 1 - Math.exp(-along / Math.max(tip.rollup_m, 1e-3));
 
-  return deficit(circulation, r2, tip.core2_m2 + tip.growth_m * along);
+  return deficit(
+    circulation * (TIP_START_SHARE + (1 - TIP_START_SHARE) * rolled),
+    r2,
+    tip.start2_m2 +
+      (tip.core2_m2 - tip.start2_m2) * rolled +
+      tip.growth_m * along,
+  );
 };
 
 /**
@@ -566,7 +598,7 @@ const source_layout = (tip: TipSource): TrailLayout => ({
   sin_alpha: tip.sin_alpha,
   flow_z: tip.flow_z,
   descent: tip.descent,
-  rollup_m: ROLLUP_SPANS * 2 * tip.semispan_m,
+  rollup_m: tip.rollup_m,
   length_m: Math.max(tip.reach_m, 1),
 });
 
@@ -1151,6 +1183,16 @@ export const vapor_state = (
 
   const second_core = airframe.tip_core_radius * second_span;
 
+  const rollup_spans = Math.min(
+    Math.max(
+      (ROLLUP_COEFFICIENT * (span * span)) /
+        Math.max(area_m2, 1e-3) /
+        Math.max(Math.abs(state.lift_coefficient), 1e-3),
+      ROLLUP_SPANS[0],
+    ),
+    ROLLUP_SPANS[1],
+  );
+
   // The leading edge from where it leaves the body to the tip
   const edge_apex_m = shape_station(shape, shape.root_span_m).leading_m;
   const edge_length_m = Math.max(shape.leading_m[tip] - edge_apex_m, 0);
@@ -1197,6 +1239,11 @@ export const vapor_state = (
 
     tip_circulation,
     tip_core2_m2: tip_core * tip_core,
+    tip_start2_m2: Math.min(
+      (TIP_START_CORE * Math.max(shape.chord_m[tip], 1e-3)) ** 2,
+      tip_core * tip_core,
+    ),
+    tip_rollup_m: rollup_spans * span,
     tip_growth_m,
     tip_descent,
     tip_reach_m: 0,
@@ -1209,6 +1256,11 @@ export const vapor_state = (
     second_tip_height_m: secondary?.tip_height_m ?? 0,
     second_circulation: airframe.tip_core_share * second_circulation,
     second_core2_m2: second_core * second_core,
+    second_start2_m2: Math.min(
+      (TIP_START_CORE * (secondary?.tip_chord_m ?? 0)) ** 2,
+      second_core * second_core,
+    ),
+    second_rollup_m: rollup_spans * second_span,
     second_growth_m: (4 * VORTEX_EDDY_VISCOSITY * second_circulation) / speed,
     second_descent:
       second_circulation / (2 * Math.PI * VORTEX_SPACING * second_span) / speed,
@@ -1296,14 +1348,24 @@ export const vapor_state = (
     const tip = tip_source(field, which);
     const strongest = tip.circulation * Math.max(tip.positive, tip.negative);
     const well = vortex_k * strongest * strongest;
-    const widest = well / needed - tip.core2_m2;
 
-    if (!(needed < 1 && widest > 0 && tip.circulation > 0)) {
+    // Rolled up, and as it leaves the trailing edge: a vortex too weak to
+    // fog once its core has grown may still fog for a while behind the tip
+    const widest = well / needed - tip.core2_m2;
+    const first =
+      (well * TIP_START_SHARE * TIP_START_SHARE) / needed - tip.start2_m2;
+
+    if (!(needed < 1 && (widest > 0 || first > 0) && tip.circulation > 0)) {
       continue;
     }
 
-    const bound = Math.sqrt(widest) * 1.15 + 0.1;
-    const reach = Math.min(widest / Math.max(tip.growth_m, 1e-9), MAX_TRAIL_M);
+    // Never wider than the whole circulation round the thinnest core
+    const bound =
+      Math.sqrt(Math.max(well / needed - tip.start2_m2, 0)) * 1.15 + 0.1;
+    const reach = Math.min(
+      widest > 0 ? widest / Math.max(tip.growth_m, 1e-9) : tip.rollup_m,
+      MAX_TRAIL_M,
+    );
 
     if (which === "wing") {
       field.tip_bound_m = bound;

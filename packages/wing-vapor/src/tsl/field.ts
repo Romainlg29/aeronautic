@@ -36,6 +36,7 @@ import {
   NOSE_REACH,
   ROOT_FADE,
   SHOCK_WIDTH,
+  TIP_START_SHARE,
   type VaporConstants,
   type VaporField,
 } from "../vapor-field";
@@ -183,6 +184,8 @@ type TipNodes = {
   semispan: F;
   circulation: F;
   core2: F;
+  start2: F;
+  rollup: F;
   growth: F;
   reach: F;
   bound: F;
@@ -207,6 +210,8 @@ const tip_nodes = (f: VaporFieldNodes, which: "wing" | "second"): TipNodes =>
         semispan: f.semispan_m,
         circulation: f.tip_circulation,
         core2: f.tip_core2_m2,
+        start2: f.tip_start2_m2,
+        rollup: f.tip_rollup_m,
         growth: f.tip_growth_m,
         reach: f.tip_reach_m,
         bound: f.tip_bound_m,
@@ -220,6 +225,8 @@ const tip_nodes = (f: VaporFieldNodes, which: "wing" | "second"): TipNodes =>
         semispan: f.second_semispan_m,
         circulation: f.second_circulation,
         core2: f.second_core2_m2,
+        start2: f.second_start2_m2,
+        rollup: f.second_rollup_m,
         growth: f.second_growth_m,
         reach: f.second_reach_m,
         bound: f.second_bound_m,
@@ -290,13 +297,19 @@ const tip_side = (
   const offset = p.sub(axis);
   const radius2 = offset.dot(offset);
 
+  // Rolling up behind it: from a share of the circulation round a thin core
+  // to all of it round the rolled-up one, as `side_deficit` does
+  const rolled = float(1).sub(exp(trailed.negate().div(max(tip.rollup, 1e-3))));
+
   const formed = select(
     ahead,
-    clamp(p.x.sub(tip_le).div(tip.chord), 0, 1),
-    float(1),
+    clamp(p.x.sub(tip_le).div(tip.chord), 0, 1).mul(TIP_START_SHARE),
+    rolled.mul(1 - TIP_START_SHARE).add(TIP_START_SHARE),
   );
 
-  const core2 = tip.core2.add(tip.growth.mul(trailed));
+  const core2 = tip.start2
+    .add(tip.core2.sub(tip.start2).mul(rolled))
+    .add(tip.growth.mul(trailed));
 
   const deficit = vortex_deficit(
     f,

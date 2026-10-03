@@ -56,6 +56,34 @@ describe("vapor_state", () => {
     expect(gentle.tip_reach_m).toBe(0);
   });
 
+  it("trails a thread from the tip that swells as it rolls up", () => {
+    const state = vapor_state(airframe, pulling(170, 7), humid, look);
+    const { field } = state;
+    const points = state.trails.positive;
+
+    // How wide the fogging tube is at one point of the trail, straight up
+    // from its axis
+    const width = (point: number) => {
+      const [x, y, z] = points.slice(point * 3, point * 3 + 3);
+      let radius = 0;
+
+      while (
+        radius < 5 &&
+        vapor_deficit(state, x, y + radius, z) > field.saturation_deficit
+      ) {
+        radius += 0.01;
+      }
+
+      return radius;
+    };
+
+    const rolled = Math.round((2 * field.tip_rollup_m) / field.trail_spacing_m);
+
+    expect(field.tip_rollup_m).toBeGreaterThan(0.5 * airframe.span_m);
+    expect(width(0)).toBeGreaterThan(0);
+    expect(width(0)).toBeLessThan(0.7 * width(rolled));
+  });
+
   it("trails them further in moister air", () => {
     const moister = { ...humid, relative_humidity: 0.97 };
 
