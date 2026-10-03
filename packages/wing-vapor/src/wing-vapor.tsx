@@ -195,11 +195,14 @@ export const WingVapor: FC<WingVaporProps> = ({
 
   // Measured a few milliseconds a frame, so a big model doesn't stall the
   // page; the vapour flies the airframe as given until it is done
-  const [captured, set_captured] = useState<MeasuredAirframe | null>(null);
+  // Kept with the model it measured, so a capture that's been superseded
+  // reads as none
+  const [result, set_result] = useState<{
+    object: Object3D;
+    measured: MeasuredAirframe;
+  } | null>(null);
 
   useEffect(() => {
-    set_captured(null);
-
     if (!vapor || !capture) return;
 
     const abort = new AbortController();
@@ -208,12 +211,18 @@ export const WingVapor: FC<WingVaporProps> = ({
       ...vapor.frame_options,
       filter: filter.current,
       signal: abort.signal,
-    }).then(set_captured, (error: unknown) => {
-      if (!abort.signal.aborted) console.error(error);
-    });
+    }).then(
+      (measured) => set_result({ object: capture, measured }),
+      (error: unknown) => {
+        if (!abort.signal.aborted) console.error(error);
+      },
+    );
 
     return () => abort.abort();
   }, [vapor, capture]);
+
+  const captured =
+    capture && result?.object === capture ? result.measured : null;
 
   const shape_from = measured ?? captured;
 

@@ -355,7 +355,7 @@ describe("measure_airframe", () => {
 
     await expect(
       capture_airframe_async(fighter, { signal: abort.signal }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/abort/i);
   }, 30_000);
 });
 
@@ -392,6 +392,8 @@ describe("serialize_capture", () => {
     );
     const baked = serialize_capture(measured);
 
-    expect(() => deserialize_capture({ ...baked, version: 0 })).toThrow();
+    expect(() => deserialize_capture({ ...baked, version: 0 })).toThrow(
+      /version/,
+    );
   });
 });
