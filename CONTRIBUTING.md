@@ -122,7 +122,8 @@ stored anywhere.
 
 1. Bump `version` in `packages/afterburner/package.json`, and commit.
 2. Tag the commit `vX.Y.Z` and push the tag.
-3. Approve the run in the Actions tab.
+3. Approve the run in the Actions tab. Once the package is on npm, the
+   workflow creates the GitHub release for the tag, with generated notes.
 
 ### One-time setup (maintainer)
 
@@ -154,6 +155,12 @@ stored anywhere.
   - Set publishing access to **Require two-factor authentication and disallow
     tokens**. Trusted publishing still works with this on, and nothing else
     can publish.
+- **The 0.0.1 release on GitHub**, by hand too: push the `v0.0.1` tag, reject
+  the Release run it starts (0.0.1 is already on npm), and create the release:
+
+  ```bash
+  gh release create v0.0.1 --verify-tag --generate-notes
+  ```
 
 ## Code of conduct
 
