@@ -80,14 +80,37 @@ const smoothstep = (low: number, high: number, value: number): number => {
   return t * t * (3 - 2 * t);
 };
 
+// The throttle's travel. Zero is idle and one is military power, the most the
+// dry engine makes; past the detent is reheat, full at the end of the travel
+export const AFTERBURNER_MAX_THROTTLE = 1.1;
+
+// How much reheat lights as the throttle passes the threshold
+// A burner does not creep in: its first zone lights with a thump, and the rest
+// stage in behind it as the throttle goes on to the stop
+export const PLUME_MIN_REHEAT = 0.35;
+
+// Over how much throttle that first zone lights: a few slider steps, so it
+// fades in rather than popping, and the batch eases it in over time as well
+export const PLUME_LIGHT_OFF = 0.03;
+
+/**
+ * Hold a throttle inside its travel, reading anything else as idle.
+ * @param throttle The throttle
+ * @returns 0 to `AFTERBURNER_MAX_THROTTLE`
+ */
+export const clamp_throttle = (throttle: number): number =>
+  Number.isFinite(throttle) ? clamp(throttle, 0, AFTERBURNER_MAX_THROTTLE) : 0;
+
 /**
  * How much of the afterburner is lit at one throttle setting.
  *
- * Below the threshold there is no reheat, only the dry engine. A threshold of
- * zero or less is an engine with no burner to light, which is always lit.
- * @param throttle How hard the engine is running, 0 to 1
+ * Below the threshold there is no reheat, only the dry engine. Past it the
+ * first zone lights within `PLUME_LIGHT_OFF` and the rest stage in up to 1.1.
+ * A threshold of zero or less is an engine with no burner to light, which is
+ * always lit.
+ * @param throttle How hard the engine is running, 0 to 1.1
  * @param profile Where the burner lights
- * @returns Zero on dry thrust, one at full burner, smooth between
+ * @returns Zero on dry thrust, one at full burner
  */
 export const burner_lit = (
   throttle: number,
@@ -99,8 +122,85 @@ export const burner_lit = (
     return 1;
   }
 
-  // A burner lit exactly at full power is a step, and a step is not a curve
-  return smoothstep(threshold, Math.max(threshold + 1e-6, 1), throttle);
+  const lit = smoothstep(threshold, threshold + PLUME_LIGHT_OFF, throttle);
+
+  const staged = smoothstep(
+    threshold,
+    Math.max(threshold + PLUME_LIGHT_OFF, AFTERBURNER_MAX_THROTTLE),
+    throttle,
+  );
+
+  return lit * (PLUME_MIN_REHEAT + (1 - PLUME_MIN_REHEAT) * staged);
+};
+
+/**
+ * How far the burner has lit, as far as the eye can tell: zero on dry thrust,
+ * one once its first zone is in, and always one for a rocket.
+ * @param burner How much reheat is lit, from `burner_lit`
+ * @returns 0 to 1
+ */
+export const burner_light_off = (burner: number): number =>
+  Math.min(burner / PLUME_MIN_REHEAT, 1);
+
+// How much of the dry engine's glow is left at idle, against military power
+export const PLUME_IDLE_GLOW = 0.3;
+
+// hc / λk at 555 nm, where the eye is most sensitive: by Wien's law, how
+// steeply a glow's luminance falls as it cools, e to the minus this over T
+export const PLUME_PHOTOPIC_K = 25_900;
+
+// The most a camera opens up for a dim plume, so a cold one cannot blow up
+// what little it glows into noise
+export const PLUME_MAX_ADAPTATION = 1e8;
+
+/**
+ * How far the camera opens up for a plume dimmer than it is at full power.
+ *
+ * Planck's law is steep: a dry turbofan's exhaust at 1000 K is a hundred
+ * thousandth as bright as its burner at 1700, so a camera exposed for the
+ * burner sees nothing at all when it goes out. A real one, filming, meters the
+ * plume and opens up, and the dull red of the dry engine shows. This is that,
+ * as a share of the way to a camera that would show every plume equally bright.
+ * @param metered_k The hottest the gas leaves at now
+ * @param full_k And at full power
+ * @param adaptation How far the camera follows, 0 not at all to 1 fully
+ * @returns A multiplier on the exposure, one at full power
+ */
+export const plume_adaptation = (
+  metered_k: number,
+  full_k: number,
+  adaptation: number,
+): number => {
+  const exponent =
+    clamp(adaptation, 0, 1) *
+    PLUME_PHOTOPIC_K *
+    (1 / Math.max(metered_k, 1) - 1 / Math.max(full_k, 1));
+
+  return clamp(Math.exp(exponent), 1, PLUME_MAX_ADAPTATION);
+};
+
+/**
+ * How hot the dry engine's exhaust is at one throttle setting.
+ *
+ * A turbine runs hotter the harder it is pushed: at idle the exhaust is little
+ * over the air, at military power it is `dry_temperature_k`. Reheat does not
+ * change it, being added on top.
+ * @param params The engine
+ * @param setting The dry throttle, 0 to 1
+ * @param profile How much of the heat is left at idle
+ * @param ambient_k The air's temperature
+ * @returns In kelvin
+ */
+export const dry_temperature = (
+  params: AfterburnerParams,
+  setting: number,
+  profile: AfterburnerProfile,
+  ambient_k: number,
+): number => {
+  const share =
+    profile.idle_temperature + (1 - profile.idle_temperature) * setting;
+
+  return ambient_k + (params.dry_temperature_k - ambient_k) * share;
 };
 
 /**
@@ -159,6 +259,14 @@ export type JetState = {
   // chamber's and stays
   soot_formed: number;
 
+  // How far the camera opens up for the plume, against full power
+  adaptation: number;
+
+  // How bright the dry engine's turbine and jet pipe glow, seen up the nozzle,
+  // the exposure divided out. Zero for a rocket, and once the burner lights
+  // it is drowned out
+  glow: number;
+
   // How far the plume is drawn, and how wide the field is at each end of it,
   // its outline's reach and all
   reach_m: number;
@@ -186,7 +294,7 @@ export const soot_formation = (
 /**
  * The jet one nozzle makes at one throttle setting.
  * @param params The engine
- * @param throttle How hard it is running, 0 to 1
+ * @param throttle How hard it is running: 0 to 1 dry, on to 1.1 in reheat
  * @param profile The air it runs in
  * @param scale How much bigger than its params the engine is drawn
  * @returns The jet
@@ -197,13 +305,17 @@ export const jet_state = (
   profile: AfterburnerProfile,
   scale = 1,
 ): JetState => {
-  const setting = clamp(throttle, 0, 1);
-  const burner = burner_lit(setting, profile);
+  const travel = clamp_throttle(throttle);
+
+  // The dry engine is at its hardest by the detent, and reheat adds to that
+  const setting = Math.min(travel, 1);
+  const burner = burner_lit(travel, profile);
   const air = atmosphere(profile);
 
+  const dry_k = dry_temperature(params, setting, profile, air.temperature_k);
+
   const exit_temperature_k =
-    params.dry_temperature_k +
-    (params.exit_temperature_k - params.dry_temperature_k) * burner;
+    dry_k + (params.exit_temperature_k - dry_k) * burner;
 
   // Only an engine with a dry state breathes air
   const breathes = smoothstep(
@@ -313,8 +425,14 @@ export const jet_state = (
   // for a badly mismatched one, either way round
   const mismatch = 1 - Math.exp(-4 * Math.abs(Math.log(pressure_ratio)));
 
+  // A dry jet's train is real but far too cool to glow: the diamonds only
+  // show once the burner relights the gas behind each disk
+  const diamonds = 1 + (burner - 1) * breathes;
+
   const strength =
-    (profile.shock_floor + (1 - profile.shock_floor) * mismatch) * supersonic;
+    (profile.shock_floor + (1 - profile.shock_floor) * mismatch) *
+    supersonic *
+    diamonds;
 
   // How far the gas swings either side of the jet's temperature through a cell
   //
@@ -388,6 +506,17 @@ export const jet_state = (
     longest_m,
   );
 
+  // The camera only opens up for a burner it can see: dry, there is only the
+  // glow, and that is drawn at the exposure the burner is
+  const lighting = burner_light_off(burner);
+
+  const glow =
+    (breathes *
+      (1 - lighting) *
+      (PLUME_IDLE_GLOW + (1 - PLUME_IDLE_GLOW) * setting) *
+      Math.max(profile.dry_glow, 0)) /
+    Math.max(profile.exposure, 1e-6);
+
   const state: JetState = {
     burner,
     breathes,
@@ -409,6 +538,12 @@ export const jet_state = (
     compression,
     soot_survival,
     soot_formed,
+    adaptation: plume_adaptation(
+      exit_temperature_k,
+      params.exit_temperature_k,
+      profile.adaptation * lighting,
+    ),
+    glow,
     reach_m,
     outer_near_m: 0,
     outer_far_m: 0,

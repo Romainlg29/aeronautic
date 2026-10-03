@@ -23,20 +23,25 @@ const engine = useRef<AfterburnerHandle>(null);
 <Afterburner ref={engine} preset="afterburner" />;
 ```
 
-| member                   | what it does                                                    |
-| ------------------------ | --------------------------------------------------------------- |
-| `throttle`               | Read or write, 0 to 1. Cheap enough to write every frame.       |
-| `update_params(partial)` | Merges into the current params. Rewrites this one instance.     |
-| `set_params(params)`     | Replaces the params over the preset.                            |
-| `set_offset(offset)`     | Moves or turns the nozzle in the frame it sits in.              |
-| `set_direction([x,y,z])` | Points the exhaust.                                             |
-| `params`                 | The resolved params, or `null` before the nozzle is in a batch. |
-| `object`                 | The nozzle's `Group`.                                           |
-| `nozzle`                 | The core `AfterburnerNozzle`, for anything else.                |
-| `batch`                  | The `AfterburnerBatchCore` it draws with.                       |
+| member                   | what it does                                                                      |
+| ------------------------ | --------------------------------------------------------------------------------- |
+| `throttle`               | Read or write, 0 to 1 dry, to 1.1 with reheat. Cheap enough to write every frame. |
+| `update_params(partial)` | Merges into the current params. Rewrites this one instance.                       |
+| `set_params(params)`     | Replaces the params over the preset.                                              |
+| `set_offset(offset)`     | Moves or turns the nozzle in the frame it sits in.                                |
+| `set_direction([x,y,z])` | Points the exhaust.                                                               |
+| `params`                 | The resolved params, or `null` before the nozzle is in a batch.                   |
+| `object`                 | The nozzle's `Group`.                                                             |
+| `nozzle`                 | The core `AfterburnerNozzle`, for anything else.                                  |
+| `batch`                  | The `AfterburnerBatchCore` it draws with.                                         |
 
 The handle is stable for the component's life. It's safe to use before the
 nozzle has joined a batch.
+
+The plume doesn't jump to a throttle you write: it eases toward it over the
+batch's `response_s`, a quarter of a second by default, as a real engine spools
+and a burner lights. `handle.nozzle.drawn_throttle` is where it has got to. Set
+`response_s={0}` on `<AfterburnerBatch>` to follow at once.
 
 <Example name="throttle-ref" />
 

@@ -14,15 +14,16 @@ new AfterburnerBatchCore(options?: AfterburnerBatchOptions)
 
 ### Options
 
-| option     | type                                         | what it is                                                      |
-| ---------- | -------------------------------------------- | --------------------------------------------------------------- |
-| `preset`   | `AfterburnerPresetName \| AfterburnerPreset` | Which look nozzles start from, and the profile it brings.       |
-| `profile`  | `Partial<AfterburnerProfile>`                | Over the preset's.                                              |
-| `quality`  | `AfterburnerQualityInput`                    | What a frame may spend.                                         |
-| `haze`     | `boolean`                                    | Whether to bend what is behind the plumes.                      |
-| `hooks`    | `AfterburnerHooks`                           | TSL to change the plume.                                        |
-| `capacity` | `number`                                     | How many nozzles to make room for up front. It grows past this. |
-| `backdrop` | `AfterburnerBackdrop`                        | From `afterburner_pass`. Fixed for the batch's life.            |
+| option       | type                                         | what it is                                                                |
+| ------------ | -------------------------------------------- | ------------------------------------------------------------------------- |
+| `preset`     | `AfterburnerPresetName \| AfterburnerPreset` | Which look nozzles start from, and the profile it brings.                 |
+| `profile`    | `Partial<AfterburnerProfile>`                | Over the preset's.                                                        |
+| `quality`    | `AfterburnerQualityInput`                    | What a frame may spend.                                                   |
+| `haze`       | `boolean`                                    | Whether to bend what is behind the plumes.                                |
+| `hooks`      | `AfterburnerHooks`                           | TSL to change the plume.                                                  |
+| `capacity`   | `number`                                     | How many nozzles to make room for up front. It grows past this.           |
+| `response_s` | `number`                                     | Seconds a plume takes to follow its throttle. Default 0.25; 0 is at once. |
+| `backdrop`   | `AfterburnerBackdrop`                        | From `afterburner_pass`. Fixed for the batch's life.                      |
 
 ### Members
 
@@ -40,6 +41,7 @@ new AfterburnerBatchCore(options?: AfterburnerBatchOptions)
 | `set_haze(boolean)`       | Turn the haze on or off. Recompiles.                              |
 | `set_hooks(hooks?)`       | Change the hooks. Recompiles.                                     |
 | `time_scale`              | Seconds of flame per second.                                      |
+| `response_s`              | Seconds a plume takes to follow its throttle. Default 0.25.       |
 | `detail_distance_m`       | Past this, eddies are dropped. Default 900.                       |
 | `cheap_distance_m`        | Past this, one sample. Default 3000.                              |
 | `min_screen_fraction`     | Smaller plumes are culled. Default 0.001.                         |
@@ -64,13 +66,14 @@ Made by `batch.add(options)`.
 | `offset`   | `AfterburnerOffset`                          | Where on the object (or the matrix) it sits.                |
 | `params`   | `AfterburnerParamsInput`                     | The engine.                                                 |
 | `preset`   | `AfterburnerPresetName \| AfterburnerPreset` | Which look to start from. Defaults to the batch's.          |
-| `throttle` | `number`                                     | 0 to 1.                                                     |
+| `throttle` | `number`                                     | 0 to 1 dry, to 1.1 with reheat.                             |
 
 ### Members
 
 | member                         | what it does                                                        |
 | ------------------------------ | ------------------------------------------------------------------- |
-| `throttle`                     | Read or write.                                                      |
+| `throttle`                     | Read or write. The plume eases toward it over `response_s`.         |
+| `drawn_throttle`               | The throttle it is drawn at right now, read-only.                   |
 | `params`                       | The resolved params, read-only.                                     |
 | `set_params(params?, preset?)` | Replace the params.                                                 |
 | `update_params(partial)`       | Merge into them.                                                    |

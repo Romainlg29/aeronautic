@@ -86,11 +86,28 @@ still look loose, because the frame was in the wrong place.
 
 The one thing a frame writes per nozzle, and one float of it.
 
-- **`burner_lit`**: a smoothstep from `burner_threshold`, which is 0.55, near
-  where a real burner lights past the military power detent. Below it the
-  engine leaves at `dry_temperature_k` rather than `exit_temperature_k`, which
-  for a turbofan is a glow the colour of hot metal and nothing bluer. A
-  threshold of zero is an engine with no burner, always lit: a rocket.
+- **The travel**: 0 is idle, 1 is military power, the most the engine makes
+  dry, and 1.1 is full reheat. `AFTERBURNER_MAX_THROTTLE` is that 1.1, and
+  `clamp_throttle` holds a value inside it.
+- **`burner_lit`**: zero below `burner_threshold`, which is 1, the military
+  power detent. Past it the first zone lights within `PLUME_LIGHT_OFF` of
+  throttle, to `PLUME_MIN_REHEAT` of full, and the rest stage in up to 1.1.
+  The batch also eases each plume toward its throttle over `response_s`, a
+  quarter of a second by default, so a burner lights over a moment as a real
+  one does rather than in a frame. A threshold of zero is an engine
+  with no burner, always lit: a rocket.
+- **Dry thrust**: below the burner the engine leaves at `dry_temperature`,
+  which climbs from `idle_temperature` of the way above the air at idle to
+  `dry_temperature_k` at military power. Gas that cool is transparent, so it
+  shows only as heat shimmer, and there are no shock diamonds: they need the
+  burner's heat to glow. What a real dry engine shows is its last turbine
+  stage and jet pipe, glowing a dull red seen up the nozzle from nearly
+  astern. `dry_glow` sets how bright, from `PLUME_IDLE_GLOW` of it at idle to
+  all of it at military power, and the lip hides it from the side. Once the
+  burner lights the glow is drowned out, and the camera opens up for the
+  first, dim zone: `plume_adaptation` is the gain an auto-exposure would add,
+  a share `adaptation` of the way to full-power brightness, fading out as
+  the burner climbs to 1.1.
 - **The pressure ratio**: falls toward `idle_pressure` of full, because a
   throttled engine is a lower chamber or turbine pressure. The shock train
   shortens and tightens with it, and an overexpanded rocket pinches harder.

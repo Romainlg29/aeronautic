@@ -23,7 +23,7 @@ useFrame(({ clock }) => {
 
   const t = clock.elapsedTime;
 
-  engine.current.throttle = 0.6 + 0.4 * Math.sin(t * 0.9);
+  engine.current.throttle = 0.55 + 0.55 * Math.sin(t * 0.9);
   engine.current.set_direction([1, 0.08 * Math.sin(t * 0.6), 0]);
 });
 

@@ -43,6 +43,7 @@ import {
   screenUV,
   select,
   sin,
+  smoothstep,
   sqrt,
   step,
   transpose,
@@ -133,6 +134,14 @@ const SHOCK_TRAIN_LENGTHS = 3;
 
 // Rec. 709 luminance, for the one alpha a colour transmittance is blended with
 const LUMINANCE: [number, number, number] = [0.2126, 0.7152, 0.0722];
+
+// How far up the jet pipe the last turbine stage stands, in nozzle radii
+// A fighter's pipe is long, the burner's duct being most of it, so the
+// turbine only shows to a camera nearly astern
+const TURBINE_DEPTH = 3;
+
+// How brightly the pipe's wall glows, against the turbine at its end
+const PIPE_GLOW = 0.3;
 
 /**
  * The names of the per instance attributes the material reads.
@@ -593,10 +602,20 @@ export const create_afterburner_material = (
     "v_optics",
   ) as unknown as V4;
   const v_exit = varying(
-    vec3(jet.exit_temperature, jet.compression, jet.soot_survival),
+    vec4(
+      jet.exit_temperature,
+      jet.compression,
+      jet.soot_survival,
+      jet.adaptation,
+    ),
     "v_exit",
-  ) as unknown as V3;
-  const v_band = varying(band, "v_band") as unknown as V4;
+  ) as unknown as V4;
+  // The radicals are the reheat's flame: a dry turbine has burnt its fuel out
+  // long before the nozzle, and leaves none. A rocket's is always burning
+  const v_band = varying(
+    vec4(band.rgb, band.a.mul(mix(float(1), jet.burner, jet.breathes))),
+    "v_band",
+  ) as unknown as V4;
   const v_misc = varying(
     vec4(motion.x, motion.y, motion.z, shape.w),
     "v_misc",
@@ -613,6 +632,7 @@ export const create_afterburner_material = (
     vec3(outline_fit.x, reach, outline.w),
     "v_outline_fit",
   ) as unknown as V3;
+  const v_glow = varying(vec2(jet.glow, shape.x), "v_glow") as unknown as V2;
 
   // Fragment stage
   const radiance = Fn(() => {
@@ -643,6 +663,8 @@ export const create_afterburner_material = (
 
       band_color: v_band.rgb,
       band_strength: v_band.a,
+
+      glow: v_glow.x,
 
       turbulence: v_misc.x,
       meander: v_misc.y,
@@ -946,7 +968,67 @@ export const create_afterburner_material = (
       },
     );
 
-    const exposed = light.mul(p.exposure).toVar();
+    // A dry engine's gas is too cool to see: a thousand kelvin is a shimmer
+    // and nothing more. What glows is the hardware, the last turbine stage and
+    // the pipe behind it a dull red, and only up the nozzle from astern
+    If(
+      v_glow.x.greaterThan(0).and(direction.x.lessThan(-PLUME_EPSILON)),
+      () => {
+        const exit_radius = max(v_glow.y, PLUME_EPSILON);
+
+        // Where the ray crosses the exit plane, and where it would meet the
+        // turbine deep behind it
+        const to_exit = origin.x.div(direction.x.negate());
+        const to_turbine = origin.x
+          .add(exit_radius.mul(TURBINE_DEPTH))
+          .div(direction.x.negate());
+
+        const at_exit = length(origin.yz.add(direction.yz.mul(to_exit))).div(
+          exit_radius,
+        );
+        const at_turbine = length(
+          origin.yz.add(direction.yz.mul(to_turbine)),
+        ).div(exit_radius);
+
+        // Through the lip, and nothing opaque in the way
+        const through_lip = float(1)
+          .sub(smoothstep(0.9, 1, at_exit))
+          .mul(step(0, to_exit))
+          .mul(step(to_exit, scene_t));
+
+        // The blades glow, the hub less, and as the view tilts the disc slides
+        // behind the lip until only the pipe's wall is left
+        const blades = smoothstep(0.25, 0.5, at_turbine).mul(0.5).add(0.5);
+        const turbine = float(1)
+          .sub(smoothstep(0.85, 1, at_turbine))
+          .mul(blades);
+
+        // A ray that misses the turbine meets the pipe's wall, cool by the lip
+        // and hotter the deeper it goes. How deep, from where it crosses the
+        // radius between the exit plane and the turbine
+        const deep = clamp(
+          float(1)
+            .sub(at_exit)
+            .div(max(at_turbine.sub(at_exit), PLUME_EPSILON)),
+          0,
+          1,
+        );
+
+        const wall = deep.mul(deep).mul(PIPE_GLOW);
+
+        const seen = mix(wall, float(1), turbine).mul(through_lip);
+
+        // The hardware runs at about the gas's own temperature, and its colour
+        // is that blackbody's, held at a luminance of one
+        const hue = blackbody(v_exit.x);
+        const tint = hue.div(max(dot(hue, vec3(...LUMINANCE)), 1e-6));
+
+        light.addAssign(transmittance.mul(tint).mul(v_glow.x).mul(seen));
+      },
+    );
+
+    // Opened up for a dim plume, as a camera metering it would be
+    const exposed = light.mul(p.exposure).mul(v_exit.w).toVar();
 
     const coverage = float(1).sub(dot(transmittance, vec3(...LUMINANCE)));
 

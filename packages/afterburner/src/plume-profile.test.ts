@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  AFTERBURNER_MAX_THROTTLE,
   burner_lit,
+  clamp_throttle,
+  dry_temperature,
+  plume_adaptation,
+  PLUME_LIGHT_OFF,
+  PLUME_MAX_ADAPTATION,
+  PLUME_MIN_REHEAT,
+  PLUME_PHOTOPIC_K,
   jet_centreline,
   jet_half_width,
   jet_state,
@@ -19,27 +27,149 @@ import {
 
 const profile = default_afterburner_profile();
 
+// Full power, the burner and all
+const FULL = AFTERBURNER_MAX_THROTTLE;
+
 describe("burner_lit", () => {
-  it("is out below the threshold", () => {
+  it("is out below the threshold, all the way to military power", () => {
     expect(burner_lit(profile.burner_threshold - 0.01, profile)).toBe(0);
     expect(burner_lit(0, profile)).toBe(0);
+    expect(burner_lit(1, profile)).toBe(0);
   });
 
-  it("is fully in at full throttle", () => {
-    expect(burner_lit(1, profile)).toBeCloseTo(1);
+  it("is fully in at the end of the travel", () => {
+    expect(burner_lit(AFTERBURNER_MAX_THROTTLE, profile)).toBeCloseTo(1);
   });
 
-  it("climbs smoothly between, and never past one", () => {
-    const middle = (profile.burner_threshold + 1) / 2;
+  it("fades its first zone in just past the threshold", () => {
+    const lighting = burner_lit(
+      profile.burner_threshold + PLUME_LIGHT_OFF / 2,
+      profile,
+    );
 
-    expect(burner_lit(middle, profile)).toBeCloseTo(0.5);
-    expect(burner_lit(2, profile)).toBeCloseTo(1);
+    const lit = burner_lit(profile.burner_threshold + PLUME_LIGHT_OFF, profile);
+
+    expect(lighting).toBeGreaterThan(0);
+    expect(lighting).toBeLessThan(PLUME_MIN_REHEAT);
+    expect(lit).toBeGreaterThanOrEqual(PLUME_MIN_REHEAT);
+    expect(lit).toBeLessThan(0.5);
   });
 
-  it("survives a threshold set at full power, where the span degenerates", () => {
-    const stepped = { ...profile, burner_threshold: 1 };
+  it("stages in between, and never past one", () => {
+    let last = 0;
 
-    expect(Number.isFinite(burner_lit(1, stepped))).toBe(true);
+    for (let throttle = 1; throttle <= 1.2; throttle += 0.005) {
+      const lit = burner_lit(throttle, profile);
+
+      expect(lit).toBeGreaterThanOrEqual(last);
+      expect(lit).toBeLessThanOrEqual(1);
+
+      last = lit;
+    }
+  });
+
+  it("survives a threshold set at full travel, where the span degenerates", () => {
+    const stepped = { ...profile, burner_threshold: AFTERBURNER_MAX_THROTTLE };
+
+    expect(Number.isFinite(burner_lit(AFTERBURNER_MAX_THROTTLE, stepped))).toBe(
+      true,
+    );
+  });
+});
+
+describe("clamp_throttle", () => {
+  it("holds the throttle inside its travel", () => {
+    expect(clamp_throttle(-1)).toBe(0);
+    expect(clamp_throttle(0.4)).toBe(0.4);
+    expect(clamp_throttle(1.05)).toBe(1.05);
+    expect(clamp_throttle(3)).toBe(AFTERBURNER_MAX_THROTTLE);
+  });
+
+  it("reads anything that is not a number as idle", () => {
+    expect(clamp_throttle(Number.NaN)).toBe(0);
+    expect(clamp_throttle(Infinity)).toBe(0);
+  });
+});
+
+describe("dry thrust", () => {
+  const params = default_afterburner_params();
+
+  it("runs hotter the harder the dry engine is pushed", () => {
+    const idle = jet_state(params, 0, profile);
+    const half = jet_state(params, 0.5, profile);
+    const military = jet_state(params, 1, profile);
+
+    expect(idle.exit_temperature_k).toBeLessThan(half.exit_temperature_k);
+    expect(half.exit_temperature_k).toBeLessThan(military.exit_temperature_k);
+    expect(military.exit_temperature_k).toBeCloseTo(params.dry_temperature_k);
+  });
+
+  it("leaves a little over the air at idle", () => {
+    const ambient = 288.15;
+
+    expect(dry_temperature(params, 0, profile, ambient)).toBeCloseTo(
+      ambient + (params.dry_temperature_k - ambient) * profile.idle_temperature,
+    );
+  });
+
+  it("opens the camera up for a burner just lit, and not before", () => {
+    const military = jet_state(params, 1, profile);
+    const light_off = jet_state(params, 1.04, profile);
+    const full = jet_state(params, AFTERBURNER_MAX_THROTTLE, profile);
+
+    expect(military.adaptation).toBe(1);
+    expect(light_off.adaptation).toBeGreaterThan(1);
+    expect(full.adaptation).toBeCloseTo(1);
+  });
+
+  it("glows instead, brighter the harder the engine runs", () => {
+    const idle = jet_state(params, 0, profile);
+    const military = jet_state(params, 1, profile);
+
+    expect(idle.glow).toBeGreaterThan(0);
+    expect(military.glow).toBeGreaterThan(idle.glow);
+  });
+
+  it("drowns the glow once the burner lights", () => {
+    expect(jet_state(params, 1.04, profile).glow).toBe(0);
+    expect(jet_state(params, AFTERBURNER_MAX_THROTTLE, profile).glow).toBe(0);
+  });
+
+  it("shows no diamonds until the burner relights the train", () => {
+    const military = jet_state(params, 1, profile);
+    const full = jet_state(params, AFTERBURNER_MAX_THROTTLE, profile);
+
+    expect(military.shock_heat).toBe(0);
+    expect(military.compression).toBe(1);
+    expect(full.shock_heat).toBeGreaterThan(0);
+  });
+
+  it("never opens up for a rocket, which has no dry state", () => {
+    const rocket = { ...profile, burner_threshold: 0 };
+
+    expect(jet_state(params, 0, rocket).adaptation).toBe(1);
+    expect(jet_state(params, 0, rocket).glow).toBe(0);
+  });
+});
+
+describe("plume_adaptation", () => {
+  it("is one when the plume is as hot as at full power, or hotter", () => {
+    expect(plume_adaptation(1700, 1700, 0.6)).toBe(1);
+    expect(plume_adaptation(2000, 1700, 0.6)).toBe(1);
+  });
+
+  it("is one when the camera does not follow", () => {
+    expect(plume_adaptation(800, 1700, 0)).toBe(1);
+  });
+
+  it("follows Wien's law all the way when it follows fully", () => {
+    expect(plume_adaptation(1200, 1700, 1)).toBeCloseTo(
+      Math.exp(PLUME_PHOTOPIC_K * (1 / 1200 - 1 / 1700)),
+    );
+  });
+
+  it("is bounded however cold the plume", () => {
+    expect(plume_adaptation(1, 1700, 1)).toBe(PLUME_MAX_ADAPTATION);
   });
 });
 
@@ -57,7 +187,7 @@ describe("jet_state", () => {
 
   it("leaves a matched nozzle at its own Mach number and radius", () => {
     const matched = { ...params, pressure_ratio: 1 };
-    const state = jet_state(matched, 1, { ...profile, idle_pressure: 1 });
+    const state = jet_state(matched, FULL, { ...profile, idle_pressure: 1 });
 
     expect(state.mach).toBeCloseTo(matched.exit_mach, 5);
     expect(state.radius_m).toBeCloseTo(matched.nozzle_radius_m, 5);
@@ -65,7 +195,7 @@ describe("jet_state", () => {
   });
 
   it("expands an underexpanded jet: faster, colder and wider", () => {
-    const state = jet_state({ ...params, pressure_ratio: 2 }, 1, profile);
+    const state = jet_state({ ...params, pressure_ratio: 2 }, FULL, profile);
 
     expect(state.mach).toBeGreaterThan(params.exit_mach);
     expect(state.temperature_k).toBeLessThan(params.exit_temperature_k);
@@ -73,14 +203,14 @@ describe("jet_state", () => {
   });
 
   it("pinches an overexpanded one", () => {
-    const state = jet_state({ ...params, pressure_ratio: 0.6 }, 1, profile);
+    const state = jet_state({ ...params, pressure_ratio: 0.6 }, FULL, profile);
 
     expect(state.mach).toBeLessThan(params.exit_mach);
     expect(state.radius_m).toBeLessThan(params.nozzle_radius_m);
   });
 
   it("spaces the shock cells as Pack's formula does", () => {
-    const state = jet_state(params, 1, profile);
+    const state = jet_state(params, FULL, profile);
 
     expect(state.shock_spacing_m).toBeCloseTo(
       1.306 * 2 * state.radius_m * Math.sqrt(state.mach ** 2 - 1),
@@ -91,7 +221,7 @@ describe("jet_state", () => {
   it("makes no shock train in a subsonic jet", () => {
     const state = jet_state(
       { ...params, exit_mach: 0.6, pressure_ratio: 1 },
-      1,
+      FULL,
       profile,
     );
 
@@ -101,12 +231,12 @@ describe("jet_state", () => {
   it("grows the potential core with the Mach number", () => {
     const slow = jet_state(
       { ...params, pressure_ratio: 1, exit_mach: 1.2 },
-      1,
+      FULL,
       profile,
     );
     const fast = jet_state(
       { ...params, pressure_ratio: 1, exit_mach: 2.5 },
-      1,
+      FULL,
       profile,
     );
 
@@ -117,13 +247,13 @@ describe("jet_state", () => {
 
   it("is shorter on dry thrust than in full reheat", () => {
     expect(jet_state(params, 0.3, profile).reach_m).toBeLessThan(
-      jet_state(params, 1, profile).reach_m,
+      jet_state(params, FULL, profile).reach_m,
     );
   });
 
   it("scales every length with the engine", () => {
-    const one = jet_state(params, 1, profile);
-    const two = jet_state(params, 1, profile, 2);
+    const one = jet_state(params, FULL, profile);
+    const two = jet_state(params, FULL, profile, 2);
 
     expect(two.core_length_m).toBeCloseTo(one.core_length_m * 2, 6);
     expect(two.reach_m).toBeCloseTo(one.reach_m * 2, 6);
@@ -132,7 +262,7 @@ describe("jet_state", () => {
 });
 
 describe("jet_half_width and jet_centreline", () => {
-  const state = jet_state(default_afterburner_params(), 1, profile);
+  const state = jet_state(default_afterburner_params(), FULL, profile);
 
   it("leaves the lip at the jet's radius, at full strength", () => {
     expect(jet_half_width(0, state)).toBeCloseTo(state.radius_m);
@@ -213,7 +343,7 @@ describe("plume_lod", () => {
     // Read off the defaults rather than written down, so changing the plume's
     // length is what fails this rather than a comment going quietly stale
     const at_changeover = plume_screen_span(
-      jet_state(default_afterburner_params(), 1, profile).reach_m,
+      jet_state(default_afterburner_params(), FULL, profile).reach_m,
       3000,
       screen_scale,
     );

@@ -21,9 +21,15 @@ import {
 } from "three/tsl";
 import type { Node } from "three/webgpu";
 import {
+  AFTERBURNER_MAX_THROTTLE,
   PLUME_EDDY_REACH,
+  PLUME_LIGHT_OFF,
+  PLUME_MAX_ADAPTATION,
+  PLUME_MIN_REHEAT,
+  PLUME_PHOTOPIC_K,
   PLUME_FAR_SPREAD,
   PLUME_FIELD_EXTENT,
+  PLUME_IDLE_GLOW,
   PLUME_MAX_COFLOW,
   PLUME_QUENCH_DENSITY,
   PLUME_SOOT_PRESSURE_EXPONENT,
@@ -173,6 +179,10 @@ export type PlumeJetNodes = {
   band_color: V3;
   band_strength: F;
 
+  // How bright the dry engine's turbine glows up the nozzle, the exposure
+  // divided out
+  glow: F;
+
   turbulence: F;
   meander: F;
   refraction: F;
@@ -247,19 +257,40 @@ export const plume_jet = (
   engine: PlumeEngineNodes,
   profile: PlumeProfileNodes,
 ) => {
-  const throttle = clamp(engine.throttle, 0, 1);
+  const travel = clamp(engine.throttle, 0, AFTERBURNER_MAX_THROTTLE);
+
+  // The dry engine is at its hardest by the detent, and reheat adds to that
+  const throttle = min(travel, 1);
 
   const threshold = profile.burner_threshold;
+
+  // The first zone lights just past the threshold, the rest stage in
+  const lit = smoothstep(threshold, threshold.add(PLUME_LIGHT_OFF), travel);
+
+  const staged = smoothstep(
+    threshold,
+    max(threshold.add(PLUME_LIGHT_OFF), AFTERBURNER_MAX_THROTTLE),
+    travel,
+  );
 
   // A threshold at or under zero is an engine with no burner, always lit
   const burner = select(
     threshold.lessThanEqual(0),
     float(1),
-    smoothstep(threshold, max(threshold.add(1e-6), 1), throttle),
+    lit.mul(mix(float(PLUME_MIN_REHEAT), float(1), staged)),
+  );
+
+  // A turbine runs hotter the harder it is pushed
+  const ambient_k = profile.air.temperature_k;
+
+  const dry_temperature = mix(
+    ambient_k,
+    engine.dry_temperature,
+    mix(profile.idle_temperature, float(1), throttle),
   );
 
   const exit_temperature = mix(
-    engine.dry_temperature,
+    dry_temperature,
     engine.exit_temperature,
     burner,
   );
@@ -370,7 +401,12 @@ export const plume_jet = (
 
   const mismatch = float(1).sub(exp(abs(log(pressure_ratio)).mul(-4)));
 
-  const strength = mix(profile.shock_floor, float(1), mismatch).mul(supersonic);
+  // A dry jet's train is too cool to glow until the burner relights it
+  const diamonds = mix(float(1), burner, breathes);
+
+  const strength = mix(profile.shock_floor, float(1), mismatch)
+    .mul(supersonic)
+    .mul(diamonds);
 
   // How far the gas swings either side of the jet through a cell, at most up
   // to its stagnation temperature behind a disk
@@ -450,6 +486,32 @@ export const plume_jet = (
     longest,
   );
 
+  // The camera only opens up for a burner it can see. Dry, there is only the
+  // glow, drawn at the exposure the burner is
+  const lighting = min(burner.div(PLUME_MIN_REHEAT), 1);
+
+  const glow = breathes
+    .mul(lighting.oneMinus())
+    .mul(mix(float(PLUME_IDLE_GLOW), float(1), throttle))
+    .mul(max(profile.dry_glow, 0))
+    .div(max(profile.exposure, 1e-6));
+
+  // How far the camera opens up for a burner dimmer than at full power
+  const adaptation = clamp(
+    exp(
+      clamp(profile.adaptation, 0, 1)
+        .mul(lighting)
+        .mul(PLUME_PHOTOPIC_K)
+        .mul(
+          float(1)
+            .div(max(exit_temperature, 1))
+            .sub(float(1).div(max(engine.exit_temperature, 1))),
+        ),
+    ),
+    1,
+    PLUME_MAX_ADAPTATION,
+  );
+
   const extent = float(PLUME_FIELD_EXTENT)
     .add(max(engine.turbulence, 0).mul(PLUME_EDDY_REACH))
     .add(max(engine.meander, 0))
@@ -461,6 +523,7 @@ export const plume_jet = (
 
   return {
     burner,
+    breathes,
     radius,
     velocity,
     core_length,
@@ -473,6 +536,8 @@ export const plume_jet = (
     compression,
     soot_survival,
     soot_formed,
+    adaptation,
+    glow,
     shock_heat,
     shock_length,
     shock_spacing,

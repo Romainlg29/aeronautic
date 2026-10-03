@@ -23,7 +23,7 @@ const nozzle = batch.add({
   params: { nozzle_radius_m: 1.2 },
 });
 
-nozzle.throttle = 0.9;
+nozzle.throttle = 1.05; // the burner part-way in
 ```
 
 The batch updates itself in its mesh's `onBeforeRender`, once a frame however

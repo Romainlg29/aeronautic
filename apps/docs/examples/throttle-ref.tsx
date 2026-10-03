@@ -13,8 +13,8 @@ const Spool: FC<{ engine: RefObject<AfterburnerHandle | null> }> = ({
   useFrame(({ clock }) => {
     if (!engine.current) return;
 
-    // Through the burner threshold and back, every few seconds
-    engine.current.throttle = 0.6 + 0.4 * Math.sin(clock.elapsedTime * 0.9);
+    // From idle through military power to full reheat and back, every few seconds
+    engine.current.throttle = 0.55 + 0.55 * Math.sin(clock.elapsedTime * 0.9);
 
     // A wobble of the nozzle's aim, as a vectoring nozzle would
     const pitch = 0.08 * Math.sin(clock.elapsedTime * 0.6);

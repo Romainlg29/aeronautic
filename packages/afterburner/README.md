@@ -162,7 +162,7 @@ Takes every `<group>` prop (`position`, `rotation`, `scale`, children…), plus:
 | ----------- | -------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------- |
 | `preset`    | `AfterburnerPresetName \| AfterburnerPreset` | the defaults | Which look to start from. Outside an `<AfterburnerBatch>` it also picks the batch, and so the profile.   |
 | `params`    | `AfterburnerParamsInput`                     | —            | How this plume looks, over the preset. Colours take any `ColorRepresentation`.                           |
-| `throttle`  | `number`                                     | `1`          | 0 to 1. A jet's burner lights past about 0.55; a rocket's is always lit.                                 |
+| `throttle`  | `number`                                     | `1.1`        | 0 to 1 is dry thrust, on to 1.1 at full reheat. A jet's burner lights past 1; a rocket's is always lit.  |
 | `batch`     | `AfterburnerBatchCore`                       | nearest      | Draw it with this batch rather than the nearest one.                                                     |
 | `target`    | `Object3D`                                   | —            | Sit on this mesh, group or bone from anywhere in the scene. `position`/`rotation` are then in its frame. |
 | `direction` | `[x, y, z]`                                  | —            | Which way the exhaust streams, in the frame it sits in. Wins over `rotation`.                            |
@@ -179,7 +179,7 @@ batch.
 
 ```ts
 type AfterburnerHandle = {
-  throttle: number; // cheap to write every frame
+  throttle: number; // cheap to write every frame; the plume eases toward it
   set_params: (params: AfterburnerParamsInput) => void; // replaces them all
   update_params: (params: AfterburnerParamsInput) => void; // merges
   set_offset: (offset: AfterburnerOffset) => void; // move or turn it
@@ -198,7 +198,7 @@ const engine = useRef<AfterburnerHandle>(null);
 
 useFrame(({ clock }) => {
   if (engine.current) {
-    engine.current.throttle = 0.8 + 0.2 * Math.sin(clock.elapsedTime * 3);
+    engine.current.throttle = 0.95 + 0.15 * Math.sin(clock.elapsedTime * 3);
   }
 });
 
@@ -287,7 +287,7 @@ const nozzle = batch.add({
   object: engine_bell,
   params: { nozzle_radius_m: 1.2 },
 });
-nozzle.throttle = 0.9;
+nozzle.throttle = 1.05; // the burner part-way in
 
 // Or on a mesh, wherever it is, at an offset in its frame
 const tail = batch.add({
