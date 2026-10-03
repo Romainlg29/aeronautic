@@ -103,6 +103,17 @@ const unit_scale = new Vector3(1, 1, 1);
 
 let seeds = 0;
 
+// How much of the screen the vapour's box may cover before its steps
+// coarsen; how coarse they may get; and how small it may get on screen, as a
+// share of its height, before its patches are dropped
+const STEP_AREA = 0.15;
+const MAX_STEP_SCALE = 3;
+const DETAIL_HEIGHT = 0.06;
+
+const scratch_project = new Matrix4();
+const scratch_view = new Matrix4();
+const scratch_corner = new Vector3();
+
 /**
  * Whether a change would change nothing.
  * @param current What there is
@@ -453,6 +464,82 @@ export class WingVapor {
   }
 
   /**
+   * Share the march out by how much of the screen the vapour covers, for the
+   * camera about to draw it.
+   *
+   * A pixel's cost is its steps, and a near view has many more pixels in it:
+   * past `STEP_AREA` of the screen the steps coarsen as the square root of
+   * the area, so a frame costs about the same however close the camera comes,
+   * and the features a step resolves are many pixels across by then anyway.
+   * Smaller than `DETAIL_HEIGHT` of the screen, the moisture's patches are
+   * finer than a pixel, and are dropped.
+   * @param camera The camera
+   */
+  private budget(camera: Camera) {
+    const min = this.uniforms.box_min.value;
+    const max = this.uniforms.box_max.value;
+
+    // The box's eight corners on screen, as the rectangle round them
+    scratch_project.multiplyMatrices(
+      camera.projectionMatrix,
+      scratch_view.multiplyMatrices(
+        camera.matrixWorldInverse,
+        this.mesh.matrixWorld,
+      ),
+    );
+
+    let left = Infinity;
+    let right = -Infinity;
+    let bottom = Infinity;
+    let top = -Infinity;
+    let behind = false;
+
+    for (let corner = 0; corner < 8; corner++) {
+      scratch_corner
+        .set(
+          corner & 1 ? max.x : min.x,
+          corner & 2 ? max.y : min.y,
+          corner & 4 ? max.z : min.z,
+        )
+        .applyMatrix4(scratch_project);
+
+      // applyMatrix4 divides by w; a corner behind the camera has none
+      const w =
+        scratch_project.elements[3] * (corner & 1 ? max.x : min.x) +
+        scratch_project.elements[7] * (corner & 2 ? max.y : min.y) +
+        scratch_project.elements[11] * (corner & 4 ? max.z : min.z) +
+        scratch_project.elements[15];
+
+      if (w <= 0) {
+        behind = true;
+        break;
+      }
+
+      left = Math.min(left, scratch_corner.x);
+      right = Math.max(right, scratch_corner.x);
+      bottom = Math.min(bottom, scratch_corner.y);
+      top = Math.max(top, scratch_corner.y);
+    }
+
+    // A share of the screen, clipped to it: all of it when the camera is in
+    // or beside the box
+    const width = behind
+      ? 2
+      : Math.max(Math.min(right, 1) - Math.max(left, -1), 0);
+    const height = behind
+      ? 2
+      : Math.max(Math.min(top, 1) - Math.max(bottom, -1), 0);
+
+    const covered = (width * height) / 4;
+
+    this.uniforms.step_scale.value = Math.min(
+      Math.max(Math.sqrt(covered / STEP_AREA), 1),
+      MAX_STEP_SCALE,
+    );
+    this.uniforms.detail.value = height / 2 > DETAIL_HEIGHT ? 1 : 0;
+  }
+
+  /**
    * Follow the aircraft and the camera, just before the mesh is drawn.
    * @param renderer The renderer drawing it
    * @param camera The camera it is drawn from
@@ -486,6 +573,8 @@ export class WingVapor {
     this.uniforms.sun_direction.value
       .fromArray(this._look.sun_direction)
       .transformDirection(scratch_inverse);
+
+    this.budget(camera);
 
     // The clock, once a frame however many cameras draw it
     if (renderer.info.frame === this._frame_number) {

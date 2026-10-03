@@ -183,6 +183,13 @@ export type VaporUniforms = {
   // lockstep
   seed: FloatUniform;
 
+  // How much coarser than its parts ask the march may step, one or more: the
+  // more of the screen the vapour covers, the more
+  step_scale: FloatUniform;
+
+  // Whether the moisture's patches are drawn: 1 near, 0 far
+  detail: FloatUniform;
+
   // The most iterations the march may take
   max_steps: UniformNode<"int", number>;
 };
@@ -218,6 +225,8 @@ export const create_vapor_uniforms = (): VaporUniforms => {
     shutter_s: uniform(1 / 60) as FloatUniform,
     time: uniform(0) as FloatUniform,
     seed: uniform(0) as FloatUniform,
+    step_scale: uniform(1) as FloatUniform,
+    detail: uniform(1) as FloatUniform,
     max_steps: uniform(160, "int") as UniformNode<"int", number>,
   };
 };
@@ -548,8 +557,10 @@ export const create_vapor_material = (
           Continue();
         });
 
+        // The part's own step, coarsened by what the view can spare, and never
+        // finer than a pixel
         const here = min(
-          max(sample.z, footprint),
+          max(sample.z.mul(u.step_scale as unknown as F), footprint),
           leave.sub(t).add(1e-3),
         ).toVar();
 
@@ -581,11 +592,21 @@ export const create_vapor_material = (
           const downstream = dot(air, flow);
           const across = air.sub(flow.mul(downstream));
 
-          const patch = clamp(
-            patchiness(vec3(downstream.div(streak), across.yz.div(u.eddy_m))),
-            -1,
-            1,
-          );
+          // Far off, the patches are smaller than a pixel: the day's own
+          // humidity, and none of the noise's hashes
+          const patch = float(0).toVar();
+
+          If((u.detail as unknown as F).greaterThan(0.5), () => {
+            patch.assign(
+              clamp(
+                patchiness(
+                  vec3(downstream.div(streak), across.yz.div(u.eddy_m)),
+                ),
+                -1,
+                1,
+              ),
+            );
+          });
 
           const grams = select(
             patch.lessThan(0),

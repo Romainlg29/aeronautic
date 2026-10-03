@@ -24,24 +24,35 @@ const SCENARIOS = {
     mach: 0.5,
     g: 7,
     humidity: 0.9,
+    roll_deg_s: 0,
+  },
+  roll: {
+    label: "Rolling pull: 5 g at Mach 0.5, rolling",
+    mach: 0.5,
+    g: 5,
+    humidity: 0.9,
+    roll_deg_s: 240,
   },
   alpha: {
     label: "High alpha: 4 g at Mach 0.4",
     mach: 0.4,
     g: 4,
     humidity: 0.9,
+    roll_deg_s: 0,
   },
   transonic: {
     label: "Transonic pass: 2 g at Mach 0.97",
     mach: 0.97,
     g: 2,
     humidity: 0.8,
+    roll_deg_s: 0,
   },
   shock: {
     label: "Shock on the wing: 5 g at Mach 0.93",
     mach: 0.93,
     g: 5,
     humidity: 0.6,
+    roll_deg_s: 0,
   },
 } as const;
 
@@ -50,7 +61,12 @@ type Scenario = keyof typeof SCENARIOS;
 // A humid summer day, low over the sea
 const AIR = { altitude_m: 300, temperature_offset_k: 10 };
 
-type Flight = { mach: number; g: number; humidity: number };
+type Flight = {
+  mach: number;
+  g: number;
+  humidity: number;
+  roll_deg_s: number;
+};
 
 // Not the shape the air flies round: the gear and its doors, hanging down in
 // the model's rest pose, and the pylons
@@ -83,6 +99,7 @@ const Fighter: FC<{
   const { scene, animations } = useGLTF(MODEL);
   const body = useRef<Group>(null);
   const vapor = useRef<WingVaporCore>(null);
+  const roll = useRef<Group>(null);
   const { actions } = useAnimations(animations, body);
 
   useEffect(() => {
@@ -102,7 +119,7 @@ const Fighter: FC<{
     retract.play();
   }, [scene, actions]);
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock }, delta) => {
     const current = vapor.current;
 
     if (!current || !body.current) return;
@@ -130,6 +147,12 @@ const Fighter: FC<{
     // The flight path is level: the nose is up by the angle of attack
     body.current.rotation.x = alpha;
 
+    // Rolling about the flight path, which is -Z: the trails, laid in the air
+    // it flew through, corkscrew behind it
+    if (roll.current) {
+      roll.current.rotation.z += ((flight.roll_deg_s * Math.PI) / 180) * delta;
+    }
+
     if (readout.current) {
       const state = current.state;
 
@@ -141,20 +164,22 @@ const Fighter: FC<{
   });
 
   return (
-    <group ref={body}>
-      <primitive object={scene} />
-      {/*
+    <group ref={roll}>
+      <group ref={body}>
+        <primitive object={scene} />
+        {/*
         The wing and body are measured off the model itself, by six depth
         views, in the frame of the model's origin, which flies -Z
       */}
-      <WingVapor
-        ref={vapor}
-        capture={scene}
-        capture_filter={airframe_only}
-        air={AIR}
-        look={{ sun_direction: SUN }}
-        forward={[0, 0, -1]}
-      />
+        <WingVapor
+          ref={vapor}
+          capture={scene}
+          capture_filter={airframe_only}
+          air={AIR}
+          look={{ sun_direction: SUN }}
+          forward={[0, 0, -1]}
+        />
+      </group>
     </group>
   );
 };
@@ -215,7 +240,12 @@ export const WingVaporExample: FC = () => {
       }
     >
       <Fighter
-        flight={{ mach: chosen.mach, g: chosen.g, humidity }}
+        flight={{
+          mach: chosen.mach,
+          g: chosen.g,
+          humidity,
+          roll_deg_s: chosen.roll_deg_s,
+        }}
         readout={readout}
       />
     </Stage>

@@ -488,6 +488,42 @@ export const edge_at = (
   };
 };
 
+// Where along the chord the wing's strongest suction is looked for: crowded
+// at the nose, where the peak is, and where a shock's rooftop starts
+const BOUND_CHORD = [0, 0.02, 0.05, 0.1, 0.2, 0.35, 0.5, 0.7, 0.9];
+
+// The path is the shape's alone, and the shape changes far less often than
+// the flight: worked out once per shape
+const edge_paths = new WeakMap<
+  WingShape,
+  { apex_m: number; length_m: number; path: EdgePath }
+>();
+
+/**
+ * `edge_path`, remembered per shape.
+ * @param shape The wing
+ * @param apex_m Where the edge leaves the body
+ * @param length_m How far aft it runs
+ * @returns The path
+ */
+const cached_edge_path = (
+  shape: WingShape,
+  apex_m: number,
+  length_m: number,
+): EdgePath => {
+  const held = edge_paths.get(shape);
+
+  if (held && held.apex_m === apex_m && held.length_m === length_m) {
+    return held.path;
+  }
+
+  const path = edge_path(shape, apex_m, length_m);
+
+  edge_paths.set(shape, { apex_m, length_m, path });
+
+  return path;
+};
+
 /**
  * Lay the leading-edge vortex's path along a wing's leading edge.
  *
@@ -904,7 +940,7 @@ export const vapor_state = (
   // The leading edge from where it leaves the body to the tip
   const edge_apex_m = shape_station(shape, shape.root_span_m).leading_m;
   const edge_length_m = Math.max(shape.leading_m[tip] - edge_apex_m, 0);
-  const path = edge_path(shape, edge_apex_m, edge_length_m);
+  const path = cached_edge_path(shape, edge_apex_m, edge_length_m);
 
   const field: VaporField = {
     mach: state.mach,
@@ -1098,12 +1134,11 @@ export const vapor_state = (
   {
     let strongest = 0;
 
-    for (let i = 0; i <= 24; i++) {
-      for (let j = 0; j <= 12; j++) {
+    for (const xi of BOUND_CHORD) {
+      for (let j = 0; j <= 6; j++) {
         const span_at =
-          shape.root_span_m + ((semispan - shape.root_span_m) * j) / 12;
+          shape.root_span_m + ((semispan - shape.root_span_m) * j) / 6;
         const station = shape_station(shape, span_at);
-        const xi = i / 24;
         const x = station.leading_m + station.chord_m * xi;
         const y =
           station.mid_m +

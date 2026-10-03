@@ -204,13 +204,41 @@ circulation) and every part of the field.
 The physics is all on the CPU too, in `vapor-field.ts`, where it is tested.
 The shader mirrors it node for node.
 
+### Trails that follow the flight
+
+A vortex stays in the air it was shed into while the aircraft flies on, so a
+trail is the tip's own path through the air: a curve in a turn, a corkscrew in
+a roll. Every frame the vapor records the aircraft's attitude and integrates
+its airspeed along its flight path, through the air rather than the world, and
+lays both trails back along that history. A model held still in a showcase
+trails the same as one flown through a game's world, and a slow frame is split
+into steps with the attitude turned evenly between them. The trails go to the
+shader as two 64-point polylines in the aircraft's frame now.
+
+### Performance
+
+The CPU side is about a quarter of a millisecond per aircraft per frame: the
+flight's state, both trails and the bounds. The capture and the wing's lattice
+only run when the shape changes.
+
+On the GPU each pixel of the vapor's box marches, skipping clear air by the
+distance the field reports to each part. Two things keep a frame's cost even:
+
+- **Coverage.** Past 15 % of the screen, the steps coarsen as the square root
+  of the box's area on screen, up to three times. Up close, the features a step
+  resolves are many pixels across anyway.
+- **Detail.** Smaller than 6 % of the screen's height, the moisture's patches,
+  the dearest part of a sample, are dropped.
+
+`max_steps` caps any one pixel. It hasn't been measured on real hardware yet.
+Measure GPU time with `renderer.resolveTimestampsAsync("render")` and
+`trackTimestamp: true`, as for the plumes, from the worst view (the camera in
+the vapor cone) and the common one.
+
 ### What it leaves out
 
-- The trails are drawn in the aircraft's frame along the free stream, so they
-  are straight. A rolling or turning aircraft's real trails curve with its
-  path. Over the hundred metres or so a trail lasts this is a small error, but
-  it is visible in a fast roll.
-- The field is symmetric left to right: no sideslip and no roll rate.
+- The field is symmetric left to right for the wing and the leading-edge
+  vortices: no sideslip. The tips' trails are each their own.
 - The vapor isn't shadowed by itself or by the aircraft.
 - The numbers are textbook correlations, good to ten or twenty per cent. That
   is far better than the eye can tell in a cloud that appears or not on a
