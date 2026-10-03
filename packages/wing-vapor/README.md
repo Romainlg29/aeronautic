@@ -130,9 +130,47 @@ measured planform is also fitted with straight edges, into `airframe`, for the
 lift and breakdown correlations. The aircraft's mass and how sharp its leading
 edge is can't be seen in depth views, so they stay as given.
 
-Without React: `vapor.capture(model, options)`, or `capture_airframe(model,
-options)` for the measurement alone. Depth views only see the outside, which
-is what the air sees too: an intake duct changes nothing a cloud forms in.
+Engine nacelles and pods jutting from the leading or trailing edge are cut
+off the wing they hang from: anything narrower than about a seventh of the
+semispan that juts from an edge is not the wing the air lifts on.
+
+Depth views only see the outside, which is what the air sees too: an intake
+duct changes nothing a cloud forms in.
+
+### Off the main thread, or ahead of time
+
+`<WingVapor capture>` measures a few milliseconds a frame, so a big model
+doesn't stall the page; until it is done the vapour flies `airframe` as given.
+Without React, `await vapor.capture_async(model, { budget_ms, signal })`, or
+`capture_airframe_async` for the measurement alone. `vapor.capture` and
+`capture_airframe` are the same, all at once.
+
+Or measure at build time, and ship the numbers in place of the capture:
+
+```ts
+// build script, in Node: capture_airframe needs no renderer
+const baked = serialize_capture(capture_airframe(model, { filter }));
+writeFileSync("jet.vapor.json", JSON.stringify(baked));
+
+// at run time
+import baked from "./jet.vapor.json";
+
+<WingVapor measured={deserialize_capture(baked)} />;
+```
+
+A bake is versioned: one from a package whose table has changed is refused,
+not misread.
+
+### On real models
+
+Besides the docs' fighter, the capture was checked on two models it was never
+tuned on: Cesium's twin turboprop (`Cesium_Air.glb`) and Babylon.js's
+aerobatic plane. The twin measured 25.7 m across, its wing 4.2 m deep at the
+root and 0.8 m at the tip, 7° of sweep, the body 2.25 m out, and a tailplane
+5.6 m across; its nacelles were what taught the capture to cut pods off.
+Both fly as you would expect: a sheet over the wing in a hard pull in humid
+air, and no tip trails. A 900 kg aerobatic plane at 7 g sheds a vortex a tenth
+as strong as the fighter's, too weak to fog in 95 % air.
 
 ## The dials
 
@@ -144,7 +182,9 @@ quantity in SI units.
   fuselage as a body of revolution for the cone, and the mass, for the load
   factor. The defaults are the docs' delta fighter. `capture` fills in all of
   the shape for you.
-- **`flight`**: `airspeed_m_s` and `angle_of_attack_rad`.
+- **`flight`**: `airspeed_m_s` and `angle_of_attack_rad`, and if you have
+  them `sideslip_rad` and `roll_rate_rad_s`. Without a roll rate, the vapour
+  measures it from how the group it follows turns.
 - **`air`**: `altitude_m`, `temperature_offset_k` and `relative_humidity`.
   Everything comes down to the humidity. The cooling a wing or a vortex makes
   is tens of kelvin at most, so at 30 % on a warm day nothing fogs.
@@ -193,10 +233,27 @@ circulation) and every part of the field.
    - The **cone** is the fuselage as a slender body. Its transonic pocket keeps
      expanding until the shock that ends it, is felt further out the nearer
      Mach one, and is cut off by the shock. Hence a cone opening aft, soft at
-     its front and hard at its back. It fades above about Mach 1.15.
+     its front and hard at its back. Past Mach one the pocket is the aft
+     body's, ended by the tail's shock, and it fades out between Mach 1.25
+     and 1.6, as it is seen to do low down.
 
    A linear theory's suction diverges at Mach one, so every deficit is eased
    into what an isentropic expansion to a local Mach 1.4 makes.
+
+   A droplet doesn't vanish at a shock: it evaporates in the warmer air behind
+   it, in about 3 ms for a micron's radius, which is a metre at 300 m/s. So
+   behind the wing's shock and the cone's the field relaxes over that length,
+   growing with the droplets' radius squared, and the hard edge has the short
+   tail photographs show.
+
+   **Rolls and sideslips** load one wing more than the other. A roll at rate
+   `p` raises the angle of attack of the wing going down by `p y / V`, about
+   `p s / V` over the angle the whole wing flies at. A sideslip turns the
+   leeward wing's sweep against the flow and the windward wing's into it,
+   `2β tan Λ` between them for a swept edge. Each tip's vortex, each
+   leading-edge vortex and each half of the wing's sheet takes its own side's
+   share, so the downgoing wing in a rolling pull fogs first and trails
+   longest.
 
 5. **The march.** One box round everything that can fog, marched per pixel.
    The field reports how far each point is from anything that could fog, so
@@ -252,9 +309,11 @@ the vapor cone) and the common one.
 
 ### What it leaves out
 
-- The field is symmetric left to right for the wing and the leading-edge
-  vortices: no sideslip. The tips' trails are each their own.
-- The vapor isn't shadowed by itself or by the aircraft.
+- The vapor shades itself, but the aircraft doesn't shade it.
+- A roll's and a sideslip's asymmetry is a loading per side, not a
+  recomputed lattice: good for the trends, not the last ten per cent.
+- No contrails from the engines' exhaust: the afterburner package's plumes
+  carry no water yet.
 - The numbers are textbook correlations, good to ten or twenty per cent. That
   is far better than the eye can tell in a cloud that appears or not on a
   degree of dew point. `tip_core_radius`, `tip_core_share` and

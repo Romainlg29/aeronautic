@@ -13,4 +13,4 @@ Nothing about these aircraft is typed in but their geometry: a few primitives ea
 - **A canard or a tailplane**, the second run of pixels along the chord outboard of the body, ahead of the wing or behind it. Its tips shed their own vortices: a canard carries a real share of the lift and trails vapor in a hard pull, as on a canard delta, while a tailplane only trims and rarely fogs.
 - **The body**, as the round body of the same largest cross-section, for the vapor cone.
 
-The capture runs once, in a few tens of milliseconds for a few hundred thousand triangles; after that only the flight changes. On a loaded model, leave out the landing gear and the stores with `capture_filter`: they are not the shape the air flies round.
+The capture runs once, in a few tens of milliseconds for a few hundred thousand triangles, a few milliseconds a frame so the page doesn't stall; after that only the flight changes. It can also be baked at build time with `serialize_capture` and passed back as `measured`. On a loaded model, leave out the landing gear and the stores with `capture_filter`: they are not the shape the air flies round.
