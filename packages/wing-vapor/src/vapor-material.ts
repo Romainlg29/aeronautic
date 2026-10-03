@@ -146,6 +146,7 @@ const FIELD_KEYS: (keyof (VaporField & VaporConstants))[] = [
   "edge_burst_m",
   "edge_bound_m",
   "wing_bound_m",
+  "evaporation_m",
   "nose_m",
   "body_length_m",
   "body_radius_m",

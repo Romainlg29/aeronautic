@@ -190,25 +190,48 @@ describe("wing_deficit", () => {
   };
 
   /**
-   * The most suction lost from one station to the next, aft of the leading
-   * edge's own peak, as a share of the strongest along the chord.
+   * The most suction lost over a few stations, aft of the leading edge's own
+   * peak, as a share of the strongest along the chord.
    * @param deficits The deficits along the chord
+   * @param stations Over how many fiftieths of the chord
    * @returns The share
    */
-  const sharpest_drop = (deficits: number[]) =>
+  const sharpest_drop = (deficits: number[], stations = 1) =>
     Math.max(
       ...deficits
-        .slice(10)
-        .map((d, i) => (deficits[i + 9] - d) / Math.max(...deficits)),
+        .slice(10 + stations - 1)
+        .map((d, i) => (deficits[i + 10 - 1] - d) / Math.max(...deficits)),
     );
 
   it("ends in a shock once the flow over it goes supersonic", () => {
     const sound = moist_air(0, 0.9, 10).sound_m_s;
     const state = vapor_state(airframe, pulling(0.97 * sound, 5), humid, look);
 
-    // Somewhere aft of the nose, a quarter of the suction goes in one
-    // fiftieth of the chord
-    expect(sharpest_drop(along_chord(state, 3))).toBeGreaterThan(0.25);
+    // A quarter of the suction gone within one evaporation length behind
+    // the shock: a few tenths of a metre on this chord
+    expect(sharpest_drop(along_chord(state, 3), 8)).toBeGreaterThan(0.25);
+  });
+
+  it("lets bigger droplets linger longer behind the shock", () => {
+    const sound = moist_air(0, 0.9, 10).sound_m_s;
+    const flight = pulling(0.97 * sound, 5);
+
+    const fine = vapor_state(airframe, flight, humid, {
+      ...look,
+      droplet_radius_m: 1e-6,
+    });
+    const coarse = vapor_state(airframe, flight, humid, {
+      ...look,
+      droplet_radius_m: 3e-6,
+    });
+
+    expect(coarse.field.evaporation_m).toBeCloseTo(
+      fine.field.evaporation_m * 9,
+      6,
+    );
+    expect(sharpest_drop(along_chord(coarse, 3), 2)).toBeLessThan(
+      sharpest_drop(along_chord(fine, 3), 2),
+    );
   });
 
   it("recovers smoothly at low speed", () => {

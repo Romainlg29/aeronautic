@@ -475,11 +475,21 @@ export const wing_sheet = (f: VaporFieldNodes, shape: Texture, p: V3): V3 => {
     sonic_at.add(sonic_at.oneMinus().mul(f.wing_travel)),
   );
 
-  const ahead = smoothstep(
-    shock.sub(SHOCK_WIDTH),
-    shock.add(SHOCK_WIDTH),
-    along,
-  ).oneMinus();
+  // Behind it the droplets last a few milliseconds before they have
+  // evaporated, a short tail on the hard edge
+  const ahead = max(
+    smoothstep(
+      shock.sub(SHOCK_WIDTH),
+      shock.add(SHOCK_WIDTH),
+      along,
+    ).oneMinus(),
+    exp(
+      max(along.sub(shock), 0)
+        .mul(chord)
+        .negate()
+        .div(max(f.evaporation_m, 1e-3)),
+    ),
+  );
 
   const pocket = mix(max(here, f.wing_sonic), min(here, peak), ahead);
 
@@ -537,7 +547,15 @@ export const vapor_cone = (f: VaporFieldNodes, p: V3): V3 => {
   const radius = f.body_radius_m.mul(pow(u, 0.75));
 
   const shock = f.cone_shock.add(r.mul(CONE_SHOCK_LEAN).div(f.body_length_m));
-  const ahead = smoothstep(shock.sub(0.01), shock.add(0.01), xi).oneMinus();
+  const ahead = max(
+    smoothstep(shock.sub(0.01), shock.add(0.01), xi).oneMinus(),
+    exp(
+      max(xi.sub(shock), 0)
+        .mul(f.body_length_m)
+        .negate()
+        .div(max(f.evaporation_m, 1e-3)),
+    ),
+  );
 
   const pocket = smoothstep(shock.sub(CONE_POCKET_LENGTH), shock, xi);
 

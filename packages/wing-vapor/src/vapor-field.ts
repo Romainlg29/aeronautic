@@ -90,6 +90,12 @@ export const BURST_SWELL = 2;
 
 const DEGREE = Math.PI / 180;
 
+// How long a micron droplet takes to evaporate behind a shock, in seconds:
+// r² ρ_w / 2 D ρ_v (1 - S), with the air the shock warms well short of
+// saturation. It goes as the radius squared
+export const EVAPORATION_S = 0.003;
+const REFERENCE_DROPLET_M = 1e-6;
+
 // The fastest a transonic pocket runs locally, its shock separating the flow
 // past it
 export const MAX_LOCAL_MACH = 1.4;
@@ -220,6 +226,10 @@ export type VaporField = {
 
   // How high above the wing its field can fog
   wing_bound_m: number;
+
+  // How far behind a shock the droplets last before they have evaporated,
+  // in metres: the airspeed times a droplet's evaporation time
+  evaporation_m: number;
 
   // The body: its nose, length, radius, axis height; the strength of its
   // suction, where the shock stands, how much of it supersonic flight leaves,
@@ -760,8 +770,15 @@ export const wing_deficit = (
 
   if (peak < sonic) {
     const shock = shock_station(field, section, sonic, mach);
-    const ahead =
-      1 - smoothstep(shock - SHOCK_WIDTH, shock + SHOCK_WIDTH, along);
+    // Behind it the droplets last a few milliseconds before they have
+    // evaporated, a short tail on the hard edge
+    const ahead = Math.max(
+      1 - smoothstep(shock - SHOCK_WIDTH, shock + SHOCK_WIDTH, along),
+      Math.exp(
+        (-Math.max(along - shock, 0) * chord) /
+          Math.max(field.evaporation_m, 1e-3),
+      ),
+    );
 
     // Ahead of it the supersonic plateau holds the peak's suction; behind
     // it the flow is subsonic again, at no less than sonic pressure
@@ -920,7 +937,13 @@ export const cone_deficit = (
   const radius = body_radius(field, xi);
 
   const shock = field.cone_shock + (CONE_SHOCK_LEAN * r) / field.body_length_m;
-  const ahead = 1 - smoothstep(shock - 0.01, shock + 0.01, xi);
+  const ahead = Math.max(
+    1 - smoothstep(shock - 0.01, shock + 0.01, xi),
+    Math.exp(
+      (-Math.max(xi - shock, 0) * field.body_length_m) /
+        Math.max(field.evaporation_m, 1e-3),
+    ),
+  );
 
   // A transonic pocket keeps expanding until the shock that ends it: the
   // suction, and how far out it is felt, build towards the shock. Hence a
@@ -1004,7 +1027,8 @@ export const vapor_state = (
   airframe: VaporAirframe,
   flight: VaporFlight,
   conditions: VaporAir,
-  look: Pick<VaporLook, "humidity_spread">,
+  look: Pick<VaporLook, "humidity_spread"> &
+    Partial<Pick<VaporLook, "droplet_radius_m">>,
   shape: WingShape = trapezoid_shape(airframe),
   history?: TrailHistory,
 ): VaporState => {
@@ -1129,6 +1153,12 @@ export const vapor_state = (
     edge_bound_m: 0,
 
     wing_bound_m: 0,
+
+    evaporation_m:
+      speed *
+      EVAPORATION_S *
+      ((look.droplet_radius_m ?? REFERENCE_DROPLET_M) / REFERENCE_DROPLET_M) **
+        2,
 
     nose_m: airframe.nose_m,
     body_length_m: Math.max(airframe.fuselage_length_m, 1e-3),
