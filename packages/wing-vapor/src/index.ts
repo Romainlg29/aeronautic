@@ -6,9 +6,12 @@ export {
 } from "./wing-vapor-core";
 export {
   canonical_frame,
+  capture_view_steps,
   capture_views,
   collect_triangles,
   depth_views,
+  run,
+  run_async,
   type AirframeViews,
   type CaptureFrame,
   type CaptureOptions,
@@ -16,7 +19,11 @@ export {
 } from "./capture";
 export {
   capture_airframe,
+  capture_airframe_async,
+  deserialize_capture,
   measure_airframe,
+  serialize_capture,
+  type BakedAirframe,
   type MeasuredAirframe,
 } from "./measure";
 export {

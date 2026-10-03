@@ -11,7 +11,11 @@ import {
 import type { MeshBasicNodeMaterial } from "three/webgpu";
 import { canonical_frame, capture_views, type CaptureOptions } from "./capture";
 import { condensation_table } from "./condensation";
-import { measure_airframe, type MeasuredAirframe } from "./measure";
+import {
+  capture_airframe_async,
+  measure_airframe,
+  type MeasuredAirframe,
+} from "./measure";
 import {
   default_vapor_air,
   default_vapor_airframe,
@@ -320,10 +324,43 @@ export class WingVapor {
       capture_views(object, { ...this._frame_options, ...options }),
     );
 
-    this._airframe = { ...this._airframe, ...measured.airframe };
-    this.set_shape(measured.shape);
+    this.apply_capture(measured);
 
     return measured;
+  }
+
+  /**
+   * `capture`, a few milliseconds a frame, so a big model doesn't drop one.
+   * Until it is done the vapour flies the shape it had. Nothing is applied
+   * if the signal aborts first.
+   * @param object The model
+   * @param options As for `capture`, plus how long each slice may run and a
+   *   signal to give up on
+   * @returns What was measured
+   */
+  async capture_async(
+    object: Object3D,
+    options: CaptureOptions & { budget_ms?: number; signal?: AbortSignal } = {},
+  ): Promise<MeasuredAirframe> {
+    const measured = await capture_airframe_async(object, {
+      ...this._frame_options,
+      ...options,
+    });
+
+    options.signal?.throwIfAborted();
+    this.apply_capture(measured);
+
+    return measured;
+  }
+
+  /**
+   * Fly a measured airframe: from a capture, or baked ahead of time and read
+   * back with `deserialize_capture`.
+   * @param measured The fitted dials and the wing's table
+   */
+  apply_capture(measured: MeasuredAirframe) {
+    this._airframe = { ...this._airframe, ...measured.airframe };
+    this.set_shape(measured.shape);
   }
 
   /**
@@ -375,6 +412,11 @@ export class WingVapor {
   set_frame(frame: WingVaporFrame) {
     this._frame_options = frame;
     this._frame.copy(canonical_frame(frame));
+  }
+
+  /** The airframe's frame on what it follows, as last set */
+  get frame_options(): Readonly<WingVaporFrame> {
+    return this._frame_options;
   }
 
   /** Free the GPU resources. It cannot be used afterwards */

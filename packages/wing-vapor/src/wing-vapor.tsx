@@ -1,5 +1,6 @@
 import { createPortal, useThree, type ThreeElements } from "@react-three/fiber";
 import {
+  useEffect,
   useImperativeHandle,
   useLayoutEffect,
   useRef,
@@ -8,6 +9,7 @@ import {
   type Ref,
 } from "react";
 import type { Group, Mesh, Object3D } from "three";
+import { capture_airframe_async, type MeasuredAirframe } from "./measure";
 import type {
   VaporAir,
   VaporAirframe,
@@ -102,8 +104,9 @@ export type WingVaporProps = Omit<ThreeElements["group"], "ref"> & {
   /**
    * A model to measure the aircraft from, by six depth views: its wing
    * station by station and its planform and body, in place of `airframe`'s
-   * shape. `airframe` still wins for whatever it gives. Captured once, when
-   * it changes
+   * shape. `airframe` still wins for whatever it gives. Captured when it
+   * changes, a few milliseconds a frame: until then the vapour flies
+   * `airframe` as given
    */
   capture?: Object3D | null;
 
@@ -113,6 +116,13 @@ export type WingVaporProps = Omit<ThreeElements["group"], "ref"> & {
    * round
    */
   capture_filter?: (mesh: Mesh) => boolean;
+
+  /**
+   * A capture done ahead of time, in place of `capture`: from
+   * `capture_airframe`, or baked to JSON with `serialize_capture` and read
+   * back with `deserialize_capture`
+   */
+  measured?: MeasuredAirframe | null;
 
   /** The most iterations one pixel's march may take */
   max_steps?: number;
@@ -137,6 +147,7 @@ export const WingVapor: FC<WingVaporProps> = ({
   up,
   capture,
   capture_filter,
+  measured,
   max_steps,
   ref,
   children,
@@ -182,18 +193,42 @@ export const WingVapor: FC<WingVaporProps> = ({
 
   filter.current = capture_filter;
 
-  // The capture first, then the airframe given over it
+  // Measured a few milliseconds a frame, so a big model doesn't stall the
+  // page; the vapour flies the airframe as given until it is done
+  const [captured, set_captured] = useState<MeasuredAirframe | null>(null);
+
+  useEffect(() => {
+    set_captured(null);
+
+    if (!vapor || !capture) return;
+
+    const abort = new AbortController();
+
+    capture_airframe_async(capture, {
+      ...vapor.frame_options,
+      filter: filter.current,
+      signal: abort.signal,
+    }).then(set_captured, (error: unknown) => {
+      if (!abort.signal.aborted) console.error(error);
+    });
+
+    return () => abort.abort();
+  }, [vapor, capture]);
+
+  const shape_from = measured ?? captured;
+
+  // The measurement first, then the airframe given over it
   useLayoutEffect(() => {
     if (!vapor) return;
 
-    if (capture) {
-      vapor.capture(capture, { filter: filter.current });
+    if (shape_from) {
+      vapor.apply_capture(shape_from);
     } else {
       vapor.set_shape(null);
     }
 
     if (stable_airframe) vapor.update_airframe(stable_airframe);
-  }, [vapor, capture, stable_airframe]);
+  }, [vapor, shape_from, stable_airframe]);
 
   useLayoutEffect(() => {
     if (stable_flight) vapor?.update_flight(stable_flight);

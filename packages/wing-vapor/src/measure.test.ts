@@ -8,7 +8,13 @@ import {
 } from "three";
 import { capture_views } from "./capture";
 import { fighter_filter, load_fighter } from "./fighter.fixture";
-import { measure_airframe } from "./measure";
+import {
+  capture_airframe,
+  capture_airframe_async,
+  deserialize_capture,
+  measure_airframe,
+  serialize_capture,
+} from "./measure";
 import { default_vapor_airframe } from "./types";
 import { shape_station } from "./wing-shape";
 
@@ -320,4 +326,72 @@ describe("measure_airframe", () => {
     // A tailless delta: nothing ahead of or behind its wing lifts
     expect(shape.secondary ?? null).toBeNull();
   }, 30_000);
+
+  it("measures the same off the main thread, in slices", async () => {
+    const fighter = await load_fighter();
+    const options = { filter: fighter_filter, resolution: 64 };
+    const sync = capture_airframe(fighter, options);
+
+    let slices = 0;
+    const counting = setInterval(() => slices++, 0);
+    const sliced = await capture_airframe_async(fighter, {
+      ...options,
+      budget_ms: 1,
+    });
+
+    clearInterval(counting);
+
+    expect(sliced.airframe).toEqual(sync.airframe);
+    expect(sliced.shape.chord_m).toEqual(sync.shape.chord_m);
+    // It did hand the thread back between slices
+    expect(slices).toBeGreaterThan(0);
+  }, 30_000);
+
+  it("gives up when aborted", async () => {
+    const fighter = await load_fighter();
+    const abort = new AbortController();
+
+    abort.abort();
+
+    await expect(
+      capture_airframe_async(fighter, { signal: abort.signal }),
+    ).rejects.toThrow();
+  }, 30_000);
+});
+
+describe("serialize_capture", () => {
+  it("bakes to JSON and reads back what was measured", async () => {
+    const fighter = await load_fighter();
+    const measured = capture_airframe(fighter, { filter: fighter_filter });
+    const baked = JSON.parse(JSON.stringify(serialize_capture(measured)));
+    const read = deserialize_capture(baked);
+
+    expect(read.airframe).toEqual(measured.airframe);
+    expect(read.shape.semispan_m).toBe(measured.shape.semispan_m);
+
+    for (const key of [
+      "leading_m",
+      "chord_m",
+      "mid_m",
+      "thickness",
+      "loading",
+    ] as const) {
+      read.shape[key].forEach((value, station) =>
+        expect(value).toBeCloseTo(measured.shape[key][station], 2),
+      );
+    }
+
+    expect(read.shape.secondary ?? null).toEqual(
+      measured.shape.secondary ?? null,
+    );
+  }, 30_000);
+
+  it("refuses a bake of another version", () => {
+    const measured = measure_airframe(
+      capture_views(new Mesh(new CylinderGeometry(1, 1, 4)), {}),
+    );
+    const baked = serialize_capture(measured);
+
+    expect(() => deserialize_capture({ ...baked, version: 0 })).toThrow();
+  });
 });

@@ -1,6 +1,8 @@
 import type { Object3D } from "three";
 import {
   capture_views,
+  capture_view_steps,
+  run_async,
   type AirframeViews,
   type CaptureOptions,
   type DepthView,
@@ -585,3 +587,117 @@ export const capture_airframe = (
   object: Object3D,
   options: CaptureOptions = {},
 ): MeasuredAirframe => measure_airframe(capture_views(object, options));
+
+/**
+ * `capture_airframe`, a few milliseconds at a time, so a big model measures
+ * without dropping a frame. The rasterising yields back to the page whenever
+ * it has used its budget; the measuring after it is a millisecond or two.
+ * @param object The model
+ * @param options As for `capture_airframe`, plus how long each slice may run
+ *   and a signal to give up on
+ * @returns The fitted dials and the wing's table
+ */
+export const capture_airframe_async = async (
+  object: Object3D,
+  options: CaptureOptions & { budget_ms?: number; signal?: AbortSignal } = {},
+): Promise<MeasuredAirframe> =>
+  measure_airframe(
+    await run_async(
+      capture_view_steps(object, options),
+      options.budget_ms,
+      options.signal,
+    ),
+  );
+
+// Bumped whenever the table's layout changes, so an old bake is refused
+// rather than misread
+const BAKE_VERSION = 1;
+
+/**
+ * A measured airframe as plain JSON, to bake at build time and ship in place
+ * of the capture.
+ */
+export type BakedAirframe = {
+  version: number;
+  airframe: MeasuredAirframe["airframe"];
+  shape: {
+    semispan_m: number;
+    root_span_m: number;
+    leading_m: number[];
+    chord_m: number[];
+    mid_m: number[];
+    thickness: number[];
+    loading: number[];
+    secondary: SecondarySurface | null;
+  };
+};
+
+// Millimetres, and four figures for the ratios, are far finer than the views
+// resolve, and keep the JSON short
+const round = (values: Float32Array, digits: number): number[] =>
+  Array.from(values, (value) => Number(value.toFixed(digits)));
+
+/**
+ * Bake a measured airframe into JSON.
+ * @param measured What `capture_airframe` returned
+ * @returns Plain data, for `JSON.stringify`
+ */
+export const serialize_capture = (
+  measured: MeasuredAirframe,
+): BakedAirframe => {
+  const { shape } = measured;
+
+  return {
+    version: BAKE_VERSION,
+    airframe: { ...measured.airframe },
+    shape: {
+      semispan_m: shape.semispan_m,
+      root_span_m: shape.root_span_m,
+      leading_m: round(shape.leading_m, 3),
+      chord_m: round(shape.chord_m, 3),
+      mid_m: round(shape.mid_m, 3),
+      thickness: round(shape.thickness, 4),
+      loading: round(shape.loading, 4),
+      secondary: shape.secondary ? { ...shape.secondary } : null,
+    },
+  };
+};
+
+/**
+ * Read a baked airframe back.
+ * @param baked What `serialize_capture` made, parsed
+ * @returns The measured airframe, as the capture would have returned it
+ */
+export const deserialize_capture = (baked: BakedAirframe): MeasuredAirframe => {
+  if (baked.version !== BAKE_VERSION) {
+    throw new Error(
+      `r3f-wing-vapor: a bake of version ${baked.version}, this reads ${BAKE_VERSION}; capture again`,
+    );
+  }
+
+  const table = (values: number[]) => {
+    if (values.length !== SHAPE_STATIONS) {
+      throw new Error(
+        `r3f-wing-vapor: a baked table of ${values.length} stations, not ${SHAPE_STATIONS}`,
+      );
+    }
+
+    return Float32Array.from(values);
+  };
+
+  const { shape } = baked;
+
+  return {
+    airframe: { ...baked.airframe },
+    shape: {
+      semispan_m: shape.semispan_m,
+      root_span_m: shape.root_span_m,
+      leading_m: table(shape.leading_m),
+      chord_m: table(shape.chord_m),
+      mid_m: table(shape.mid_m),
+      thickness: table(shape.thickness),
+      loading: table(shape.loading),
+      secondary: shape.secondary ? { ...shape.secondary } : null,
+    },
+  };
+};
