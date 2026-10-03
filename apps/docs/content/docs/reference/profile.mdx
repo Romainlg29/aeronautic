@@ -18,6 +18,10 @@ Pass any subset as the batch's `profile`. The rest come from the batch's preset,
 | [`adaptation`](#adaptation)                       | `0.6`    | How far the camera opens up for a burner dimmer than at full power, 0 to 1.                                       |
 | [`dry_glow`](#dry_glow)                           | `0.35`   | How bright the dry engine's glow is, as it reaches the screen.                                                    |
 | [`sky_light`](#sky_light)                         | `0.0005` | How much sky light the particles scatter, in the same units.                                                      |
+| [`sun_light`](#sun_light)                         | `0`      | How much direct sunlight the particles scatter, in the same units.                                                |
+| [`sun_x`](#sun_x)                                 | `0.4`    | The direction toward the sun in world space, its x, at any length.                                                |
+| [`sun_y`](#sun_y)                                 | `0.8`    | And its y.                                                                                                        |
+| [`sun_z`](#sun_z)                                 | `0.45`   | And its z.                                                                                                        |
 | [`visible_temperature_k`](#visible_temperature_k) | `850`    | Below this the gas no longer glows enough to see, in kelvin.                                                      |
 | [`max_length_d`](#max_length_d)                   | `40`     | The longest any plume is drawn, in exit diameters.                                                                |
 | [`burner_threshold`](#burner_threshold)           | `1`      | Below this throttle the engine is on dry thrust; a rocket's is zero.                                              |
@@ -86,6 +90,32 @@ On dry thrust the exhaust is a thousand kelvin or less, too cool to see but as a
 `number` · default `0.0005`
 
 How much sky light the particles scatter, in the same units. The reason a solid motor's smoke is white in daylight and black at night.
+
+## sun_light
+
+`number` · default `0`
+
+How much direct sunlight the particles scatter, in the same units.
+
+Unlike the sky's, the sun's light comes from one way: smoke seen against the sun glows, seen with the sun behind the camera it is dull, and the side of a thick plume away from the sun is in its own shadow. Zero leaves the plume lit by the sky alone.
+
+## sun_x
+
+`number` · default `0.4`
+
+The direction toward the sun in world space, its x, at any length. The position of a directional light aimed at the origin will do.
+
+## sun_y
+
+`number` · default `0.8`
+
+And its y.
+
+## sun_z
+
+`number` · default `0.45`
+
+And its z.
 
 ## visible_temperature_k
 

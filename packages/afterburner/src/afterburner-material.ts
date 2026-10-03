@@ -16,6 +16,7 @@ import {
   If,
   Loop,
   abs,
+  bool,
   attribute,
   ceil,
   cameraFar,
@@ -36,6 +37,7 @@ import {
   max,
   min,
   mix,
+  normalize,
   perspectiveDepthToViewZ,
   positionGeometry,
   screenSize,
@@ -61,6 +63,7 @@ import { hash_cell } from "./tsl/noise";
 import {
   PLUME_EPSILON,
   plume_bound,
+  plume_bound_coarse,
   plume_closest,
   plume_field,
   plume_frame,
@@ -68,6 +71,7 @@ import {
   plume_jet,
   plume_span,
   plume_station,
+  plume_sun_phase,
   type PlumeContext,
   type PlumeEngineNodes,
   type PlumeFieldHooks,
@@ -634,6 +638,15 @@ export const create_afterburner_material = (
   ) as unknown as V3;
   const v_glow = varying(vec2(jet.glow, shape.x), "v_glow") as unknown as V2;
 
+  // Toward the sun, out of the world into the nozzle's frame. The mesh is
+  // only ever translated, so its frame is the world's
+  const sun_world = vec3(p.sun_x, p.sun_y, p.sun_z);
+
+  const v_sun = varying(
+    rotate(inverse, sun_world.div(max(length(sun_world), PLUME_EPSILON))),
+    "v_sun",
+  ) as unknown as V3;
+
   // Fragment stage
   const radiance = Fn(() => {
     const instance: PlumeJetNodes = {
@@ -697,6 +710,15 @@ export const create_afterburner_material = (
     // Unit length, so t comes out in metres
     const along_ray = length(v_dir.xyz);
     const direction = v_dir.xyz.div(along_ray).toVar();
+
+    // The sun, and how much of it the particles send down this ray: the
+    // phase is the same for every sample of it
+    const sun = normalize(v_sun).toVar();
+
+    context.sun = {
+      direction: sun,
+      phase: plume_sun_phase(direction, sun).toVar(),
+    };
 
     // How far along this ray the opaque scene sits
     const scene_t = scene_view_z(backdrop).mul(along_ray).div(v_dir.w);
@@ -882,6 +904,9 @@ export const create_afterburner_material = (
     // How much hot gas the ray went through, for the haze
     const column = float(0).toVar();
 
+    // Whether the last step was in empty space, where the coarse bound may skip
+    const outside = bool(true).toVar();
+
     Loop(
       { start: int(0), end: budget_steps, type: "int", condition: "<" },
       () => {
@@ -889,7 +914,7 @@ export const create_afterburner_material = (
           Break();
         });
 
-        const frame = plume_frame(origin.add(direction.mul(t)), context);
+        const point = origin.add(direction.mul(t)).toVar();
 
         const before_train = has_fine.and(t.lessThan(seg_start));
 
@@ -910,7 +935,26 @@ export const create_afterburner_material = (
         // the cells, which only vary along it and are what aliases down the axis
         const footprint = vec2(here, here.mul(axial));
 
+        // Far from the gas, a bound from the point alone does, and the frame,
+        // the meander's fetch among it, is only worked out near it
+        If(outside.and(far_tier.not()), () => {
+          const coarse = plume_bound_coarse(point, context);
+
+          If(coarse.greaterThan(0), () => {
+            const leap = max(coarse.mul(p.step_safety), here);
+
+            t.addAssign(select(before_train, min(leap, to_train), leap));
+
+            Continue();
+          });
+        });
+
+        const frame = plume_frame(point, context);
+
         const gap = plume_bound(frame, context);
+
+        // In the gas, the coarse bound would not skip the next step either
+        outside.assign(gap.greaterThan(0));
 
         // Empty space: skip at least a stride, so the loop never covers less
         // than an even march would, and spends almost nothing on the gap

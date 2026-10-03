@@ -1,12 +1,13 @@
-import { Fn, mix, vec3 } from "three/tsl";
+import type { Data3DTexture } from "three";
+import { Fn, float, mix, texture3D, vec3 } from "three/tsl";
 import type { Node } from "three/webgpu";
+import { NOISE_VOLUME_PERIOD, get_noise_volume } from "../noise-volume";
 
 // The noise the plume is made of, as TSL
 //
-// A hash rather than a texture, so the plume carries no assets with it, and
-// value noise rather than gradient noise because it is eight hashes and a few
-// mixes: the march samples it tens of times a fragment, and nothing about a
-// flame needs gradient noise's isotropy once the domain is stretched along it
+// The eddies and the meander read a small volume of gradient noise baked at
+// start up: one fetch an octave, and one for both curves of the meander (see
+// noise-volume.ts). The hashed value noise stays for anyone's own hooks
 //
 // Each of these compiles to one native function, so calling them in a loop
 // costs a call rather than another copy of the code
@@ -86,6 +87,92 @@ export const turbulence = (point: Node<"vec3">, octaves = 2): Node<"float"> => {
 
   return eddies;
 };
+
+/**
+ * Gradient noise from the baked volume: one filtered fetch.
+ *
+ * Sampled with an explicit level, so it is safe anywhere, a march loop's
+ * non-uniform control flow included. One unit of `point` is one noise cell,
+ * as it is for `value_noise`.
+ * @param point Where to sample it
+ * @param volume The volume, `get_noise_volume()` by default
+ * @returns Noise in [0, 1], with value noise's mean and spread
+ */
+export const volume_noise = (
+  point: Node<"vec3">,
+  volume: Data3DTexture = get_noise_volume(),
+): Node<"float"> =>
+  texture3D(volume, point.div(NOISE_VOLUME_PERIOD), float(0))
+    .r as unknown as Node<"float">;
+
+/**
+ * A few octaves of the baked noise, summed: one fetch an octave.
+ * @param point Where to sample it
+ * @param octaves How many, 1 to 3
+ * @param volume The volume, `get_noise_volume()` by default
+ * @returns Noise in [0, 1]
+ */
+export const volume_turbulence = (
+  point: Node<"vec3">,
+  octaves = 2,
+  volume: Data3DTexture = get_noise_volume(),
+): Node<"float"> => {
+  let eddies = volume_noise(point, volume);
+
+  // Each octave shifted off the last, so their tiles do not line up
+  if (octaves > 1) {
+    eddies = eddies
+      .mul(0.65)
+      .add(
+        volume_noise(point.mul(2.17).add(vec3(5.3, 1.7, 9.1)), volume).mul(
+          0.35,
+        ),
+      );
+  }
+
+  if (octaves > 2) {
+    eddies = eddies
+      .mul(0.78)
+      .add(
+        volume_noise(point.mul(4.63).add(vec3(2.9, 7.1, 3.7)), volume).mul(
+          0.22,
+        ),
+      );
+  }
+
+  return eddies;
+};
+
+// One dimensional value noise strays 0.25 from its mean, the volume 0.184
+const WANDER_GRADE = 0.25 / 0.184;
+
+/**
+ * Two independent curves of one dimensional noise from the baked volume, for
+ * something that only varies along the plume: one fetch for both, against
+ * wander_noise's four hashes.
+ *
+ * Read down a line slanted across the volume, so it does not repeat with the
+ * tile, and graded to wander_noise's spread.
+ * @param along Where to sample it
+ * @param seed Which pair of curves to sample
+ * @param volume The volume, `get_noise_volume()` by default
+ * @returns Two curves, each about 0.5 with wander_noise's spread
+ */
+export const volume_wander = (
+  along: Node<"float">,
+  seed: Node<"float">,
+  volume: Data3DTexture = get_noise_volume(),
+): Node<"vec2"> =>
+  (
+    texture3D(
+      volume,
+      vec3(along, seed.add(along.mul(0.37)), 0.37).div(NOISE_VOLUME_PERIOD),
+      float(0),
+    ).rg as unknown as Node<"vec2">
+  )
+    .sub(0.5)
+    .mul(WANDER_GRADE)
+    .add(0.5);
 
 // Two hashes rather than the eight a 3D lookup costs
 // And the right shape as well as the cheap one: a whip moves a cross-section

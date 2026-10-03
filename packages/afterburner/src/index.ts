@@ -36,6 +36,12 @@ export {
   get_blackbody_lut,
   REFERENCE_TEMPERATURE_K,
 } from "./blackbody";
+export {
+  build_noise_volume,
+  get_noise_volume,
+  NOISE_VOLUME_PERIOD,
+  NOISE_VOLUME_TEXELS,
+} from "./noise-volume";
 export { atmosphere, standard_atmosphere, type AirState } from "./atmosphere";
 export { build_plume_hull } from "./plume-hull";
 export {

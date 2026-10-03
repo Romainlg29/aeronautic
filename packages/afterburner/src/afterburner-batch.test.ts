@@ -1,7 +1,7 @@
 import { Matrix4, Object3D, Vector3 } from "three";
 import { describe, expect, it, vi } from "vitest";
 import { AFTERBURNER_ATTRIBUTES } from "./afterburner-material";
-import { AfterburnerBatch } from "./afterburner-batch";
+import { AfterburnerBatch, axis_distance } from "./afterburner-batch";
 
 const render = (batch: AfterburnerBatch, frame: number) => {
   const camera = new Object3D() as unknown as Parameters<
@@ -152,6 +152,38 @@ describe("AfterburnerBatch", () => {
 
     batch.add({ params: { refraction_m: 0.1 } });
     expect(batch.mesh.material).not.toBe(clear);
+  });
+
+  it("draws the furthest plume first", () => {
+    const batch = new AfterburnerBatch({ response_s: 0 });
+    const near = new Object3D();
+    const far = new Object3D();
+
+    near.position.set(0, 0, -10);
+    far.position.set(0, 0, -100);
+    near.updateMatrixWorld();
+    far.updateMatrixWorld();
+
+    batch.add({ object: near, params: { nozzle_radius_m: 1 } });
+    batch.add({ object: far, params: { nozzle_radius_m: 2 } });
+    render(batch, 1);
+
+    expect(slot_of(batch, AFTERBURNER_ATTRIBUTES.shape, 0)[0]).toBe(2);
+    expect(slot_of(batch, AFTERBURNER_ATTRIBUTES.shape, 1)[0]).toBe(1);
+    expect(slot_of(batch, AFTERBURNER_ATTRIBUTES.place, 0)[2]).toBeCloseTo(-90);
+
+    // The throttle follows its nozzle into its new slot
+    batch.nozzles[1].throttle = 0.3;
+
+    expect(slot_of(batch, AFTERBURNER_ATTRIBUTES.place, 1)[3]).toBeCloseTo(0.3);
+  });
+
+  it("measures a plume by the nearest point of its axis", () => {
+    const elements = new Matrix4().makeTranslation(0, 0, 0).elements;
+
+    expect(axis_distance(elements, 10, { x: 5, y: 3, z: 0 })).toBeCloseTo(3);
+    expect(axis_distance(elements, 10, { x: 14, y: 3, z: 0 })).toBeCloseTo(5);
+    expect(axis_distance(elements, 10, { x: -4, y: 3, z: 0 })).toBeCloseTo(5);
   });
 
   it("advances its clock once a frame", () => {
