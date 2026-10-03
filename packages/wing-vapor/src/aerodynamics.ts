@@ -253,8 +253,7 @@ export const flight_state = (
   // Kutta–Joukowski over the rolled-up pair: L = ρ V Γ b'
   const tip_circulation =
     speed > 0
-      ? Math.abs(lift_n) /
-        (air.density_kg_m3 * speed * VORTEX_SPACING * span)
+      ? Math.abs(lift_n) / (air.density_kg_m3 * speed * VORTEX_SPACING * span)
       : 0;
 
   // In slender-wing theory the lift is the rate the crossflow's impulse grows
@@ -300,11 +299,8 @@ export const angle_of_attack_for_load = (
   air: MoistAir,
 ): number => {
   const lift_of = (alpha: number) =>
-    flight_state(
-      airframe,
-      { airspeed_m_s, angle_of_attack_rad: alpha },
-      air,
-    ).load_factor;
+    flight_state(airframe, { airspeed_m_s, angle_of_attack_rad: alpha }, air)
+      .load_factor;
 
   const sign = Math.sign(load_factor) || 1;
   const wanted = Math.abs(load_factor);
@@ -384,8 +380,7 @@ export const critical_pressure = (mach: number): number => {
   const g = AIR_GAMMA;
 
   return (
-    (2 / (g * m2)) *
-    (Math.pow((2 + (g - 1) * m2) / (g + 1), g / (g - 1)) - 1)
+    (2 / (g * m2)) * (Math.pow((2 + (g - 1) * m2) / (g + 1), g / (g - 1)) - 1)
   );
 };
 

@@ -150,13 +150,8 @@ export const Stage: FC<StageProps> = ({
           return renderer;
         }}
       >
-        <color
-          attach="background"
-          args={[daylight ? "#6f9fd8" : "#05070b"]}
-        />
-        <hemisphereLight
-          args={["#8090b0", "#101010", daylight ? 1.6 : 0.6]}
-        />
+        <color attach="background" args={[daylight ? "#6f9fd8" : "#05070b"]} />
+        <hemisphereLight args={["#8090b0", "#101010", daylight ? 1.6 : 0.6]} />
         <directionalLight
           position={[5, 10, 5]}
           intensity={daylight ? 3 : 1.2}

@@ -1,0 +1,174 @@
+# r3f-wing-vapor
+
+Physically based **wing vapor** for [React Three Fiber](https://r3f.docs.pmnd.rs)
+and three.js, written in TSL for three's `WebGPURenderer`.
+
+Four phenomena, from one pressure field:
+
+- **Tip vortex trails** in a hard pull, streaming back along the free stream,
+  rolling inboard and spreading until they no longer fog.
+- **Leading-edge vortices** over a swept wing at high angle of attack, bursting
+  where vortex breakdown has reached.
+- **Vapor over the wing**: the suction of the upper surface in a pull, and once
+  the flow over it goes supersonic, a rooftop ending in a **shock** that cuts
+  the cloud off in a hard edge, marching aft as the speed climbs.
+- **The vapor cone** (the "Prandtl–Glauert cloud") near Mach one: the
+  transonic pocket round the fuselage, ended by the shock behind it.
+
+None of it is drawn to a shape. The package works out the pressure round the
+aircraft from its planform, its airspeed and its angle of attack, expands the
+day's moist air through that pressure field, and draws cloud wherever the air
+passes its dew point. Dry air stays clear however hard the pull, and in humid
+air a gentle turn trails its tips.
+
+**[Live example on the docs' fighter](https://romainlg29.github.io/afterburner/docs/examples/wing-vapor/)**
+
+## Install
+
+```bash
+pnpm add r3f-wing-vapor
+```
+
+The same peer dependencies as `r3f-afterburner`: `react` 19, `three` 0.186.x and
+`@react-three/fiber` 9 (or 10). It needs a `WebGPURenderer`, which falls back to
+WebGL 2 by itself. It doesn't run on the classic `WebGLRenderer`.
+
+## Quick start
+
+`<WingVapor>` is a group where the aircraft's reference point sits. Put it
+inside the model, and give it the airframe, the flight and the day:
+
+```tsx
+import { WingVapor } from "r3f-wing-vapor";
+
+const Jet = () => (
+  <group>
+    <JetModel />
+    <WingVapor
+      // The model flies along its local -Z, with +Y up (the defaults)
+      forward={[0, 0, -1]}
+      airframe={{
+        span_m: 14,
+        root_chord_m: 9.2,
+        tip_chord_m: 1.6,
+        leading_edge_sweep_rad: (55 * Math.PI) / 180,
+        apex_m: -5.66, // the leading edge meets the centreline 5.66 m ahead
+      }}
+      flight={{ airspeed_m_s: 170, angle_of_attack_rad: 0.35 }}
+      air={{ altitude_m: 300, relative_humidity: 0.9 }}
+      look={{ sun_direction: [5, 10, 5] }}
+    />
+  </group>
+);
+```
+
+The flight changes every frame in a real scene. Write it through the ref, which
+costs no React render:
+
+```tsx
+const vapor = useRef<WingVaporCore>(null);
+
+useFrame(() => {
+  vapor.current?.update_flight({ airspeed_m_s, angle_of_attack_rad });
+});
+
+<WingVapor ref={vapor} airframe={airframe} />;
+```
+
+A flight model usually knows the load factor, not the angle of attack.
+`angle_of_attack_for_load(airframe, g, airspeed, air)` inverts the lift curve
+for it.
+
+Without React, `WingVaporCore` is the same thing: add `vapor.mesh` to the scene
+and set `vapor.object` to the object it follows.
+
+## The dials
+
+They split four ways, the way the physics does. Every one is a physical
+quantity in SI units.
+
+- **`airframe`**: the wing's planform (span, root and tip chords, leading-edge
+  sweep, where its apex sits, dihedral, thickness, where it meets the body), the
+  fuselage as a body of revolution for the cone, and the mass, for the load
+  factor. The defaults are the docs' delta fighter.
+- **`flight`**: `airspeed_m_s` and `angle_of_attack_rad`.
+- **`air`**: `altitude_m`, `temperature_offset_k` and `relative_humidity`.
+  Everything comes down to the humidity. The cooling a wing or a vortex makes
+  is tens of kelvin at most, so at 30 % on a warm day nothing fogs.
+- **`look`**: the sun's direction and colour, the sky's light, the droplets'
+  size, how patchy the moisture is, and the shutter, which streaks the patches
+  along the flow.
+
+`effects` switches each phenomenon on or off. It is compiled into the shader.
+
+`vapor.state` reports what the physics worked out: the air (dew point, density,
+speed of sound), the flight (Mach number, lift coefficient, load factor,
+circulation) and every part of the field.
+
+## How it works
+
+1. **The air.** The International Standard Atmosphere, with the vapour on top:
+   its partial pressure from the relative humidity, Magnus's saturation
+   pressure over liquid water (the droplets are supercooled), the mixing ratio
+   and the dew point.
+2. **The parcel.** Air swept past a wing has its pressure dropped in well under
+   a millisecond, so it expands adiabatically. Past its dew point the vapour
+   condenses and gives up its latent heat, which warms the parcel back up and
+   holds the cloud to far less water than a dry expansion would. The parcel is
+   solved on the moist adiabat, and the water it holds against the pressure
+   ratio goes into a small lookup table, made once per day and altitude.
+3. **The lift.** DATCOM's lift slope for the attached flow, and Polhamus's
+   suction analogy for what a sharp swept leading edge's vortices add. Vortex
+   breakdown marches up the wing with the angle of attack, sooner for a less
+   swept edge, and the vortex lift goes with it: the stall.
+4. **The pressure field**, as four deficits that add:
+   - Each **tip vortex** is a Scully vortex holding part of the circulation,
+     `Γ = L / ρ V b′`. It trails along the free stream, rolls inboard to π/4 of
+     the span, sinks under its own downwash, and its core spreads by turbulent
+     diffusion until its pressure well is too shallow to fog. So the trail is
+     longer for a heavier pull, a slower aircraft and moister air.
+   - Each **leading-edge vortex** is conical, so its core pressure is the same
+     all the way along until it bursts. There its core swells and the vapor
+     fades into a ragged puff.
+   - The **upper surface** carries thin-airfoil theory's suction, the peak at
+     the nose handed to the leading-edge vortex once the flow separates off a
+     sharp edge, corrected for compressibility with Kármán–Tsien and simple
+     sweep theory. Once the suction passes sonic it becomes a supersonic
+     rooftop ended by a shock, which stands further aft the faster the flight
+     and drops the pressure back to subsonic. In drier air only the pocket
+     fogs, and its aft edge is the shock.
+   - The **cone** is the fuselage as a slender body. Its transonic pocket keeps
+     expanding until the shock that ends it, is felt further out the nearer
+     Mach one, and is cut off by the shock. Hence a cone opening aft, soft at
+     its front and hard at its back. It fades above about Mach 1.15.
+
+   A linear theory's suction diverges at Mach one, so every deficit is eased
+   into what an isentropic expansion to a local Mach 1.4 makes.
+
+5. **The march.** One box round everything that can fog, marched per pixel.
+   The field reports how far each point is from anything that could fog, so
+   the clear air is skipped. Wherever the pressure is low enough, the table
+   gives the liquid water, two octaves of noise make the moisture patchy, and
+   the droplets scatter the sun (Henyey–Greenstein, mostly forward) and the
+   sky. The blend is premultiplied, as a cloud's is, and the scene's depth
+   stops the vapor at the wing it sits on.
+
+The physics is all on the CPU too, in `vapor-field.ts`, where it is tested.
+The shader mirrors it node for node.
+
+### What it leaves out
+
+- The trails are drawn in the aircraft's frame along the free stream, so they
+  are straight. A rolling or turning aircraft's real trails curve with its
+  path. Over the hundred metres or so a trail lasts this is a small error, but
+  it is visible in a fast roll.
+- The field is symmetric left to right: no sideslip and no roll rate.
+- The vapor isn't shadowed by itself or by the aircraft.
+- The numbers are textbook correlations, good to ten or twenty per cent. That
+  is far better than the eye can tell in a cloud that appears or not on a
+  degree of dew point. `tip_core_radius`, `tip_core_share` and
+  `leading_edge_core_radius` are the empirical ones.
+
+## License
+
+[MIT](LICENSE) © Romain Le Gall

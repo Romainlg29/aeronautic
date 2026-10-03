@@ -15,6 +15,10 @@ Every plume in a batch is one instanced draw.
 
 - **Library:** [`packages/afterburner`](packages/afterburner), published to npm as
   [`r3f-afterburner`](https://www.npmjs.com/package/r3f-afterburner).
+- **Wing vapor:** [`packages/wing-vapor`](packages/wing-vapor), `r3f-wing-vapor`:
+  tip and leading-edge vortex trails, shock vapor over the wing and the vapor
+  cone, from the aircraft's planform, its flight and the day's humidity. See
+  [its README](packages/wing-vapor/README.md).
 - **Docs:** [`apps/docs`](apps/docs), a [Fumadocs](https://fumadocs.dev) site
   (Next.js, exported static) with a tutorial, guides, live examples, the
   reference and how the shader works. Deployed to GitHub Pages at
@@ -138,7 +142,7 @@ pnpm test            # vitest
 pnpm lint            # oxlint
 pnpm fmt             # oxfmt (fmt:check in CI)
 pnpm typecheck
-pnpm build           # the library, with tsdown (Rolldown)
+pnpm build           # the libraries, with tsdown (Rolldown)
 pnpm build:docs      # the docs, into apps/docs/out
 ```
 

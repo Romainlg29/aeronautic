@@ -29,7 +29,12 @@ describe("planform", () => {
 
 describe("lift_slope", () => {
   it("is slender-wing theory's πA/2 for a slender wing", () => {
-    const slender = { ...airframe, span_m: 2, root_chord_m: 20, tip_chord_m: 0 };
+    const slender = {
+      ...airframe,
+      span_m: 2,
+      root_chord_m: 20,
+      tip_chord_m: 0,
+    };
     const a = planform(slender).aspect_ratio;
 
     expect(lift_slope(slender, 0)).toBeCloseTo((Math.PI * a) / 2, 1);
@@ -107,8 +112,11 @@ describe("flight_state", () => {
     expect(hard).toBeGreaterThan(easy);
 
     const circulation = (alpha: number) =>
-      flight_state(airframe, { airspeed_m_s: 180, angle_of_attack_rad: alpha }, air)
-        .tip_circulation;
+      flight_state(
+        airframe,
+        { airspeed_m_s: 180, angle_of_attack_rad: alpha },
+        air,
+      ).tip_circulation;
 
     expect(circulation(hard) / circulation(easy)).toBeCloseTo(7 / 3, 3);
   });

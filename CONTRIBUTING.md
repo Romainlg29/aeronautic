@@ -24,6 +24,8 @@ shows up in the examples straight away, with no build.
 | -------------------------------- | ------------------------------------------------------------------------- |
 | `packages/afterburner/src`       | The library: components, the batch, presets, and the CPU-side physics     |
 | `packages/afterburner/src/tsl`   | The shader, in TSL: the jet, the field, the march                         |
+| `packages/wing-vapor/src`        | Wing vapor: moist air, condensation, the lift and its pressure field      |
+| `packages/wing-vapor/src/tsl`    | Its shader, in TSL: the same field, node for node                         |
 | `apps/docs`                      | The docs site (Fumadocs on Next.js, exported static)                      |
 | `apps/docs/examples`             | Each live example. Its page runs the file and shows it as the code        |
 | `apps/docs/scripts/reference.ts` | Generates the params, profile and quality reference pages from `types.ts` |

@@ -31,8 +31,7 @@ describe("condensate", () => {
   });
 
   it("is warmer than the dry adiabat, for the latent heat", () => {
-    const dry =
-      humid.temperature_k * Math.pow(0.85, AIR_GAS_CONSTANT / AIR_CP);
+    const dry = humid.temperature_k * Math.pow(0.85, AIR_GAS_CONSTANT / AIR_CP);
 
     expect(condensate(0.85, humid).temperature_k).toBeGreaterThan(dry + 1);
   });
@@ -68,7 +67,11 @@ describe("condensation_table", () => {
 
     // Below about half an atmosphere's ratio the thinning air holds less per
     // cubic metre for all it condenses: the table is only monotonic above
-    for (let texel = CONDENSATION_TEXELS / 2; texel < CONDENSATION_TEXELS; texel++) {
+    for (
+      let texel = CONDENSATION_TEXELS / 2;
+      texel < CONDENSATION_TEXELS;
+      texel++
+    ) {
       expect(table[texel * 4 + 1]).toBeLessThanOrEqual(
         table[(texel - 1) * 4 + 1],
       );

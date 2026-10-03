@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm --filter r3f-afterburner build",
+    "build": "pnpm --filter r3f-afterburner --filter r3f-wing-vapor build",
     "build:docs": "pnpm --filter docs build",
     "dev": "pnpm --filter docs dev",
     "dev:docs": "pnpm --filter docs dev",

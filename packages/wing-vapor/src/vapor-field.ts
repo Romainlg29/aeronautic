@@ -74,6 +74,9 @@ export const ROOT_FADE = 0.12;
 // theory's suction peak finite
 export const NOSE_RADIUS = 0.03;
 
+// How far back from the nose a wing's field reaches its full height, in chords
+export const NOSE_REACH = 0.3;
+
 // How high a wing's pressure field reaches, in chords, at low speed. The
 // Prandtl–Glauert stretch carries it higher, 1/β, as Mach one nears
 export const WING_FIELD_HEIGHT = 0.1;
@@ -268,12 +271,10 @@ export const tip_deficit = (
 
   if (along < 0) {
     // Forming along the tip chord, from nothing at the leading edge
-    const formed = Math.min(
-      Math.max((x - tip_le) / field.tip_chord_m, 0),
-      1,
-    );
+    const formed = Math.min(Math.max((x - tip_le) / field.tip_chord_m, 0), 1);
     const ax = Math.min(Math.max(x, tip_le), tip_te);
-    const r2 = (x - ax) ** 2 + (y - tip_y) ** 2 + (span - field.semispan_m) ** 2;
+    const r2 =
+      (x - ax) ** 2 + (y - tip_y) ** 2 + (span - field.semispan_m) ** 2;
 
     return vortex_deficit(
       field,
@@ -346,18 +347,17 @@ export const edge_deficit = (
     along,
   );
 
-  const core = Math.max(field.edge_core * reach, 0.02) * (1 + BURST_SWELL * burst);
+  const core =
+    Math.max(field.edge_core * reach, 0.02) * (1 + BURST_SWELL * burst);
 
   // Off the edge it trails away into the tip vortex's sheet
   const leaving = Math.exp(-past / (0.3 * field.edge_length_m));
 
-  return (
-    vortex_deficit(
-      field,
-      field.edge_gradient * on_wing * (1 - 0.3 * burst) * leaving,
-      r2,
-      core * core,
-    )
+  return vortex_deficit(
+    field,
+    field.edge_gradient * on_wing * (1 - 0.3 * burst) * leaving,
+    r2,
+    core * core,
   );
 };
 
@@ -419,7 +419,8 @@ export const wing_deficit = (
 
   if (peak < sonic) {
     const shock = shock_station(field, section, sonic, mach);
-    const ahead = 1 - smoothstep(shock - SHOCK_WIDTH, shock + SHOCK_WIDTH, along);
+    const ahead =
+      1 - smoothstep(shock - SHOCK_WIDTH, shock + SHOCK_WIDTH, along);
 
     // Ahead of it the supersonic plateau holds the peak's suction; behind
     // it the flow is subsonic again, at no less than sonic pressure
@@ -428,10 +429,13 @@ export const wing_deficit = (
       Math.max(coefficient, sonic) * (1 - ahead);
   }
 
-  // Up from the surface it decays, reaching further as Mach one nears
+  // Up from the surface it decays, reaching further as Mach one nears. A
+  // disturbance is felt about as far off the surface as it is long, so near
+  // the nose, where the suction is a narrow peak, it reaches less high
   const reach =
-    (WING_FIELD_HEIGHT * chord) /
-    Math.max(compressibility_beta(mach), WING_HEIGHT_MIN_BETA);
+    ((WING_FIELD_HEIGHT * chord) /
+      Math.max(compressibility_beta(mach), WING_HEIGHT_MIN_BETA)) *
+    nose_reach(along);
 
   const fade =
     smoothstep(
@@ -449,6 +453,14 @@ export const wing_deficit = (
     fade
   );
 };
+
+/**
+ * How high a wing's field reaches at one station, against its reach mid-chord.
+ * @param xi Along the chord, 0 to 1
+ * @returns The share
+ */
+export const nose_reach = (xi: number): number =>
+  Math.min((xi + NOSE_RADIUS) / NOSE_REACH, 1);
 
 /**
  * Hold a linear theory's deficit to what the flow can reach.
@@ -566,8 +578,7 @@ export const cone_deficit = (
   const r = Math.hypot(y - field.body_height_m, z);
   const radius = body_radius(field, xi);
 
-  const shock =
-    field.cone_shock + (CONE_SHOCK_LEAN * r) / field.body_length_m;
+  const shock = field.cone_shock + (CONE_SHOCK_LEAN * r) / field.body_length_m;
   const ahead = 1 - smoothstep(shock - 0.01, shock + 0.01, xi);
 
   // A transonic pocket keeps expanding until the shock that ends it: the
@@ -688,7 +699,8 @@ export const vapor_state = (
     (2 * Math.PI * VORTEX_SPACING * airframe.span_m) /
     speed;
 
-  const edge_length_m = Math.max(semispan - airframe.root_span_m, 0) * tan_sweep;
+  const edge_length_m =
+    Math.max(semispan - airframe.root_span_m, 0) * tan_sweep;
 
   const field: VaporField = {
     mach: state.mach,
@@ -768,7 +780,8 @@ export const vapor_state = (
 
       const tip_le = field.apex_m + semispan * tan_sweep;
       const tip_y = field.wing_height_m + semispan * field.tan_dihedral;
-      const end_x = tip_le + field.tip_chord_m + field.tip_reach_m * field.cos_alpha;
+      const end_x =
+        tip_le + field.tip_chord_m + field.tip_reach_m * field.cos_alpha;
       const end_y =
         tip_y + field.tip_reach_m * (field.sin_alpha - field.tip_descent);
       const b = field.tip_bound_m;
@@ -780,7 +793,8 @@ export const vapor_state = (
 
   // Leading-edge vortices: conical, so one deficit all along the unburst core
   {
-    const ratio = field.edge_gradient * tan_sweep / Math.max(field.edge_core, 1e-3);
+    const ratio =
+      (field.edge_gradient * tan_sweep) / Math.max(field.edge_core, 1e-3);
     const well = vortex_k * ratio * ratio;
 
     if (needed < 1 && well > needed && field.edge_gradient > 0) {
@@ -788,10 +802,14 @@ export const vapor_state = (
       const end_core = field.edge_core * end_reach;
       const circulation = field.edge_gradient * edge_length_m;
       const widest = Math.sqrt(
-        Math.max(vortex_k * circulation * circulation / needed - end_core * end_core, 0),
+        Math.max(
+          (vortex_k * circulation * circulation) / needed - end_core * end_core,
+          0,
+        ),
       );
 
-      field.edge_bound_m = Math.max(widest, (1 + BURST_SWELL) * end_core) * 1.15 + 0.1;
+      field.edge_bound_m =
+        Math.max(widest, (1 + BURST_SWELL) * end_core) * 1.15 + 0.1;
 
       const apex_x = field.apex_m + airframe.root_span_m * tan_sweep;
       const b = field.edge_bound_m;
@@ -818,7 +836,8 @@ export const vapor_state = (
 
     for (let i = 0; i <= 24; i++) {
       for (let j = 0; j <= 12; j++) {
-        const span = airframe.root_span_m + ((semispan - airframe.root_span_m) * j) / 12;
+        const span =
+          airframe.root_span_m + ((semispan - airframe.root_span_m) * j) / 12;
         const chord =
           airframe.root_chord_m +
           ((airframe.tip_chord_m - airframe.root_chord_m) * span) / semispan;
@@ -845,14 +864,19 @@ export const vapor_state = (
         root_x + airframe.root_chord_m,
         field.apex_m + semispan * tan_sweep + airframe.tip_chord_m,
       );
-      const low = field.wing_height_m + Math.min(semispan * field.tan_dihedral, 0);
+      const low =
+        field.wing_height_m + Math.min(semispan * field.tan_dihedral, 0);
       const high =
         field.wing_height_m +
         Math.max(semispan * field.tan_dihedral, 0) +
         field.thickness * airframe.root_chord_m;
 
       mins.push([root_x - 0.05 * airframe.root_chord_m, low - 0.05, -semispan]);
-      maxs.push([trailing + 0.1 * airframe.tip_chord_m, high + field.wing_bound_m, semispan]);
+      maxs.push([
+        trailing + 0.1 * airframe.tip_chord_m,
+        high + field.wing_bound_m,
+        semispan,
+      ]);
     }
   }
 
@@ -864,7 +888,8 @@ export const vapor_state = (
       ratio > 0 ? CONE_STRENGTH * ratio * ratio * Math.log(1 / ratio) : 0;
     field.cone_shock =
       CONE_SHOCK_SUBSONIC +
-      (CONE_SHOCK_SONIC - CONE_SHOCK_SUBSONIC) * smoothstep(0.85, 1.02, state.mach);
+      (CONE_SHOCK_SONIC - CONE_SHOCK_SUBSONIC) *
+        smoothstep(0.85, 1.02, state.mach);
 
     let strongest = 0;
 
@@ -910,7 +935,9 @@ export const vapor_state = (
 
       const b = field.cone_bound_m;
       const shock_x =
-        (field.cone_shock + (CONE_SHOCK_LEAN * b) / field.body_length_m + 0.02) *
+        (field.cone_shock +
+          (CONE_SHOCK_LEAN * b) / field.body_length_m +
+          0.02) *
           field.body_length_m -
         field.nose_m;
 

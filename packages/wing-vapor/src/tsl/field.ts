@@ -17,10 +17,7 @@ import {
   vec3,
 } from "three/tsl";
 import type { Node } from "three/webgpu";
-import {
-  LEADING_EDGE_VORTEX_SPAN,
-  VORTEX_SPACING,
-} from "../aerodynamics";
+import { LEADING_EDGE_VORTEX_SPAN, VORTEX_SPACING } from "../aerodynamics";
 import {
   BURST_LENGTH,
   BURST_SWELL,
@@ -28,6 +25,7 @@ import {
   CONE_SHOCK_LEAN,
   EDGE_SURFACE,
   NOSE_RADIUS,
+  NOSE_REACH,
   ROLLUP_SPANS,
   ROOT_FADE,
   SHOCK_WIDTH,
@@ -318,7 +316,9 @@ export const wing_sheet = (f: VaporFieldNodes, p: V3): V3 => {
 
   const coefficient = select(peak.lessThan(f.wing_sonic), pocket, here);
 
-  const reach = f.wing_reach.mul(chord);
+  const reach = f.wing_reach
+    .mul(chord)
+    .mul(min(along.add(NOSE_RADIUS).div(NOSE_REACH), 1));
 
   const root = f.root_span_m.div(f.semispan_m);
 
@@ -367,9 +367,7 @@ export const vapor_cone = (f: VaporFieldNodes, p: V3): V3 => {
   const u = max(along.mul(along.oneMinus()).mul(4), 1e-3);
   const radius = f.body_radius_m.mul(pow(u, 0.75));
 
-  const shock = f.cone_shock.add(
-    r.mul(CONE_SHOCK_LEAN).div(f.body_length_m),
-  );
+  const shock = f.cone_shock.add(r.mul(CONE_SHOCK_LEAN).div(f.body_length_m));
   const ahead = smoothstep(shock.sub(0.01), shock.add(0.01), xi).oneMinus();
 
   const pocket = smoothstep(shock.sub(CONE_POCKET_LENGTH), shock, xi);
@@ -397,10 +395,7 @@ export const vapor_cone = (f: VaporFieldNodes, p: V3): V3 => {
     float(0),
   );
 
-  const shock_x = shock
-    .add(0.02)
-    .mul(f.body_length_m)
-    .sub(f.nose_m);
+  const shock_x = shock.add(0.02).mul(f.body_length_m).sub(f.nose_m);
 
   const outside = max(
     r.sub(f.cone_bound_m),

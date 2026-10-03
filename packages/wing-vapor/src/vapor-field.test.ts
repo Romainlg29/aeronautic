@@ -158,7 +158,12 @@ describe("wing_deficit", () => {
 
   it("ends in a shock once the flow over it goes supersonic", () => {
     const sound = moist_air(0, 0.9, 10).sound_m_s;
-    const { field } = vapor_state(airframe, pulling(0.97 * sound, 5), humid, look);
+    const { field } = vapor_state(
+      airframe,
+      pulling(0.97 * sound, 5),
+      humid,
+      look,
+    );
 
     // Somewhere aft of the nose, a quarter of the suction goes in one
     // fiftieth of the chord

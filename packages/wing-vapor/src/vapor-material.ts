@@ -50,10 +50,7 @@ import {
   vec4,
   viewportDepthTexture,
 } from "three/tsl";
-import {
-  CONDENSATION_MIN_RATIO,
-  CONDENSATION_TEXELS,
-} from "./condensation";
+import { CONDENSATION_MIN_RATIO, CONDENSATION_TEXELS } from "./condensation";
 import { vapor_field, type VaporFieldNodes } from "./tsl/field";
 import { patchiness } from "./tsl/noise";
 import type { VaporEffects } from "./types";
@@ -200,7 +197,9 @@ export const create_vapor_uniforms = (): VaporUniforms => {
   }
 
   const vector = (name: string) =>
-    uniform(new Vector3()).setName(`wing_vapor_${name}`) as unknown as Vec3Uniform;
+    uniform(new Vector3()).setName(
+      `wing_vapor_${name}`,
+    ) as unknown as Vec3Uniform;
 
   return {
     field,
@@ -426,7 +425,10 @@ export const create_vapor_material = (
           Continue();
         });
 
-        const here = min(max(sample.z, footprint), leave.sub(t).add(1e-3)).toVar();
+        const here = min(
+          max(sample.z, footprint),
+          leave.sub(t).add(1e-3),
+        ).toVar();
 
         If(inside.lessThan(0.5), () => {
           inside.assign(1);
@@ -436,9 +438,7 @@ export const create_vapor_material = (
 
         // Only below the dew point's deficit is there anything to look up
         If(sample.x.greaterThan(f.saturation_deficit), () => {
-          const ratio = float(1).sub(
-            min(sample.x, 1 - CONDENSATION_MIN_RATIO),
-          );
+          const ratio = float(1).sub(min(sample.x, 1 - CONDENSATION_MIN_RATIO));
 
           const u_table = clamp(
             ratio.sub(CONDENSATION_MIN_RATIO).div(1 - CONDENSATION_MIN_RATIO),
@@ -459,9 +459,7 @@ export const create_vapor_material = (
           const across = air.sub(flow.mul(downstream));
 
           const patch = clamp(
-            patchiness(
-              vec3(downstream.div(streak), across.yz.div(u.eddy_m)),
-            ),
+            patchiness(vec3(downstream.div(streak), across.yz.div(u.eddy_m))),
             -1,
             1,
           );
