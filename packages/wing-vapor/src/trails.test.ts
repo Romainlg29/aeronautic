@@ -14,6 +14,7 @@ const layout: TrailLayout = {
   semispan_m: 7,
   cos_alpha: 1,
   sin_alpha: 0,
+  flow_z: 0,
   descent: 0,
   rollup_m: 1e9,
   length_m: 200,

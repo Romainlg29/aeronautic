@@ -103,6 +103,15 @@ export type VaporFlight = {
 
   // The angle between the wing's chord plane and the oncoming air, in radians
   angle_of_attack_rad: number;
+
+  // How far the oncoming air comes from one side, in radians. Positive
+  // blows from +z in the canonical frame, loading that wing. None by default
+  sideslip_rad?: number;
+
+  // How fast it rolls about its flight path, in radians per second, +z wing
+  // going down. Left out, `WingVaporCore` measures it from the attitude of
+  // what it follows, frame by frame
+  roll_rate_rad_s?: number;
 };
 
 /**

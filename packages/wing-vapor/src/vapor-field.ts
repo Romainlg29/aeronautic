@@ -59,6 +59,11 @@ import {
 export const CANARD_LOADING = 1.2;
 export const TAIL_LOADING = 0.15;
 
+// How lopsided a roll or a sideslip may make the loading, at the tip, and
+// what any one station's loading is held within
+const MAX_BIAS = 0.7;
+const SIDE_LOADING: [number, number] = [0.2, 1.8];
+
 // The least deficit the bounds follow the field out to
 const BOUND_FLOOR = 0.003;
 
@@ -154,8 +159,18 @@ export type VaporField = {
   // The flight
   mach: number;
   speed_m_s: number;
+
+  // The free stream's direction in the canonical frame: aft and up by the
+  // angle of attack, and sideways by the sideslip
   cos_alpha: number;
   sin_alpha: number;
+  flow_z: number;
+
+  // How much harder one side is loaded than the other, at the tip: a roll's
+  // downgoing wing meets the air at a higher angle, and a sideslip's windward
+  // wing is less swept. Positive loads the +z side
+  roll_bias: number;
+  slip_bias: number;
 
   // ρ / (8π² p): a vortex's pressure deficit per Γ² over (r² + r_c²)
   vortex_k: number;
@@ -414,6 +429,11 @@ type TipSource = {
   vortex_k: number;
   cos_alpha: number;
   sin_alpha: number;
+  flow_z: number;
+
+  // Each tip's circulation over the surface's, for a roll or a sideslip
+  positive: number;
+  negative: number;
 };
 
 /**
@@ -437,6 +457,9 @@ const tip_source = (field: VaporField, which: "wing" | "second"): TipSource =>
         vortex_k: field.vortex_k,
         cos_alpha: field.cos_alpha,
         sin_alpha: field.sin_alpha,
+        flow_z: field.flow_z,
+        positive: side_loading(field, field.semispan_m),
+        negative: side_loading(field, -field.semispan_m),
       }
     : {
         leading_m: field.second_tip_leading_m,
@@ -451,7 +474,32 @@ const tip_source = (field: VaporField, which: "wing" | "second"): TipSource =>
         vortex_k: field.vortex_k,
         cos_alpha: field.cos_alpha,
         sin_alpha: field.sin_alpha,
+        flow_z: field.flow_z,
+        positive: side_loading(field, field.second_semispan_m),
+        negative: side_loading(field, -field.second_semispan_m),
       };
+
+/**
+ * How much more than the symmetric loading a station carries, in a roll
+ * or a sideslip.
+ *
+ * A roll at p raises the angle of attack of the downgoing wing by p y / V,
+ * growing out to the tip; a sideslip unsweeps the windward wing, whose
+ * loading goes as cos² of its sweep, 1 + 2β tan Λ.
+ * @param field The field
+ * @param span How far out, signed: +z or -z
+ * @returns A multiplier on the loading
+ */
+export const side_loading = (field: VaporField, span: number): number =>
+  Math.min(
+    Math.max(
+      1 +
+        (field.roll_bias * span) / Math.max(field.semispan_m, 1e-3) +
+        field.slip_bias * Math.sign(span),
+      SIDE_LOADING[0],
+    ),
+    SIDE_LOADING[1],
+  );
 
 /**
  * One tip vortex's deficit at one point.
@@ -481,6 +529,9 @@ const side_deficit = (
   const deficit = (circulation: number, r2: number, core2: number) =>
     (tip.vortex_k * circulation * circulation) / Math.max(r2 + core2, 1e-6);
 
+  const circulation =
+    tip.circulation * (side > 0 ? tip.positive : tip.negative);
+
   if (along < 0) {
     // Forming along the tip chord, from nothing at the leading edge
     const formed = Math.min(
@@ -493,13 +544,13 @@ const side_deficit = (
       (y - tip.height_m) ** 2 +
       (z - side * tip.semispan_m) ** 2;
 
-    return deficit(tip.circulation * formed, r2, tip.core2_m2);
+    return deficit(circulation * formed, r2, tip.core2_m2);
   }
 
   const at = trail_point(points, spacing_m, along, scratch_trail);
   const r2 = (x - at.x) ** 2 + (y - at.y) ** 2 + (z - at.z) ** 2;
 
-  return deficit(tip.circulation, r2, tip.core2_m2 + tip.growth_m * along);
+  return deficit(circulation, r2, tip.core2_m2 + tip.growth_m * along);
 };
 
 /**
@@ -513,6 +564,7 @@ const source_layout = (tip: TipSource): TrailLayout => ({
   semispan_m: tip.semispan_m,
   cos_alpha: tip.cos_alpha,
   sin_alpha: tip.sin_alpha,
+  flow_z: tip.flow_z,
   descent: tip.descent,
   rollup_m: ROLLUP_SPANS * 2 * tip.semispan_m,
   length_m: Math.max(tip.reach_m, 1),
@@ -577,7 +629,11 @@ export const edge_deficit = (
 
   return vortex_deficit(
     field,
-    field.edge_gradient * on_wing * (1 - 0.3 * burst) * leaving,
+    field.edge_gradient *
+      side_loading(field, Math.sign(z) * at.span_m) *
+      on_wing *
+      (1 - 0.3 * burst) *
+      leaving,
     r2,
     core * core,
   );
@@ -749,7 +805,8 @@ export const wing_deficit = (
 
   // The section's lift, attached flow only: the vortex lift is the
   // leading-edge vortex's
-  const section = (field.section_lift_m * station.loading) / chord;
+  const section =
+    (field.section_lift_m * station.loading * side_loading(field, z)) / chord;
 
   const incompressible = (at: number) =>
     -(section / Math.PI) * lift_shape(at, field.separation) -
@@ -1042,6 +1099,7 @@ export const vapor_state = (
 
   const speed = Math.max(flight.airspeed_m_s, 1e-3);
   const alpha = flight.angle_of_attack_rad;
+  const sideslip = flight.sideslip_rad ?? 0;
   const semispan = shape.semispan_m;
   const span = semispan * 2;
   const tip = SHAPE_STATIONS - 1;
@@ -1101,8 +1159,25 @@ export const vapor_state = (
   const field: VaporField = {
     mach: state.mach,
     speed_m_s: speed,
-    cos_alpha: Math.cos(alpha),
-    sin_alpha: Math.sin(alpha),
+    cos_alpha: Math.cos(alpha) * Math.cos(sideslip),
+    sin_alpha: Math.sin(alpha) * Math.cos(sideslip),
+    flow_z: -Math.sin(sideslip),
+
+    roll_bias: Math.min(
+      Math.max(
+        ((flight.roll_rate_rad_s ?? 0) * semispan) /
+          (speed * Math.max(Math.abs(alpha), 2 * DEGREE)),
+        -MAX_BIAS,
+      ),
+      MAX_BIAS,
+    ),
+    slip_bias: Math.min(
+      Math.max(
+        2 * sideslip * Math.tan(airframe.leading_edge_sweep_rad),
+        -MAX_BIAS,
+      ),
+      MAX_BIAS,
+    ),
     vortex_k,
     saturation_deficit,
 
@@ -1219,7 +1294,8 @@ export const vapor_state = (
   // Tip vortices: the wing's, and a canard's or a tailplane's
   for (const which of ["wing", "second"] as const) {
     const tip = tip_source(field, which);
-    const well = vortex_k * tip.circulation * tip.circulation;
+    const strongest = tip.circulation * Math.max(tip.positive, tip.negative);
+    const well = vortex_k * strongest * strongest;
     const widest = well / needed - tip.core2_m2;
 
     if (!(needed < 1 && widest > 0 && tip.circulation > 0)) {
@@ -1285,14 +1361,19 @@ export const vapor_state = (
       );
     }
 
+    const heaviest = Math.max(
+      side_loading(field, semispan),
+      side_loading(field, -semispan),
+    );
     const ratio =
-      (field.edge_gradient * steepest) / Math.max(field.edge_core, 1e-3);
+      (field.edge_gradient * heaviest * steepest) /
+      Math.max(field.edge_core, 1e-3);
     const well = vortex_k * ratio * ratio;
 
     if (needed < 1 && well > needed && field.edge_gradient > 0) {
       const end_reach = path.reach_m[tip];
       const end_core = field.edge_core * end_reach;
-      const circulation = field.edge_gradient * edge_length_m;
+      const circulation = field.edge_gradient * heaviest * edge_length_m;
       const widest = Math.sqrt(
         Math.max(
           (vortex_k * circulation * circulation) / needed - end_core * end_core,
@@ -1335,10 +1416,18 @@ export const vapor_state = (
           2 * station.thickness * station.chord_m * xi * (1 - xi) +
           1e-3;
 
-        strongest = Math.max(
-          strongest,
-          wing_deficit(geometry, x, y, Math.min(span_at, semispan * 0.999)),
-        );
+        // Both wings: a roll or a sideslip loads one harder
+        for (const side of [1, -1]) {
+          strongest = Math.max(
+            strongest,
+            wing_deficit(
+              geometry,
+              x,
+              y,
+              side * Math.min(span_at, semispan * 0.999),
+            ),
+          );
+        }
       }
     }
 

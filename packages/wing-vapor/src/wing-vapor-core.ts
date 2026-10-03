@@ -110,6 +110,11 @@ const STEP_AREA = 0.15;
 const MAX_STEP_SCALE = 3;
 const DETAIL_HEIGHT = 0.06;
 
+// How long the measured roll rate takes to follow the attitude, so a frame's
+// jitter does not flick the loading from side to side
+const ROLL_RESPONSE_S = 0.15;
+
+const scratch_turn = new Quaternion();
 const scratch_project = new Matrix4();
 const scratch_view = new Matrix4();
 const scratch_corner = new Vector3();
@@ -168,6 +173,11 @@ export class WingVapor {
   private _shape: WingShape | null = null;
 
   private _frame_number = -1;
+
+  // The attitude last frame, and the roll rate measured from it
+  private readonly _attitude = new Quaternion();
+  private _attitude_set = false;
+  private _roll_rate = 0;
   private _last_ms = -1;
 
   constructor(options: WingVaporOptions = {}) {
@@ -388,9 +398,15 @@ export class WingVapor {
 
     this._shape ??= this._captured ?? trapezoid_shape(this._airframe);
 
+    // A roll the flight does not give is the one the attitude shows
+    const flight =
+      this._flight.roll_rate_rad_s === undefined
+        ? { ...this._flight, roll_rate_rad_s: this._roll_rate }
+        : this._flight;
+
     const state = vapor_state(
       this._airframe,
-      this._flight,
+      flight,
       this._air,
       this._look,
       this._shape,
@@ -540,6 +556,36 @@ export class WingVapor {
   }
 
   /**
+   * How fast the aircraft rolls, from how its attitude turned since the last
+   * frame, about the flight path's own axis, eased over `ROLL_RESPONSE_S`.
+   * A flight that gives its own roll rate keeps it.
+   * @param attitude Its attitude now
+   * @param delta_s How long since the last frame
+   */
+  private measure_roll(attitude: Quaternion, delta_s: number) {
+    if (this._attitude_set && delta_s > 1e-4 && delta_s < 1) {
+      // The turn since the last frame, in the aircraft's own frame then
+      const turn = scratch_turn
+        .copy(this._attitude)
+        .invert()
+        .multiply(attitude);
+
+      if (turn.w < 0) {
+        turn.set(-turn.x, -turn.y, -turn.z, -turn.w);
+      }
+
+      // About the canonical x, aft: positive puts the +z wing down
+      const rate = (2 * Math.atan2(turn.x, turn.w)) / delta_s;
+      const follow = 1 - Math.exp(-delta_s / ROLL_RESPONSE_S);
+
+      this._roll_rate += (rate - this._roll_rate) * follow;
+    }
+
+    this._attitude.copy(attitude);
+    this._attitude_set = true;
+  }
+
+  /**
    * Follow the aircraft and the camera, just before the mesh is drawn.
    * @param renderer The renderer drawing it
    * @param camera The camera it is drawn from
@@ -600,13 +646,16 @@ export class WingVapor {
 
     const field = this._state.field;
 
+    this.measure_roll(scratch_rotation, delta_s);
+
     this._history.advance(
       delta_s,
       scratch_rotation,
       field.speed_m_s,
       field.cos_alpha,
       field.sin_alpha,
-      field.tip_reach_m,
+      Math.max(field.tip_reach_m, field.second_reach_m),
+      field.flow_z,
     );
 
     this._state = this.refresh();

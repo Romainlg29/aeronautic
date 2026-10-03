@@ -123,6 +123,48 @@ describe("vapor_state", () => {
   });
 });
 
+describe("a roll or a sideslip", () => {
+  /**
+   * The deficit just behind each tip, a few metres down its trail.
+   * @param flight The flight
+   * @returns The +z side's and the -z side's
+   */
+  const behind_tips = (flight: VaporFlight) => {
+    const state = vapor_state(airframe, flight, humid, look);
+    const at = (points: Float32Array) =>
+      vapor_deficit(state, points[3 * 6], points[3 * 6 + 1], points[3 * 6 + 2]);
+
+    return [at(state.trails.positive), at(state.trails.negative)];
+  };
+
+  it("loads the downgoing wing in a roll", () => {
+    const [positive, negative] = behind_tips({
+      ...pulling(170, 6),
+      roll_rate_rad_s: 3,
+    });
+
+    expect(positive).toBeGreaterThan(negative * 1.2);
+  });
+
+  it("loads the windward wing in a sideslip, and blows the trails downwind", () => {
+    const flight = { ...pulling(170, 6), sideslip_rad: 0.08 };
+    const [positive, negative] = behind_tips(flight);
+
+    expect(positive).toBeGreaterThan(negative);
+
+    const { trails } = vapor_state(airframe, flight, humid, look);
+    const last = (trails.positive.length / 3 - 1) * 3;
+
+    expect(trails.positive[last + 2]).toBeLessThan(trails.positive[2] - 1);
+  });
+
+  it("is symmetric without either", () => {
+    const [positive, negative] = behind_tips(pulling(170, 6));
+
+    expect(positive).toBeCloseTo(negative, 8);
+  });
+});
+
 describe("a second lifting surface", () => {
   /**
    * The default airframe with a second surface of a given kind.

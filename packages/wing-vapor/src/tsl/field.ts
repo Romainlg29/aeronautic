@@ -14,6 +14,7 @@ import {
   mix,
   pow,
   select,
+  sign,
   sin,
   smoothstep,
   sqrt,
@@ -86,6 +87,10 @@ const FAR = 1e5;
 // so their distances are not quite Euclidean
 const BOUND_SAFETY = 0.85;
 
+// What one station's loading is held within, in a roll or a sideslip, as on
+// the CPU
+const SIDE_LOADING: [number, number] = [0.2, 1.8];
+
 // And for the tips' trails, which bend
 const TRAIL_SAFETY = 0.5;
 
@@ -149,6 +154,24 @@ const trail_at = (trails: Texture, row: number, along: F, spacing: F): V3 => {
 
   return mix(a, b, t) as unknown as V3;
 };
+
+/**
+ * How much more than the symmetric loading a station carries, in a roll or
+ * a sideslip, as `side_loading` works it out.
+ * @param f The field
+ * @param span How far out, signed
+ * @returns A multiplier on the loading
+ */
+const side_loading = (f: VaporFieldNodes, span: F): F =>
+  clamp(
+    f.roll_bias
+      .mul(span)
+      .div(max(f.semispan_m, 1e-3))
+      .add(f.slip_bias.mul(sign(span)))
+      .add(1),
+    SIDE_LOADING[0],
+    SIDE_LOADING[1],
+  );
 
 /**
  * One lifting surface's tips, as nodes.
@@ -230,10 +253,11 @@ const tip_side = (
 
   // Onto the straight trail, then twice onto the trail's own tangent, as
   // `nearest_along` does
-  const along = p.x
-    .sub(tip_te)
-    .mul(f.cos_alpha)
-    .add(p.y.sub(tip_y).mul(f.sin_alpha))
+  // From the trail's start, the tip's trailing edge, along the stream
+  const start = trail_at(trails, row, float(0), tip.spacing);
+  const along = p
+    .sub(start)
+    .dot(vec3(f.cos_alpha, f.sin_alpha, f.flow_z))
     .toVar();
 
   const ahead = along.lessThan(0);
@@ -276,7 +300,7 @@ const tip_side = (
 
   const deficit = vortex_deficit(
     f,
-    tip.circulation.mul(formed),
+    tip.circulation.mul(formed).mul(side_loading(f, tip.semispan.mul(side))),
     radius2,
     core2,
   );
@@ -339,9 +363,15 @@ export const tip_vortex = (f: VaporFieldNodes, trails: Texture, p: V3): V3 => {
  * @param f The field
  * @param shape The wing's tables
  * @param p The point, z folded
+ * @param side Which wing, +1 or -1: the point is folded
  * @returns The deficit, the distance outside its tube and the step
  */
-export const edge_vortex = (f: VaporFieldNodes, shape: Texture, p: V3): V3 => {
+export const edge_vortex = (
+  f: VaporFieldNodes,
+  shape: Texture,
+  p: V3,
+  side: F = float(1),
+): V3 => {
   const along = p.x.sub(f.edge_apex_m);
   const length_m = max(f.edge_length_m, 1e-3);
 
@@ -377,7 +407,11 @@ export const edge_vortex = (f: VaporFieldNodes, shape: Texture, p: V3): V3 => {
     along.greaterThan(0),
     vortex_deficit(
       f,
-      f.edge_gradient.mul(on_wing).mul(burst.mul(-0.3).add(1)).mul(leaving),
+      f.edge_gradient
+        .mul(side_loading(f, vz.mul(side)))
+        .mul(on_wing)
+        .mul(burst.mul(-0.3).add(1))
+        .mul(leaving),
       radius2,
       core.mul(core),
     ),
@@ -402,10 +436,16 @@ export const edge_vortex = (f: VaporFieldNodes, shape: Texture, p: V3): V3 => {
  * @param f The field
  * @param shape The wing's tables
  * @param p The point, z folded
+ * @param side Which wing, +1 or -1: the point is folded
  * @returns The deficit, the distance outside the layer it can fog in and the
  *   step
  */
-export const wing_sheet = (f: VaporFieldNodes, shape: Texture, p: V3): V3 => {
+export const wing_sheet = (
+  f: VaporFieldNodes,
+  shape: Texture,
+  p: V3,
+  side: F = float(1),
+): V3 => {
   const span = p.z;
   const eta = span.div(f.semispan_m);
 
@@ -426,7 +466,10 @@ export const wing_sheet = (f: VaporFieldNodes, shape: Texture, p: V3): V3 => {
 
   const height = p.y.sub(surface);
 
-  const section = f.section_lift_m.mul(loading).div(chord);
+  const section = f.section_lift_m
+    .mul(loading)
+    .mul(side_loading(f, span.mul(side)))
+    .div(chord);
 
   const lift_shape = (at: F): F =>
     mix(
@@ -618,6 +661,9 @@ export const vapor_field = (
 ): V3 => {
   const folded = vec3(point.x, point.y, abs(point.z));
 
+  // Which wing: the field is folded, but a roll or a sideslip loads one more
+  const side = select(point.z.lessThan(0), float(-1), float(1));
+
   const parts: V3[] = [];
 
   if (effects.tip_vortices) {
@@ -625,11 +671,11 @@ export const vapor_field = (
   }
 
   if (effects.leading_edge_vortices) {
-    parts.push(edge_vortex(f, shape, folded));
+    parts.push(edge_vortex(f, shape, folded, side));
   }
 
   if (effects.wing) {
-    parts.push(wing_sheet(f, shape, folded));
+    parts.push(wing_sheet(f, shape, folded, side));
   }
 
   if (effects.cone) {

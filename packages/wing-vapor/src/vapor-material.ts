@@ -109,6 +109,9 @@ const FIELD_KEYS: (keyof (VaporField & VaporConstants))[] = [
   "speed_m_s",
   "cos_alpha",
   "sin_alpha",
+  "flow_z",
+  "roll_bias",
+  "slip_bias",
   "vortex_k",
   "saturation_deficit",
   "semispan_m",
@@ -555,7 +558,7 @@ export const create_vapor_material = (
 
     // The air moves aft past the aircraft at the airspeed, along the free
     // stream, and the patches move with it. The shutter streaks them
-    const flow = vec3(f.cos_alpha, f.sin_alpha, 0);
+    const flow = vec3(f.cos_alpha, f.sin_alpha, f.flow_z);
     const drift = f.speed_m_s.mul(u.time as unknown as F);
     const streak = (u.eddy_m as unknown as F).add(
       f.speed_m_s.mul(u.shutter_s as unknown as F),

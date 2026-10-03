@@ -58,6 +58,9 @@ export type TrailLayout = {
   cos_alpha: number;
   sin_alpha: number;
 
+  // And its sideways component, from a sideslip
+  flow_z: number;
+
   // How far the vortex sinks, per metre of air, and how long it takes to
   // roll up inboard
   descent: number;
@@ -114,6 +117,7 @@ export const straight_trails = (layout: TrailLayout): TrailPaths => {
       // The air the vortex was shed into has gone aft, along the stream
       point.x += along * layout.cos_alpha;
       point.y += along * layout.sin_alpha;
+      point.z += along * layout.flow_z;
       point.toArray(points, index * 3);
     }
 
@@ -158,8 +162,9 @@ export class TrailHistory {
    * @param attitude How the canonical frame is turned in the world now
    * @param airspeed_m_s How fast it flies through the air
    * @param cos_alpha The free stream's direction in the canonical frame
-   * @param sin_alpha And its other component
+   * @param sin_alpha And its upward component
    * @param keep_m How much air of trail to keep
+   * @param flow_z The free stream's sideways component, from a sideslip
    */
   advance(
     delta_s: number,
@@ -168,6 +173,7 @@ export class TrailHistory {
     cos_alpha: number,
     sin_alpha: number,
     keep_m: number,
+    flow_z = 0,
   ) {
     if (delta_s > MAX_GAP_S) {
       this.reset();
@@ -192,7 +198,7 @@ export class TrailHistory {
       // The aircraft flies against the free stream: forward and down from
       // its nose by the angle of attack
       const velocity = scratch_vector
-        .set(-cos_alpha, -sin_alpha, 0)
+        .set(-cos_alpha, -sin_alpha, -flow_z)
         .applyQuaternion(turned)
         .multiplyScalar(airspeed_m_s);
 
@@ -283,7 +289,7 @@ export class TrailHistory {
         if (beyond > 0) {
           where.addScaledVector(
             scratch_vector
-              .set(layout.cos_alpha, layout.sin_alpha, 0)
+              .set(layout.cos_alpha, layout.sin_alpha, layout.flow_z)
               .applyQuaternion(before.attitude),
             beyond,
           );
@@ -343,7 +349,7 @@ export const trail_point = (
  * the nearest point wherever it can matter. The shader does the same.
  * @param points The trail's points
  * @param spacing_m How far apart they are
- * @param layout Where it starts and which way the stream runs
+ * @param layout Which way the stream runs
  * @param x The point
  * @param y And its second coordinate
  * @param z And its third
@@ -352,16 +358,18 @@ export const trail_point = (
 export const nearest_along = (
   points: Float32Array,
   spacing_m: number,
-  layout: Pick<TrailLayout, "tip_x" | "tip_y" | "cos_alpha" | "sin_alpha">,
+  layout: Pick<TrailLayout, "cos_alpha" | "sin_alpha" | "flow_z">,
   x: number,
   y: number,
   z: number,
 ): number => {
   const length_m = spacing_m * (TRAIL_POINTS - 1);
 
+  // Onto the free stream from the trail's start, the tip's trailing edge
   let along =
-    (x - layout.tip_x) * layout.cos_alpha +
-    (y - layout.tip_y) * layout.sin_alpha;
+    (x - points[0]) * layout.cos_alpha +
+    (y - points[1]) * layout.sin_alpha +
+    (z - points[2]) * layout.flow_z;
 
   if (along < 0) {
     return along;
