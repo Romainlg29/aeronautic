@@ -48,6 +48,30 @@ the answer is the same. Only a point the eddies could push into the layer pays
 for the noise. A ray down the axis spends most of its length in the core, so
 this matters most astern.
 
+Where it is paid for, it is cheap. The eddies were hashed value noise, eight
+hashes and seven mixes an octave. They now read a 64³ volume of gradient noise
+(`noise-volume.ts`), two independent bytes a texel and 512 KiB in all, built
+once at start up as the blackbody lookup is, so the library still ships no
+assets. The volume tiles every 16 noise cells; each octave is offset from the
+last so their tiles do not line up. It is sampled at an explicit level, which is
+safe inside the march's divergent loop. Gradient noise, now that it costs
+nothing more, has no lattice showing through once the domain is stretched along
+the flow, and it is graded to value noise's mean and spread, so every dial tuned
+against the one reads the same against the other. Where a step is so long that
+the eddies would blur to their mean anyway, the fetches are skipped outright.
+
+The meander reads the same volume. Its two sideways curves come from the two
+channels of one fetch, down a line slanted across the volume so it does not
+repeat with the tile, where they were four hashes before.
+
+Empty space is skipped twice over. Far from the gas, a coarse bound worked out
+from the point alone (the plume's widest reach there, padded by the most the
+meander could carry it) says how far the ray can leap, before the frame and its
+meander fetch are worked out at all. Only once a step lands near the gas does
+the full bound, and then the sample, take over; a ray in the gas does not
+re-check the coarse bound until it leaves again. Abeam of a booster this took
+about a quarter off the frame.
+
 Measured astern of a fighter at DPR 1 (in the plume, looking up it into the
 burner, 1024×768), the worst case went from 11.1 ms to about
 7 ms of GPU a frame. Abeam, it costs about 1.4 ms.

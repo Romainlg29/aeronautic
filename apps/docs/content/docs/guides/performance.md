@@ -9,6 +9,11 @@ Every nozzle in a batch is one instance of one mesh: **one draw call**,
 however many there are. Only nozzles whose matrix changed are re-uploaded, by
 update range. A nozzle that sits still costs nothing on the CPU.
 
+The plumes blend over each other, so the instances are kept furthest first,
+measured from the camera to the nearest point of each plume's axis. They are
+reordered only when the order is wrong by more than 2%, so two plumes side by
+side do not swap every frame, and a reorder re-uploads the whole batch once.
+
 Without an `<AfterburnerBatch>`, nozzles share one batch per scene and
 preset. Add one when you want to:
 
@@ -56,7 +61,8 @@ batch.stats(); // { nozzles: 40, near: 2, mid: 9, far: 25, culled: 4 }
 
 Or pass your own: `quality={{ near_steps: 80 }}`. Step counts are uniforms and
 change live. Only the octave count is compiled in, so changing it recompiles
-the material.
+the material. An octave is one fetch from a small baked noise volume, so the
+third costs a texture read, not another round of hashing.
 
 The march skips empty space by a conservative bound and stops once the flame is
 opaque, so the step count is a ceiling, not an average. Steps are also shared

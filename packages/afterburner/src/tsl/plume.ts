@@ -36,7 +36,7 @@ import {
 } from "../plume-profile";
 import { REFERENCE_TEMPERATURE_K } from "../blackbody";
 import type { AfterburnerProfile } from "../types";
-import { signed, turbulence, wander_noise } from "./noise";
+import { signed, volume_turbulence, volume_wander } from "./noise";
 
 // The plume as a jet: a temperature field and what is in it
 //
@@ -245,6 +245,115 @@ export type PlumeContext = {
 
   // Temperature to radiance, a luminance of one at the reference temperature
   blackbody: (temperature_k: F) => V3;
+
+  // The sun, for the particles to scatter. Left out, only the sky lights them
+  sun?: PlumeSunNodes;
+};
+
+/**
+ * The sun as one pixel of the plume sees it.
+ */
+export type PlumeSunNodes = {
+  // Toward the sun, unit length, in the nozzle's frame
+  direction: V3;
+
+  // How much of the sun's light the particles send down this ray, against
+  // what they would if they scattered evenly every way: `plume_sun_phase`
+  phase: F;
+};
+
+// How strongly the particles scatter forward, Henyey and Greenstein's g
+// Alumina a few microns across sends most of what it scatters onward
+const SUN_FORWARD_SCATTER = 0.6;
+
+// A thick cloud is never black on its shadowed side: light scattered many
+// times leaks round. Stood in for by a share of the light let through a
+// shadow a few times thinner
+const SUN_MULTIPLE_SHARE = 0.3;
+const SUN_MULTIPLE_THINNING = 0.25;
+
+// The shallowest a ray toward the sun is allowed to cross the plume, as the
+// sine of its angle to the axis. Shallower would run it down an endless plume
+const SUN_MIN_SLANT = 0.2;
+
+/**
+ * How much of the sun's light scatters down a ray, against even scattering.
+ * Henyey and Greenstein's phase function, times 4π.
+ * @param direction The ray, from the camera, unit length
+ * @param sun Toward the sun, unit length, in the same frame
+ * @returns One for even scattering; more looking toward the sun, less away
+ */
+export const plume_sun_phase = (direction: V3, sun: V3): F => {
+  const g = SUN_FORWARD_SCATTER;
+
+  // Light runs from the sun along -sun, and on to the camera along -direction
+  const cosine = dot(direction, sun);
+  const denominator = float(1 + g * g).sub(cosine.mul(2 * g));
+
+  return float(1 - g * g).div(pow(max(denominator, 1e-4), 1.5));
+};
+
+/**
+ * The complementary error function, to about 1e-3.
+ * Abramowitz and Stegun's 7.1.27, mirrored for negative arguments.
+ * @param x The argument
+ * @returns erfc(x), 0 to 2
+ */
+const erfc = (x: F): F => {
+  const a = abs(x);
+
+  const series = a
+    .mul(0.078108)
+    .add(0.000972)
+    .mul(a)
+    .add(0.230389)
+    .mul(a)
+    .add(0.278393)
+    .mul(a)
+    .add(1);
+
+  const squared = series.mul(series);
+  const tail = float(1).div(squared.mul(squared));
+
+  return select(x.lessThan(0), float(2).sub(tail), tail);
+};
+
+/**
+ * How much the plume shades one point of itself from the sun.
+ *
+ * Locally the plume is a cylinder of gas whose extinction falls off across it
+ * as a Gaussian in its half-width. The optical depth from a point out to the
+ * sun through such a cylinder has a closed form, in the error function, so the
+ * shadow costs a handful of operations rather than a second march.
+ * @param frame Where the point is
+ * @param axis Extinction per metre on the axis at this station, per primary
+ * @param sun Toward the sun, unit length, in the nozzle's frame
+ * @returns The optical depth to the sun, per primary
+ */
+export const plume_sun_depth = (frame: PlumeFrame, axis: V3, sun: V3): V3 => {
+  const width = max(frame.half_width, PLUME_EPSILON);
+
+  // 2^-(r/r½)² as e^-k r²
+  const k = float(Math.LN2).div(width.mul(width));
+  const root_k = sqrt(k);
+
+  // Across the axis: how far the point is, and how fast the ray leaves it
+  const across = sun.yz;
+  const slant = length(across);
+  const heading = across.div(max(slant, PLUME_EPSILON));
+
+  // How far along the ray's track across the plume the point already is, and
+  // how close that track passes to the axis
+  const ahead = dot(frame.lateral, heading);
+  const miss = max(dot(frame.lateral, frame.lateral).sub(ahead.mul(ahead)), 0);
+
+  const crossing = exp(k.mul(miss).negate())
+    .mul(Math.sqrt(Math.PI) / 2)
+    .div(root_k)
+    .mul(erfc(ahead.mul(root_k)))
+    .div(max(slant, SUN_MIN_SLANT));
+
+  return axis.mul(crossing) as unknown as V3;
 };
 
 /**
@@ -779,10 +888,10 @@ export const plume_frame = (point: V3, context: PlumeContext): PlumeFrame => {
 
   const phase = station.sub(time.mul(jet.velocity).mul(0.6)).div(period);
 
-  const drift = vec2(
-    wander_noise(phase, jet.seed).sub(0.5),
-    wander_noise(phase, jet.seed.add(11)).sub(0.5),
-  ).mul(jet.meander.mul(half_width).mul(freedom).mul(2));
+  // Both curves from one fetch of the noise volume
+  const drift = volume_wander(phase, jet.seed)
+    .sub(0.5)
+    .mul(jet.meander.mul(half_width).mul(freedom).mul(2));
 
   const lateral = point.yz.sub(drift).toVar();
   const round = length(lateral).toVar();
@@ -888,6 +997,52 @@ export const plume_bound = (frame: PlumeFrame, context: PlumeContext): F => {
   return max(capped, length(frame.lateral).sub(extent.mul(frame.spread)));
 };
 
+// How far one curve of volume_wander strays from 0.5 at most, and so the
+// meander's furthest reach in each axis as a share of its amplitude
+const WANDER_REACH = 0.5 * (0.25 / 0.184);
+
+/**
+ * A looser bound than plume_bound, from the point alone: it allows for the
+ * meander at its widest rather than measuring it, so it needs none of the
+ * frame. Cheap enough to try first on every step of empty space.
+ * @param point The point, in the nozzle's frame
+ * @param context The plume
+ * @returns The bound, in metres; positive means the field is empty that far
+ */
+export const plume_bound_coarse = (point: V3, context: PlumeContext): F => {
+  const { jet } = context;
+
+  const x = point.x;
+
+  const capped = max(x.negate(), x.sub(jet.reach));
+
+  const half_width = plume_half_width(x, jet);
+
+  const core = clamp(x.div(max(jet.core_length, PLUME_EPSILON)), 0, 1);
+
+  const layer = max(
+    half_width.sub(jet.radius.mul(core.oneMinus())),
+    jet.radius.mul(0.02),
+  );
+
+  const extent = half_width
+    .mul(PLUME_FIELD_EXTENT)
+    .add(layer.mul(max(jet.turbulence, 0)).mul(PLUME_EDDY_REACH));
+
+  // The outline holds all of itself within its reach of the axis
+  const spread = jet.outline ? max(jet.outline.reach, 1) : float(1);
+
+  // Both curves at their furthest at once, a diagonal
+  const freedom = smoothstep(0, jet.core_length.mul(2), x);
+
+  const meander = jet.meander
+    .mul(half_width)
+    .mul(freedom)
+    .mul(2 * WANDER_REACH * Math.SQRT2);
+
+  return max(capped, length(point.yz).sub(extent.mul(spread)).sub(meander));
+};
+
 /**
  * What a hook sees about one sample of the plume.
  */
@@ -907,7 +1062,7 @@ export type PlumeSampleContext = PlumeFrame & {
  */
 export type PlumeFieldHooks = {
   /**
-   * The eddies, in [0, 1], replacing the built-in value noise.
+   * The eddies, in [0, 1], replacing the built-in noise volume.
    * @param flow The point in flow space: x runs aft with the gas, yz across it
    */
   turbulence?: (flow: V3, frame: PlumeFrame & { context: PlumeContext }) => F;
@@ -996,10 +1151,14 @@ export const plume_field = (
     .greaterThan(core_radius)
     .and(radial.sub(push).lessThan(core_radius.add(shear_width.mul(3))));
 
-  If(turbulent.and(reaches_layer), () => {
-    // Eddies a third of the layer across, growing with it downstream
-    const eddy = layer.mul(0.3).add(jet.radius.mul(0.03)).toVar();
+  // Eddies a third of the layer across, growing with it downstream
+  const eddy = layer.mul(0.3).add(jet.radius.mul(0.03)).toVar();
 
+  // A step wider than an eddy cannot resolve one, and past 1.2 eddies the
+  // noise would be blended out entirely, so it is not fetched
+  const blur = smoothstep(0.35, 1.2, footprint.x.div(eddy)).toVar();
+
+  If(turbulent.and(reaches_layer).and(blur.lessThan(1)), () => {
     const along = frame.station
       .sub(time.mul(jet.velocity).mul(0.6))
       .div(streaked(eddy.mul(profile.eddy_stretch), frame, context));
@@ -1008,14 +1167,9 @@ export const plume_field = (
 
     const raw =
       options.hooks?.turbulence?.(flow, { ...frame, context }) ??
-      turbulence(flow, options.octaves);
+      volume_turbulence(flow, options.octaves);
 
-    // A step wider than an eddy cannot resolve one
-    const eddies = mix(
-      raw,
-      float(0.5),
-      smoothstep(0.35, 1.2, footprint.x.div(eddy)),
-    );
+    const eddies = mix(raw, float(0.5), blur);
 
     displaced.addAssign(
       signed(eddies).mul(jet.turbulence).mul(layer).mul(PLUME_EDDY_REACH),
@@ -1227,7 +1381,46 @@ export const plume_field = (
     .mul(activated);
 
   // And the sky, scattered by whatever is white
-  const scattered = particles.mul(jet.albedo).mul(profile.sky_light);
+  const lighting = vec3(profile.sky_light).toVar();
+
+  // And the sun, from one way, through whatever of the plume is between
+  const sun = context.sun;
+
+  if (sun) {
+    If(
+      profile.sun_light.greaterThan(0).and(jet.particles.greaterThan(0)),
+      () => {
+        // The extinction the plume has on its axis here, as the profile across
+        // it is measured from: what the gas holds when it is all exhaust
+        const axis_soot = jet.soot
+          .mul(dense)
+          .mul(frame.centre)
+          .mul(mix(jet.soot_survival, float(1), frame.centre));
+
+        const axis = vec3(...SOOT_SPECTRUM)
+          .mul(axis_soot)
+          .add(jet.particles.mul(dense).mul(frame.centre));
+
+        const depth = plume_sun_depth(
+          frame,
+          axis as unknown as V3,
+          sun.direction,
+        );
+
+        const direct = exp(depth.negate()).mul(
+          sun.phase.mul(1 - SUN_MULTIPLE_SHARE),
+        );
+
+        const leaked = exp(depth.mul(-SUN_MULTIPLE_THINNING)).mul(
+          SUN_MULTIPLE_SHARE,
+        );
+
+        lighting.addAssign(direct.add(leaked).mul(profile.sun_light));
+      },
+    );
+  }
+
+  const scattered = lighting.mul(particles.mul(jet.albedo));
 
   const emitted = thermal.add(band).add(scattered);
 

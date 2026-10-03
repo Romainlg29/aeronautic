@@ -20,7 +20,8 @@ the batch's `profile`.
   dense and yellow-orange, with an opaque tail that trails smoke. Hydrolox
   exhaust is water vapour: nearly invisible but for the Mach disks and the haze.
   Methalox sits between, a violet band glow and a little soot. A solid booster's
-  exhaust is alumina, white and scattering, lit by `sky_light`.
+  exhaust is alumina, white and scattering, lit by `sky_light` and
+  `sun_light`.
 
 Lengths come from `nozzle_radius_m`, so a preset resized stays the same plume
 at a different size. Speeds do not scale, because the gas does not go faster
@@ -29,6 +30,27 @@ out of a bigger nozzle.
 The world scale of a nozzle's matrix also scales the plume without changing its
 look. Lengths are multiplied by it and densities divided by it, so `scale={2}`
 on the group draws the same flame twice the size rather than a thicker one.
+
+### Sunlight on the smoke
+
+Sky light comes from everywhere, so it lights smoke evenly. The sun comes from
+one way, and `sun_light`, aimed by `sun_x`, `sun_y` and `sun_z` (toward the sun,
+in world space), adds three things to the particles' scattering:
+
+- **Forward scattering.** A Henyey-Greenstein phase with `g = 0.6`: smoke seen
+  against the sun glows, and seen with the sun behind the camera it is dull.
+- **Self-shadowing.** The light reaching a point has crossed the plume between
+  it and the sun. That depth is not marched. The plume's particles fall off
+  across the axis as a Gaussian, so the depth along a straight ray through it
+  is closed form, an `erfc` of how far the point is past the axis toward the
+  sun. One evaluation a sample, and the side away from the sun goes dark.
+- **Light that got there anyway.** Smoke this dense scatters many times. A
+  share of the light (30%) is let through a shadow thinned to a quarter, so the
+  shadowed side is dim rather than black.
+
+It is zero by default, which is night or a plume lit by the sky alone, and the
+`solid_booster` preset turns it on. Give it the direction of the scene's
+directional light, and keep it in the units `sky_light` and `exposure` share.
 
 ---
 

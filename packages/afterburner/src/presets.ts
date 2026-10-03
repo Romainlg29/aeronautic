@@ -211,7 +211,12 @@ export const AFTERBURNER_PRESETS = {
       meander: 0.22,
       refraction_m: 0.12,
     },
-    profile: { ...ROCKET_PROFILE, exposure: 0.35, sky_light: 0.02 },
+    profile: {
+      ...ROCKET_PROFILE,
+      exposure: 0.35,
+      sky_light: 0.02,
+      sun_light: 1.5,
+    },
   },
 
   // Nothing flying: an argon arcjet out of a lab, hot enough to ionise, glowing

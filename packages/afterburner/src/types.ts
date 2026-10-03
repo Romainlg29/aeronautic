@@ -191,6 +191,24 @@ export type AfterburnerProfile = {
   // The reason a solid motor's smoke is white in daylight and black at night
   sky_light: number;
 
+  // How much direct sunlight the particles scatter, in the same units
+  //
+  // Unlike the sky's, the sun's light comes from one way: smoke seen against
+  // the sun glows, seen with the sun behind the camera it is dull, and the side
+  // of a thick plume away from the sun is in its own shadow. Zero leaves the
+  // plume lit by the sky alone
+  sun_light: number;
+
+  // The direction toward the sun in world space, its x, at any length
+  // The position of a directional light aimed at the origin will do
+  sun_x: number;
+
+  // And its y
+  sun_y: number;
+
+  // And its z
+  sun_z: number;
+
   // Below this the gas no longer glows enough to see, in kelvin
   // What the plume is cut at, where nothing in it is hot or dense enough to show
   visible_temperature_k: number;
@@ -353,6 +371,12 @@ export const default_afterburner_profile = (): AfterburnerProfile => ({
   adaptation: 0.6,
   dry_glow: 0.35,
   sky_light: 0.0005,
+
+  // Night: no sun. Where it would be by day, high and off to one side
+  sun_light: 0,
+  sun_x: 0.4,
+  sun_y: 0.8,
+  sun_z: 0.45,
 
   visible_temperature_k: 850,
   max_length_d: 40,
