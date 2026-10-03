@@ -130,6 +130,12 @@ export const CONE_REACH = 0.25;
 // length out
 export const CONE_SHOCK_SUBSONIC = 0.55;
 export const CONE_SHOCK_SONIC = 0.92;
+
+// And past Mach one, where it has reached the tail
+export const CONE_SHOCK_SUPERSONIC = 0.98;
+
+// The Mach numbers over which a supersonic body's vapour fades out
+export const SUPERSONIC_FADE: [number, number] = [1.25, 1.6];
 export const CONE_SHOCK_LEAN = 0.08;
 
 // How long the pocket ahead of the cone's shock is, as a share of the body
@@ -1130,7 +1136,11 @@ export const vapor_state = (
     body_height_m: airframe.fuselage_height_m,
     cone_strength: 0,
     cone_shock: 0,
-    cone_fade: 1 - smoothstep(1.05, 1.2, state.mach),
+    // Past Mach one the pocket's shock is the tail's, and linear theory's
+    // 1/β weakens it and draws it in as the speed grows; vapour round the aft
+    // body is seen to about Mach 1.3 low down, and no further
+    cone_fade:
+      1 - smoothstep(SUPERSONIC_FADE[0], SUPERSONIC_FADE[1], state.mach),
     cone_bound_m: 0,
   };
 
@@ -1327,7 +1337,9 @@ export const vapor_state = (
     field.cone_shock =
       CONE_SHOCK_SUBSONIC +
       (CONE_SHOCK_SONIC - CONE_SHOCK_SUBSONIC) *
-        smoothstep(0.85, 1.02, state.mach);
+        smoothstep(0.85, 1.02, state.mach) +
+      (CONE_SHOCK_SUPERSONIC - CONE_SHOCK_SONIC) *
+        smoothstep(1, 1.2, state.mach);
 
     let strongest = 0;
 

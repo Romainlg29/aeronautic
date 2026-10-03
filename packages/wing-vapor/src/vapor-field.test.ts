@@ -67,7 +67,7 @@ describe("vapor_state", () => {
     );
   });
 
-  it("only makes the cone near the speed of sound", () => {
+  it("only makes the cone near the speed of sound, and a little past it", () => {
     const sound = moist_air(0, 0.9, 10).sound_m_s;
 
     const slow = vapor_state(airframe, pulling(0.6 * sound, 1), humid, look);
@@ -77,12 +77,23 @@ describe("vapor_state", () => {
       humid,
       look,
     );
-    const fast = vapor_state(airframe, pulling(1.3 * sound, 1), humid, look);
+    const fast = vapor_state(airframe, pulling(1.8 * sound, 1), humid, look);
 
     expect(transonic.field.cone_bound_m).toBeGreaterThan(
       Math.max(slow.field.cone_bound_m * 3, airframe.fuselage_radius_m * 2),
     );
     expect(fast.field.cone_bound_m).toBe(0);
+
+    // Just supersonic, it holds on round the aft body, its shock at the tail
+    const supersonic = vapor_state(
+      airframe,
+      pulling(1.15 * sound, 1),
+      humid,
+      look,
+    ).field;
+
+    expect(supersonic.cone_bound_m).toBeGreaterThan(0);
+    expect(supersonic.cone_shock).toBeGreaterThan(transonic.field.cone_shock);
   });
 
   it("fits every part inside its bounds", () => {
