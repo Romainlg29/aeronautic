@@ -1,0 +1,119 @@
+name: three release
+
+# The library supports one three minor at a time, capped in its peer range,
+# because TSL changes between releases. Every week this looks for a newer
+# three, tries the library against it, and opens an issue to test and widen
+# the cap. One issue per minor: a release already reported is left alone
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: three-release
+  cancel-in-progress: false
+
+jobs:
+  check:
+    # Issue automation and a test run: the 1-vCPU runner is enough, and cheaper
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # Is the latest three past the peer range's upper bound, and not yet reported?
+      - name: Compare three with the supported range
+        id: versions
+        run: |
+          latest=$(npm view three version)
+          range=$(node -p "require('./packages/afterburner/package.json').peerDependencies.three")
+          newer=$(LATEST="$latest" RANGE="$range" node -e '
+            const cap = /<\s*(\d+)\.(\d+)\.(\d+)/.exec(process.env.RANGE);
+            const at = process.env.LATEST.split(".").map(Number);
+            if (!cap) throw new Error("No upper bound in " + process.env.RANGE);
+            const bound = cap.slice(1).map(Number);
+            const past = at[0] > bound[0] || (at[0] === bound[0] && (at[1] > bound[1] || (at[1] === bound[1] && at[2] >= bound[2])));
+            console.log(past ? "true" : "false");
+          ')
+          minor=$(echo "$latest" | cut -d. -f1,2)
+          title="Support three $minor"
+          reported=false
+          if [ "$newer" = "true" ] && gh issue list --repo "$GITHUB_REPOSITORY" --state all --search "\"$title\" in:title" --json title --jq '.[].title' | grep -qxF "$title"; then
+            reported=true
+          fi
+          {
+            echo "latest=$latest"
+            echo "range=$range"
+            echo "release=r$(echo "$latest" | cut -d. -f2)"
+            echo "title=$title"
+            echo "open=$([ "$newer" = "true" ] && [ "$reported" = "false" ] && echo true || echo false)"
+          } >> "$GITHUB_OUTPUT"
+          echo "three $latest, supported $range, newer: $newer, reported: $reported"
+
+      # Try it: the library's types and tests against the new three
+      - name: Install the new three
+        if: steps.versions.outputs.open == 'true'
+        env:
+          LATEST: ${{ steps.versions.outputs.latest }}
+        run: |
+          pnpm install --frozen-lockfile
+          types=$(npm view "@types/three@~$LATEST" version 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d "'")
+          pnpm --filter r3f-afterburner add -D "three@$LATEST" "@types/three@${types:-latest}"
+      - name: Typecheck
+        id: typecheck
+        if: steps.versions.outputs.open == 'true'
+        continue-on-error: true
+        run: pnpm --filter r3f-afterburner typecheck
+      - name: Test
+        id: test
+        if: steps.versions.outputs.open == 'true'
+        continue-on-error: true
+        run: pnpm --filter r3f-afterburner test
+
+      - name: Open the issue
+        if: steps.versions.outputs.open == 'true'
+        env:
+          LATEST: ${{ steps.versions.outputs.latest }}
+          RANGE: ${{ steps.versions.outputs.range }}
+          RELEASE: ${{ steps.versions.outputs.release }}
+          TITLE: ${{ steps.versions.outputs.title }}
+          TYPECHECK: ${{ steps.typecheck.outcome }}
+          TEST: ${{ steps.test.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create three --repo "$GITHUB_REPOSITORY" --color 049ef4 \
+            --description "A three.js release to support" --force
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --label three --body "$(cat <<EOF
+          three **$LATEST** is out, and the library's peer range is \`$RANGE\`.
+
+          Release notes: https://github.com/mrdoob/three.js/releases/tag/$RELEASE
+
+          Tried automatically ([run]($RUN_URL)):
+
+          - typecheck: **$TYPECHECK**
+          - tests: **$TEST**
+
+          The tests cover the CPU side only. TSL and WebGPU changes show up in
+          the browser, so before widening the range:
+
+          - [ ] Bump \`three\` and \`@types/three\` in \`packages/afterburner\` and \`apps/docs\`
+          - [ ] Widen \`peerDependencies.three\` in \`packages/afterburner/package.json\`
+          - [ ] \`pnpm test\`, \`pnpm typecheck\`, \`pnpm build:docs\`
+          - [ ] Open every docs example with \`pnpm dev\` and check the console for shader errors
+          - [ ] Look through the release notes for TSL, node and WebGPURenderer changes
+          EOF
+          )"

@@ -1,0 +1,25 @@
+{
+  "name": "afterburner-workspace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm --filter r3f-afterburner build",
+    "build:docs": "pnpm --filter docs build",
+    "dev": "pnpm --filter docs dev",
+    "dev:docs": "pnpm --filter docs dev",
+    "lint": "oxlint",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "oxfmt": "^0.71.0",
+    "oxlint": "^1.86.0",
+    "typescript": "~6.0.2"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.9.0"
+}

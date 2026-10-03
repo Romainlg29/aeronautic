@@ -1,0 +1,23 @@
+name: Performance
+description: Something is slower than it should be, or an idea to make it faster
+labels: [performance]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What's slow, or the idea
+      description: The scene, the viewpoint (close up astern is the worst case), and how many plumes.
+    validations:
+      required: true
+  - type: textarea
+    id: numbers
+    attributes:
+      label: Measurements
+      description: GPU ms per frame (see "Measuring" in the performance guide), the resolution and DPR, and the quality setting.
+  - type: input
+    id: environment
+    attributes:
+      label: Browser, OS and GPU
+      placeholder: Chrome 140, macOS 15, M2
+    validations:
+      required: true

@@ -1,0 +1,117 @@
+---
+title: Presets and propellants
+description: "The built-in looks, presets of your own, and rocket fuels by mixture ratio."
+---
+
+## The built-in presets
+
+| name                    | what it is                                                                |
+| ----------------------- | ------------------------------------------------------------------------- |
+| `afterburner`           | A clean military reheat: blue core, crisp diamonds, almost no turbulence. |
+| `afterburner_turbulent` | The same can, churning. The default when no preset is given.              |
+| `rocket_kerolox`        | RP-1 and LOX: yellow-orange, sooty, opaque and very turbulent.            |
+| `rocket_hydrolox`       | LH2 and LOX: nearly invisible violet, bright Mach disks, strong haze.     |
+| `rocket_methalox`       | Methane and LOX: blue-violet root, pink-orange tail, clear diamonds.      |
+| `solid_booster`         | An APCP booster: huge, white-yellow, dense and ragged.                    |
+| `plasma`                | A cyan, laminar, sci-fi drive.                                            |
+
+<Example name="presets-gallery" />
+
+Each preset is drawn at its own nozzle size. A booster's 1.9 m nozzle makes a
+much bigger plume than a jet's 0.5 m.
+
+## What a preset sets
+
+A preset is two things:
+
+- **params**, per nozzle: the engine;
+- **a profile**, per batch: the air and the camera's exposure. Each preset is
+  exposed like a photograph of that engine, so a dim hydrogen plume and a
+  blinding booster both read.
+
+The profile comes from the **batch's** preset. A nozzle with no batch above it
+gets a batch made for its preset, so this just works. Inside an
+`<AfterburnerBatch>`, the batch's `preset` sets the profile, and each nozzle's
+`preset` only sets its params:
+
+```tsx
+// Both nozzles drawn with the kerolox profile (its exposure, its air)
+<AfterburnerBatch preset="rocket_kerolox">
+  <Afterburner />
+  <Afterburner preset="rocket_methalox" position={[0, 0, 4]} />
+</AfterburnerBatch>
+```
+
+If you mix very different engines in one scene, give each look its own batch,
+or set `exposure` in the batch's `profile` to suit them all.
+
+## Changing a preset
+
+`params` are applied over the preset, field by field:
+
+```tsx
+<Afterburner preset="rocket_methalox" params={{ turbulence: 0.4 }} />
+```
+
+A `nozzle_radius_m` different from the preset's **scales every length the
+preset set with it**: a bigger engine of the same design, not a stubby one.
+
+```tsx
+// A bigger booster, same look
+<Afterburner preset="solid_booster" params={{ nozzle_radius_m: 3.7 }} />
+```
+
+## A preset of your own
+
+A preset can be an object, `{ params, profile }`. Spread from
+`AFTERBURNER_PRESETS` to start from a built-in one:
+
+```ts
+import { AFTERBURNER_PRESETS, type AfterburnerPreset } from "r3f-afterburner";
+
+export const sunset_booster: AfterburnerPreset = {
+  params: {
+    ...AFTERBURNER_PRESETS.solid_booster.params,
+    band_color: "#ff5a1f",
+  },
+  profile: AFTERBURNER_PRESETS.solid_booster.profile,
+};
+```
+
+```tsx
+<Afterburner preset={sunset_booster} />
+```
+
+Keep the object stable, as a module constant or `useMemo`.
+
+## Rockets by propellant
+
+A liquid rocket can be given its fuel and **mixture ratio** (oxidiser over
+fuel, by mass) instead of raw soot and afterburning numbers:
+
+```tsx
+<Afterburner
+  preset="rocket_kerolox"
+  params={{ propellant: { fuel: "kerosene", mixture_ratio: 2.0 } }}
+/>
+```
+
+`fuel` is `"kerosene"`, `"methane"` or `"hydrogen"`. Below the fuel's
+stoichiometric ratio the engine runs **rich**:
+
+- it makes more soot, more of which survives;
+- more leftover fuel burns where the exhaust meets the air, the bright sheath;
+- the chamber is a little cooler.
+
+Given against a preset of the same fuel, the change is relative to that
+preset's own mix, temperatures included. So each preset comes back exactly at
+its own ratio: kerolox at 2.36, methalox at 3.6, hydrolox at 6. Any param you
+give outright still wins over what the mix works out.
+
+<Example name="rocket-mix" />
+
+Drag the ratio down to 1.6 for a dark, smoky, fire-sheathed plume. Push it up
+to 3.3 for a clean one, with the violet band glow and the diamonds showing.
+
+`propellant_params`, `propellant_effects` and `equivalence_ratio` are exported
+if you want the numbers on the main thread.

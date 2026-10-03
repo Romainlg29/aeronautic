@@ -1,0 +1,27 @@
+name: New preset
+description: Propose an engine to ship as a preset
+labels: [preset]
+body:
+  - type: textarea
+    id: engine
+    attributes:
+      label: The engine
+      description: What kind of engine it is (by type, e.g. "a turboprop's exhaust", "a hydrazine thruster"), and why it's worth shipping.
+    validations:
+      required: true
+  - type: textarea
+    id: numbers
+    attributes:
+      label: The numbers
+      description: Exit Mach, pressure ratio, temperatures, gamma, molar mass, soot, and where they come from. Rough is fine to start.
+  - type: textarea
+    id: look
+    attributes:
+      label: References
+      description: Photos or videos of the real thing. They're what the preset is tuned against.
+  - type: checkboxes
+    id: pr
+    attributes:
+      label: Contributing it
+      options:
+        - label: I'd like to open the PR myself (see "Adding a preset" in CONTRIBUTING.md)

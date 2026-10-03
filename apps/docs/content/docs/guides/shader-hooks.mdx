@@ -1,0 +1,107 @@
+---
+title: Shader hooks and TSL
+description: "Change the field or the final pixel with TSL hooks, or build your own material."
+---
+
+## Hooks
+
+Hooks are TSL functions, built into the material when it compiles. They're the
+easy way to change the look without forking. A hook is called **once**, when
+the material is built, so it costs exactly what the nodes it returns cost.
+
+```tsx
+import type { AfterburnerHooks } from "r3f-afterburner";
+import { atan, cos, mix, vec3 } from "three/tsl";
+
+const hooks: AfterburnerHooks = {
+  // The temperature at a sample, in kelvin: 10% hotter on the axis
+  temperature: (kelvin, sample) =>
+    kelvin.mul(sample.across.oneMinus().max(0).mul(0.1).add(1)),
+
+  // What a sample emits per metre, before exposure
+  emission: (rgb, sample) =>
+    mix(rgb, rgb.mul(vec3(1, 0.8, 0.6)), sample.mixture),
+
+  // Your own eddies, in [0, 1], over flow space
+  turbulence: (flow) => my_noise(flow),
+
+  // The final pixel, in linear radiance
+  radiance: (rgb, pixel) => rgb.mul(1.2),
+
+  // The nozzle's outline, its radius in every direction in nozzle radii
+  outline: {
+    radius: (direction) =>
+      cos(atan(direction.y, direction.x).mul(8)).mul(0.15).add(1),
+    reach: 1.15,
+  },
+};
+
+<AfterburnerBatch hooks={hooks}>…</AfterburnerBatch>;
+```
+
+<Callout type="warn">
+  Make `hooks` stable: a module constant or `useMemo`. A new object recompiles
+  the material.
+</Callout>
+
+### What each hook gets
+
+| hook          | arguments                  | returns                             |
+| ------------- | -------------------------- | ----------------------------------- |
+| `turbulence`  | `flow: vec3`, `frame`      | `float` in [0, 1], the eddies       |
+| `temperature` | `kelvin: float`, `sample`  | `float`, kelvin                     |
+| `emission`    | `rgb: vec3`, `sample`      | `vec3`, radiance per metre          |
+| `radiance`    | `rgb: vec3`, `pixel`       | `vec3`, the pixel's linear radiance |
+| `outline`     | `direction: vec2`, `frame` | `float`, the exit's radius that way |
+
+`outline` is an object, `{ radius, reach }`: `radius` is the hook, in nozzle
+radii, and `reach` the most it ever returns, which the plume's bounds are
+widened to. See [Shaped nozzles](../nozzle-shapes/#any-outline).
+
+`flow` is the point in flow space: x runs aft with the gas, y and z across it.
+
+A **sample** (`PlumeSampleContext`) has:
+
+| field        | what it is                                               |
+| ------------ | -------------------------------------------------------- |
+| `point`      | The point, in the nozzle's frame, in metres.             |
+| `x`          | Metres downstream of the exit.                           |
+| `core`       | How far through the potential core, 0 to 1.              |
+| `half_width` | The jet's half-width here, in metres.                    |
+| `centre`     | The centreline excess, 0 to 1.                           |
+| `speed`      | The local centreline velocity, m/s.                      |
+| `mixture`    | How much of the gas here is exhaust, 0 to 1.             |
+| `across`     | How far out the sample is, in half-widths, after eddies. |
+| `context`    | The jet, profile, time and blackbody nodes.              |
+
+A **pixel** (`AfterburnerPixel`) has `origin`, `direction` and `span` (the ray
+in the nozzle's frame, and where it enters and leaves), `lod` (0 near, 1 mid,
+2 far), `transmittance` (what still shows through, per primary) and `context`.
+
+## The TSL itself
+
+`r3f-afterburner/tsl` exports every piece the material is made of, for building
+a material of your own:
+
+| group        | exports                                                                                                             |
+| ------------ | ------------------------------------------------------------------------------------------------------------------- |
+| Noise        | `hash_cell`, `value_noise`, `wander_noise`, `turbulence`, `signed`                                                  |
+| Light        | `blackbody`, temperature to linear radiance from a Planck lookup                                                    |
+| The jet      | `plume_jet` (the fully expanded jet from the nozzle, gas and air), `plume_half_width`, `plume_centreline`           |
+| The field    | `plume_frame`, `plume_field`, `plume_bound`, `plume_span`, `plume_closest`, `plume_station`, `plume_outline`        |
+| The material | `create_afterburner_material`, `create_afterburner_uniforms`, `write_afterburner_profile`, `AFTERBURNER_ATTRIBUTES` |
+
+- `plume_frame` takes a point in the nozzle's frame to its station and mixing
+  layer, and measures how far out it is against the nozzle's outline,
+  `jet.outline` (`PlumeOutlineNodes`), when the jet has one.
+- `plume_outline` is that measure on its own.
+- `plume_field` gives the temperature, mixture, extinction and emission there.
+- `plume_bound` says how far a march may safely step.
+
+Each takes its inputs explicitly through a `PlumeContext`,
+`{ jet, profile, time, blackbody }`, so it works from any material, instanced
+or not. The profile nodes include `air`, the atmosphere that
+`write_afterburner_profile` works out on the CPU.
+
+The [How it works](../../how-it-works/the-plume/) section explains what each
+piece does and why.

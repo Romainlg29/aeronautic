@@ -1,0 +1,98 @@
+---
+title: Placing plumes
+description: "Position, rotation, direction, targets, and moving a nozzle from code."
+---
+
+## The one rule
+
+**A plume leaves its nozzle's origin along the nozzle's local +X.** Every way
+of placing one just decides where that origin is and which way +X points.
+
+## In JSX
+
+`<Afterburner>` takes every `<group>` prop. `position` is the exit plane's
+centre. Turn it with `rotation`, or point it with `direction`:
+
+```tsx
+// Exit 7 m behind the parent's origin, exhaust towards −X
+<Afterburner position={[-7, 0, 0]} direction={[-1, 0, 0]} />
+
+// The same, as a rotation: half a turn about Y takes +X to −X
+<Afterburner position={[-7, 0, 0]} rotation={[0, Math.PI, 0]} />
+```
+
+`direction` is any vector in the parent's frame, normalised for you. When both
+are given, it wins over `rotation`.
+
+The group's `scale` scales the plume, look and all. Usually you want
+`params={{ nozzle_radius_m }}` instead: it rescales every length of the jet,
+the way a bigger engine would.
+
+## On a node you don't own
+
+For a node of a loaded model, or anything else outside your JSX, pass it as
+`target`. The plume is portalled into it, and `position`, `rotation` and
+`direction` are then in **its** frame:
+
+```tsx
+const { nodes } = useGLTF("/fighter.glb");
+
+<Afterburner
+  target={nodes.FX_Exhaust_L}
+  position={[0, 0, 0.18]}
+  direction={[0, 0, -1]}
+/>;
+```
+
+`target` takes any `Object3D`: a mesh, a group, a bone. If it comes from a ref,
+keep it in state so the plume re-renders once it exists. See
+[the tutorial](../../tutorial/on-a-model/#when-the-node-arrives-later).
+
+<Example name="on-a-model" />
+
+## Moving it from code
+
+Through the [handle](../refs/), without a render:
+
+```ts
+// Move and aim it, in the frame it sits in
+engine.current?.set_offset({
+  position: [0, 0.2, -4.2],
+  direction: [0, -0.1, -1],
+});
+
+// Just aim it
+engine.current?.set_direction([0, -0.1, -1]);
+
+// Or write the group directly: it is a plain three.js Group
+engine.current?.object?.position.set(0, 0.2, -4.2);
+```
+
+`set_offset` takes an `AfterburnerOffset`:
+
+| field       | type                                                      |
+| ----------- | --------------------------------------------------------- |
+| `position`  | `[x, y, z]` or any `{ x, y, z }`                          |
+| `rotation`  | an `Euler`, a `Quaternion`, `[x, y, z]` or `[x, y, z, w]` |
+| `direction` | `[x, y, z]` or any `{ x, y, z }`; wins over `rotation`    |
+
+Fields you leave out are kept.
+
+## Without React
+
+A core nozzle follows an `object`'s world matrix, at an optional offset in its
+frame. `attach` switches which object it follows:
+
+```ts
+const tail = batch.add({
+  object: engine_node,
+  offset: { position: [0, 0, -4.2], direction: [0, 0, -1] },
+});
+
+tail.set_offset({ position: [0, 0.1, -4.2] });
+tail.attach(other_engine); // follow something else
+tail.attach(null); // stop following, and hold where it is now
+```
+
+Detaching folds the last world pose into the nozzle's `matrix`, so the plume
+doesn't jump. More in [Without React](../without-react/).

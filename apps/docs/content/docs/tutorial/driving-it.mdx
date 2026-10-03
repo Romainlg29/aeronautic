@@ -1,0 +1,91 @@
+---
+title: 3. Driving it from code
+description: "Throttle, aim and altitude every frame through refs, without re-rendering."
+---
+
+Props are for settings. Some values change every frame: a throttle on a flight
+model, a vectoring nozzle, the aircraft's altitude. Write those through a ref,
+and nothing re-renders.
+
+## Throttle and aim, per engine
+
+`<Afterburner ref>` gives you an `AfterburnerHandle`. Its `throttle` is a plain
+field, cheap to write every frame. `set_direction` turns the nozzle:
+
+```tsx
+import { useFrame } from "@react-three/fiber";
+import { Afterburner, type AfterburnerHandle } from "r3f-afterburner";
+
+const engine = useRef<AfterburnerHandle>(null);
+
+useFrame(({ clock }) => {
+  if (!engine.current) return;
+
+  const t = clock.elapsedTime;
+
+  engine.current.throttle = 0.6 + 0.4 * Math.sin(t * 0.9);
+  engine.current.set_direction([1, 0.08 * Math.sin(t * 0.6), 0]);
+});
+
+<Afterburner ref={engine} preset="afterburner" />;
+```
+
+<Example name="throttle-ref" />
+
+The handle is stable for the component's life. You can write to it before the
+nozzle is in a batch: the value is kept and applied once it is.
+
+## The air, per batch
+
+Altitude, airspeed and the day's temperature belong to the **profile**, which
+all of a batch's nozzles share. Take a ref to an `<AfterburnerBatch>` and call
+`update_profile`. It merges the fields you give and only writes uniforms:
+
+```tsx
+import {
+  Afterburner,
+  AfterburnerBatch,
+  type AfterburnerBatchCore,
+} from "r3f-afterburner";
+
+const batch = useRef<AfterburnerBatchCore>(null);
+
+useFrame(() => {
+  batch.current?.update_profile({
+    altitude_m: aircraft.position.y,
+    airspeed_m_s: aircraft.speed,
+  });
+});
+
+<AfterburnerBatch ref={batch} preset="afterburner">
+  <Afterburner />
+</AfterburnerBatch>;
+```
+
+Watch the colour as it climbs: orange at the ground, blue-violet near 11 km.
+
+<Example name="altitude-sweep" />
+
+[Flight and altitude](../../guides/flight-and-altitude/) explains why it
+changes.
+
+## Changing the engine
+
+`update_params` on the handle merges new params into the nozzle's and keeps the
+rest. It rewrites that one instance: cheap, but not free. Call it when
+something changes, not every frame:
+
+```ts
+engine.current?.update_params({ exit_mach: 1.6, soot_per_m: 1.2 });
+```
+
+`set_params` replaces them all.
+
+<Callout type="warn">
+  A prop wins again whenever it changes. If you pass `params` and also call
+  `update_params`, the next change to the `params` prop overwrites what you
+  wrote. Give each field one owner.
+</Callout>
+
+That's the whole API. The [guides](../../guides/placement/) go deeper on each
+part, and the [reference](../../reference/components/) lists everything.

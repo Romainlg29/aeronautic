@@ -1,0 +1,37 @@
+{
+  "name": "docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/reference.ts && next dev",
+    "build": "node scripts/reference.ts && next build",
+    "preview": "serve out",
+    "typecheck": "next typegen && tsc --noEmit"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.7.9",
+    "@react-three/fiber": "^9.8.1",
+    "fumadocs-core": "16.15.17",
+    "fumadocs-mdx": "15.4.5",
+    "fumadocs-ui": "npm:@fumadocs/base-ui@16.15.17",
+    "lucide-react": "^1.47.0",
+    "next": "16.3.7",
+    "r3f-afterburner": "workspace:*",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "three": "~0.186.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/mdx": "^2.0.14",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "~0.186.0",
+    "postcss": "^8.5.28",
+    "serve": "^14.2.6",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.2"
+  }
+}

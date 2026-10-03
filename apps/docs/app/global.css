@@ -1,0 +1,95 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+@theme {
+  --font-sans: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, monospace;
+}
+
+/* Exhaust orange, for links, the active page and buttons */
+:root {
+  --color-fd-primary: oklch(0.6 0.17 48);
+  --color-fd-primary-foreground: oklch(0.99 0 0);
+  --color-fd-ring: oklch(0.6 0.17 48);
+}
+
+.dark {
+  --color-fd-primary: oklch(0.75 0.16 55);
+  --color-fd-primary-foreground: oklch(0.18 0.02 50);
+  --color-fd-ring: oklch(0.75 0.16 55);
+  --color-fd-background: oklch(0.15 0.005 260);
+  --color-fd-card: oklch(0.18 0.006 260);
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+/* The live examples */
+
+.example {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  overflow: hidden;
+  background: #05070b;
+}
+
+.example canvas {
+  display: block;
+}
+
+.example-note {
+  position: absolute;
+  inset: auto 0.75rem 0.6rem;
+  color: #aab2c0;
+  font: 12px var(--font-mono);
+  pointer-events: none;
+}
+
+.example-fallback {
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  color: #aab2c0;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.example-controls {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  background: rgb(10 13 20 / 0.7);
+  backdrop-filter: blur(8px);
+  color: #e6e9ef;
+  font: 12px var(--font-sans);
+  max-width: calc(100% - 1.2rem);
+}
+
+.example-controls label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.example-controls input[type="range"] {
+  width: 7rem;
+  accent-color: #f59e42;
+}
+
+.example-controls select {
+  background: #151a24;
+  color: inherit;
+  border: 1px solid #2a3140;
+  border-radius: 0.25rem;
+  padding: 0.1rem 0.25rem;
+}

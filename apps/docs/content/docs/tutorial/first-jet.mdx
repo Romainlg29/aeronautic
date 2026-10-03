@@ -1,0 +1,135 @@
+---
+title: 1. Your first jet
+description: "Build a graded WebGPU scene with one engine and a throttle slider."
+---
+
+In this tutorial you'll build the scene below: one engine can, its plume, bloom,
+and a throttle slider. Parts 2 and 3 put it on a moving model and drive it from
+code.
+
+<Example name="basic-jet" />
+
+## The renderer
+
+Start from an empty React app with `three`, `@react-three/fiber`,
+`@react-three/drei` and `r3f-afterburner` installed. The canvas needs a
+`WebGPURenderer`. Initialise it before handing it back:
+
+```tsx title="app.tsx"
+import { Canvas } from "@react-three/fiber";
+import { WebGPURenderer } from "three/webgpu";
+
+export const App = () => (
+  <Canvas
+    camera={{ position: [10, 4, 16], fov: 40 }}
+    gl={async (props) => {
+      const renderer = new WebGPURenderer({ ...props, antialias: false });
+      await renderer.init();
+      return renderer;
+    }}
+  >
+    <Scene throttle={1} />
+  </Canvas>
+);
+```
+
+`antialias: false` because the plume is soft, and the bloom pass below does not
+need a multisampled buffer.
+
+## Bloom and tone mapping
+
+The plume's radiance is physical, and its brightest parts are meant to clip:
+the white-hot root and the Mach disks. Bloom the scene, then tone map it with
+AgX:
+
+```tsx title="grade.tsx"
+import { useFrame, useThree } from "@react-three/fiber";
+import { useEffect, useMemo } from "react";
+import { AgXToneMapping } from "three";
+import { bloom } from "three/addons/tsl/display/BloomNode.js";
+import { pass } from "three/tsl";
+import { RenderPipeline, type WebGPURenderer } from "three/webgpu";
+
+export const Grade = () => {
+  const { gl, scene, camera } = useThree();
+  const renderer = gl as unknown as WebGPURenderer;
+
+  const pipeline = useMemo(() => {
+    const color = pass(scene, camera).getTextureNode("output");
+    const pipeline = new RenderPipeline(renderer);
+
+    // strength, radius, threshold: only what clips blooms
+    pipeline.outputNode = color.add(bloom(color, 0.45, 0.2, 1));
+
+    return pipeline;
+  }, [renderer, scene, camera]);
+
+  useEffect(() => {
+    renderer.toneMapping = AgXToneMapping;
+    return () => pipeline.dispose();
+  }, [renderer, pipeline]);
+
+  // Priority 1 takes over rendering from R3F
+  useFrame(() => pipeline.render(), 1);
+
+  return null;
+};
+```
+
+## The engine
+
+The plume leaves the `<Afterburner>` group's origin along its **+X**. Put the
+engine can behind the origin, on −X, so the plume comes out of its mouth:
+
+```tsx title="scene.tsx"
+import { OrbitControls } from "@react-three/drei";
+import { Afterburner } from "r3f-afterburner";
+import { Grade } from "./grade";
+
+const Nozzle = () => (
+  // A cylinder is along Y; a quarter turn about Z lays it along X
+  <mesh position={[-1, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+    <cylinderGeometry args={[0.54, 0.6, 2, 32, 1, true]} />
+    <meshStandardMaterial color="#3d424c" metalness={0.6} side={2} />
+  </mesh>
+);
+
+export const Scene = ({ throttle }: { throttle: number }) => (
+  <>
+    <color attach="background" args={["#05070b"]} />
+    <hemisphereLight args={["#8090b0", "#101010", 0.6]} />
+    <Nozzle />
+    <Afterburner preset="afterburner" throttle={throttle} />
+    <OrbitControls target={[8, 0, 0]} />
+    <Grade />
+  </>
+);
+```
+
+The `afterburner` preset's nozzle is 0.5 m in radius. Every length in the
+plume comes from that radius and the gas, so the cells and the core are already
+the right size.
+
+## The throttle
+
+`throttle` runs from 0 to 1. A jet's burner lights past the profile's
+`burner_threshold`, 0.55 by default. Below that the engine is on dry thrust and
+barely glows. Keep it in state and pass it down:
+
+```tsx
+const [throttle, set_throttle] = useState(1);
+
+<input
+  type="range"
+  min={0}
+  max={1}
+  step={0.01}
+  value={throttle}
+  onChange={(event) => set_throttle(Number(event.target.value))}
+/>;
+```
+
+Changing a prop re-renders. That's fine for a slider. For a value that changes
+every frame, write it through a ref instead, as in [part 3](../driving-it/).
+
+Next: [put it on a model](../on-a-model/).

@@ -1,0 +1,13 @@
+{
+  "title": "Examples",
+  "icon": "Play",
+  "pages": [
+    "basic-jet",
+    "presets",
+    "altitude",
+    "on-a-model",
+    "nozzle-shapes",
+    "throttle-and-aim",
+    "rocket-mixture"
+  ]
+}

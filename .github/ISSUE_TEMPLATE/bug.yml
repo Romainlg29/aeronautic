@@ -1,0 +1,40 @@
+name: Bug report
+description: Something renders wrong, throws, or doesn't do what the docs say
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead. Screenshots help a lot.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: The smallest code that shows it, ideally a CodeSandbox or StackBlitz link.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: r3f-afterburner, three, @react-three/fiber and react
+      placeholder: r3f-afterburner 0.0.1, three 0.186.1, fiber 9.8.1, react 19.3.0
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Browser, OS and GPU
+      description: And whether it's WebGPU or the WebGL 2 fallback, if you know
+      placeholder: Chrome 140, Windows 11, RTX 4070, WebGPU
+    validations:
+      required: true
+  - type: textarea
+    id: console
+    attributes:
+      label: Console output
+      description: Any errors or warnings, shader errors especially.
+      render: text

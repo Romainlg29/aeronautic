@@ -1,0 +1,15 @@
+node_modules
+dist
+*.tsbuildinfo
+.DS_Store
+.next
+out
+next-env.d.ts
+.source
+*.log
+.claude/
+.env*
+coverage
+# Written by next dev
+apps/docs/AGENTS.md
+apps/docs/CLAUDE.md

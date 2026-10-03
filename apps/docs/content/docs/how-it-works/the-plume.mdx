@@ -1,0 +1,100 @@
+---
+title: The plume as a distance field
+description: "What the plume is, and why it is traced as a signed distance field."
+---
+
+This section is the design notes behind `r3f-afterburner`: why the plume is a
+signed distance field, what each dial means physically, and why the tiers
+exist. You do not need it to use the library, but it explains why the dials
+are the ones they are.
+
+<Callout type="info">
+  Snippets are sometimes written as GLSL where that reads more plainly than node
+  chains. The TSL itself lives in `packages/afterburner/src/tsl/`. Everything
+  here can be reproduced in the [examples](../../examples/basic-jet/).
+</Callout>
+
+## What the plume is
+
+A cone of light has a closed form: one quadratic per fragment. A plume does
+not. It is a shape with cells and eddies cut into it, so the fragment shader
+traces it. For every pixel the plume covers:
+
+1. A **proxy hull**, one instance per nozzle, gets the fragment onto the
+   screen.
+2. The ray is taken into the **nozzle's own frame**.
+3. A **bounding cylinder** says where the ray enters and leaves the plume.
+4. `plume_bound` asks whether anything burns near the current point. If
+   nothing does for _d_ metres, the march **skips _d_ metres** in one
+   iteration and asks again.
+5. Where something does, `plume_field` gives its **density and colour**, split
+   into the flame channel and the shock channel (the Mach disks).
+6. Both are composited by **Beer–Lambert**, `1 − exp(−density × depth)`, and
+   added over the scene.
+
+Every nozzle is one instance, written once when it is placed. Only the
+throttle and the nozzle frame are uploaded every frame.
+
+---
+
+## Why a distance field
+
+The shape is written as a distance rather than as a radius profile, and two
+things fall out of that.
+
+**The empty space is free.** `plume_bound` answers "how far is the nearest
+burning thing, at least" — the smooth body with the wander applied and the shell
+and the chew allowed for, and nothing about the cells or the eddies, both of
+which only ever pull the surface _inside_ what it allows. So a positive answer
+is a promise that the full field is empty for at least that far, and the ray
+crosses the gap between the hull and the fire in one iteration instead of
+twenty. Every iteration of the march either skips or samples, never both:
+
+```glsl
+float gap = plume_bound(point);
+
+if (gap > 0.0) {
+  t += max(gap * uStepSafety, stride);
+
+  continue;
+}
+```
+
+Because a skip advances by at least a stride, the loop still covers the whole
+span in no more iterations than an even march would have taken. It is a strict
+improvement, not a trade: the worst case is what the old fixed march cost every
+time, and the common case — a ray clipping the edge of a plume, or crossing the
+tapered back half of the hull — is a fraction of it.
+
+`uStepSafety` is why it is a bound and not a distance. The radius profile shears
+along the axis and the wander shears it again, so `length(lateral) - radius`
+runs long where the profile is steep. Two thirds covers the worst of it.
+
+**The shape is one thing.** A Mach disk is a waist in the flow, so it is a waist
+in the surface — `surface = radius * (1 - pinch * cell * lit)` — and not a
+brightness painted over a smooth cone. The eddies displace that same surface, in
+metres. There is one shape, and everything that happens to a plume happens to
+it.
+
+### The trap: a distance field is uniform inside itself
+
+This is the one thing that does not come for free, and the first version had it
+wrong. A ray crossing three metres of plume interior accumulates three metres of
+_exactly the same number_, so every cell and every eddy averages straight back
+out of the integral and what comes back is a smooth cone with all its detail
+confined to a silhouette one pixel wide. It looked airbrushed, and no amount of
+turning the shock dials up changed it.
+
+So the same lookups feed an interior term as well as the surface:
+
+```glsl
+// A pinch conserves the mass it pinches, so the narrow part is the dense part
+float interior = 1.0 + uShockPinch * cell * lit;
+
+// And the eddies thin the medium as well as chewing its edge
+interior += v_flow.z * uEddyBite * (eddies - 0.5) * 2.0 * agitation;
+```
+
+Both are free — the noise was already fetched and the cell was already computed.
+`eddy_bite` is the dial, and at zero the plume goes back to being a lit cone
+with a ragged rim.

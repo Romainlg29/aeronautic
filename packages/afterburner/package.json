@@ -1,0 +1,88 @@
+{
+  "name": "r3f-afterburner",
+  "version": "0.0.1",
+  "description": "Realistic jet afterburner and rocket exhaust plumes for three.js and React Three Fiber: raymarched in TSL for WebGPU, with shock diamonds, heat haze and one instanced draw",
+  "keywords": [
+    "afterburner",
+    "effects",
+    "exhaust",
+    "fire",
+    "flame",
+    "heat-haze",
+    "jet",
+    "jet-engine",
+    "plume",
+    "r3f",
+    "raymarching",
+    "react-three-fiber",
+    "rocket",
+    "rocket-engine",
+    "shader",
+    "shock-diamonds",
+    "three",
+    "three.js",
+    "threejs",
+    "thruster",
+    "tsl",
+    "vfx",
+    "webgpu"
+  ],
+  "homepage": "https://romainlg29.github.io/afterburner/",
+  "bugs": {
+    "url": "https://github.com/Romainlg29/afterburner/issues"
+  },
+  "license": "MIT",
+  "author": "Romain Le Gall (https://github.com/Romainlg29)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Romainlg29/afterburner.git",
+    "directory": "packages/afterburner"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./tsl": {
+      "types": "./dist/tsl.d.ts",
+      "default": "./dist/tsl.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "pnpm build"
+  },
+  "devDependencies": {
+    "@react-three/fiber": "^9.8.1",
+    "@types/react": "^19.3.0",
+    "@types/three": "~0.186.0",
+    "react": "^19.3.0",
+    "three": "~0.186.1",
+    "tsdown": "^0.23.0",
+    "typescript": "~6.0.2",
+    "vitest": "^4.1.4"
+  },
+  "peerDependencies": {
+    "@react-three/fiber": "^9.0.0 || ^10.0.0-alpha.0",
+    "react": "^19.0.0",
+    "three": ">=0.186.0 <0.187.0"
+  }
+}

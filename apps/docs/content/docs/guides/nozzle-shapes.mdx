@@ -1,0 +1,135 @@
+---
+title: Shaped nozzles
+description: "Oval, flat, square or any outline you draw: plumes from nozzles that aren't round."
+---
+
+<Example name="nozzle-shapes" />
+
+Not every nozzle is round. A fighter's petals often close to an oval. A flat
+vectoring nozzle is a slot several times wider than it is tall. A lobed mixer
+has a scalloped rim. Four params set the exit's outline, and a hook takes any
+other shape.
+
+## The outline params
+
+```tsx
+<Afterburner
+  preset="afterburner"
+  params={{
+    nozzle_radius_m: 0.27,
+    nozzle_aspect: 1.4, // width over height
+    nozzle_squareness: 2, // 2 an ellipse, higher squarer
+    nozzle_roll: 0, // radians about the plume's axis
+    nozzle_outline_length: 1, // in potential core lengths
+  }}
+/>
+```
+
+| param                   | default | what it does                                                                   |
+| ----------------------- | ------- | ------------------------------------------------------------------------------ |
+| `nozzle_aspect`         | `1`     | Width over height. 1 is round (or square), 1.4 a fighter's oval, 3+ a slot.    |
+| `nozzle_squareness`     | `2`     | The superellipse's exponent: 1 a diamond, 2 an ellipse, 4 a rounded rectangle. |
+| `nozzle_roll`           | `0`     | Turns the outline about the plume's axis, right-handed about +X.               |
+| `nozzle_outline_length` | `1`     | How far downstream the shape lasts before the jet is round. 0 is round.        |
+
+The outline is a superellipse, `|u/a|ⁿ + |v/b|ⁿ = 1`. That one family covers
+almost every real nozzle, from ellipses to rounded rectangles, and every
+plume in a batch may have its own, in the same instanced draw.
+
+### Size stays `nozzle_radius_m`
+
+For a shaped exit, `nozzle_radius_m` is the radius of the **round exit of the
+same area**. The mass flow is the same, so the core length, the shock spacing
+and every other length the jet works out stay right. Every preset's radius
+also fits any outline. To match a model's oval exit of width `w` and height
+`h`:
+
+```ts
+const nozzle_radius_m = Math.sqrt((w / 2) * (h / 2)); // an ellipse's
+const nozzle_aspect = w / h;
+```
+
+For other squarenesses, `nozzle_outline_fit(aspect, squareness)` gives the
+outline's size against that radius. Its `area_scale` times `nozzle_radius_m` is
+the outline's mean semi-axis, `√(ab)`.
+
+### Which way is wide
+
+The width runs along the **nozzle frame's z** and the height along its **y**,
+with the plume streaming down +X. A plume aimed with `direction` is turned the
+shortest way from +X, which keeps its y as near up as it can. So a wide nozzle
+aimed level comes out wide from side to side. Anything else is a
+`nozzle_roll`: a quarter turn, `Math.PI / 2`, stands it on its side.
+
+On a model, the plume rides the anchor's frame. Aim the anchor (see
+[Placement](../placement/)) so the exit's long side lies along the axis you
+want, or roll the outline to fit.
+
+### Mixing round
+
+A jet from a shaped exit doesn't keep its shape. Its long sides and corners
+shear faster than the rest, so within a few diameters it's round, the way any
+jet is downstream. The plume relaxes from the outline at the lip to a circle
+over `nozzle_outline_length` potential core lengths. At the default of 1, the
+shape is all but gone where the core closes. Raise it for a slot that should
+read flat for longer. At 0, the plume is round from the lip.
+
+## Any outline
+
+The `outline` hook replaces the superellipse with any shape. You give its
+radius in every direction across the plume, in nozzle radii, as TSL:
+
+```tsx
+import { AfterburnerBatch, type AfterburnerHooks } from "r3f-afterburner";
+import { atan, cos } from "three/tsl";
+
+// Eight lobes, 15% deep: r(θ) = 1 + 0.15 cos 8θ
+const LOBED: AfterburnerHooks = {
+  outline: {
+    radius: (direction) =>
+      cos(atan(direction.y, direction.x).mul(8)).mul(0.15).add(1),
+    reach: 1.15,
+  },
+};
+
+<AfterburnerBatch hooks={LOBED}>
+  <Afterburner preset="afterburner" />
+</AfterburnerBatch>;
+```
+
+- **`radius(direction, frame)`**: how far out the outline is in `direction`,
+  in nozzle radii. `direction` is unit length in the outline's own axes: x
+  along its width, y up its height, after `nozzle_roll`. `frame` is the
+  [plume frame](../shader-hooks/#the-tsl-itself) at the sample, so the outline
+  may change downstream too.
+- **`reach`**: the most `radius` ever returns. The bounds around the plume are
+  widened by it. Anything past it is cut off, and a reach much larger than the
+  outline costs steps.
+
+Keep the outline's area near a unit circle's, `π`, and `nozzle_radius_m` keeps
+its meaning. A hook is the batch's, so every plume in that batch takes the
+outline. Each still turns by its own `nozzle_roll` and relaxes over its own
+`nozzle_outline_length`, and `nozzle_aspect` and `nozzle_squareness` no
+longer apply. Give other shapes their own `<AfterburnerBatch>`, as the lobed
+exit above has.
+
+<Callout type="warn">
+  Make `hooks` stable: a module constant or `useMemo`. A new object recompiles
+  the material. See [Shader hooks](../shader-hooks/).
+</Callout>
+
+## Cost
+
+A round nozzle costs what it did. An outline adds two `pow`s per sample, and
+its reach widens the hull, so a slot of aspect 3 marches somewhat more empty
+space beside its narrow sides. A hook costs whatever its nodes cost: an `atan`
+and a `cos` are cheap, but a texture lookup per sample is not.
+
+## In your own material
+
+The field reads the outline from `jet.outline` (`PlumeOutlineNodes`) through
+`plume_frame`, so a custom material built from the
+[TSL](../shader-hooks/#the-tsl-itself) gets it by filling that in, and
+`plume_outline` is the measure on its own. A custom geometry writes the
+`afterburner_outline` and `afterburner_outline_fit` attributes, the second
+from `nozzle_outline_fit`. See the [material helpers](../../reference/helpers/#material).

@@ -1,0 +1,201 @@
+import { Matrix4, Object3D, Vector3 } from "three";
+import { describe, expect, it } from "vitest";
+import { AFTERBURNER_ATTRIBUTES } from "./afterburner-material";
+import { AfterburnerBatch } from "./afterburner-batch";
+
+const render = (batch: AfterburnerBatch, frame: number) => {
+  const camera = new Object3D() as unknown as Parameters<
+    NonNullable<typeof batch.mesh.onBeforeRender>
+  >[2];
+
+  Object.assign(camera, {
+    projectionMatrix: new Matrix4().makePerspective(-1, 1, 1, -1, 1, 1000),
+    matrixWorldInverse: new Matrix4(),
+  });
+
+  batch.mesh.onBeforeRender(
+    { info: { frame } } as never,
+    null as never,
+    camera,
+    null as never,
+    null as never,
+    null as never,
+  );
+};
+
+const slot_of = (batch: AfterburnerBatch, name: string, slot: number) => {
+  const attribute = batch.mesh.geometry.getAttribute(name);
+
+  return [0, 1, 2, 3].map((component) =>
+    attribute.getComponent(slot, component),
+  );
+};
+
+describe("AfterburnerBatch", () => {
+  it("draws one instance per nozzle", () => {
+    const batch = new AfterburnerBatch();
+
+    batch.add();
+    batch.add();
+
+    expect(batch.mesh.geometry.instanceCount).toBe(2);
+  });
+
+  it("writes the throttle into the instance", () => {
+    const batch = new AfterburnerBatch();
+    const nozzle = batch.add({ throttle: 0.4 });
+
+    nozzle.throttle = 0.7;
+
+    expect(slot_of(batch, AFTERBURNER_ATTRIBUTES.place, 0)[3]).toBeCloseTo(0.7);
+  });
+
+  it("moves the last nozzle into a removed one's slot", () => {
+    const batch = new AfterburnerBatch();
+
+    const first = batch.add({ params: { nozzle_radius_m: 1 } });
+    const last = batch.add({ params: { nozzle_radius_m: 2 } });
+
+    first.remove();
+
+    expect(batch.nozzles).toEqual([last]);
+    expect(slot_of(batch, AFTERBURNER_ATTRIBUTES.shape, 0)[0]).toBe(2);
+  });
+
+  it("grows past its capacity", () => {
+    const batch = new AfterburnerBatch({ capacity: 2 });
+
+    for (let index = 0; index < 5; index++) {
+      batch.add({ params: { nozzle_radius_m: index + 1 } });
+    }
+
+    expect(batch.mesh.geometry.instanceCount).toBe(5);
+    expect(slot_of(batch, AFTERBURNER_ATTRIBUTES.shape, 4)[0]).toBe(5);
+    expect(slot_of(batch, AFTERBURNER_ATTRIBUTES.shape, 0)[0]).toBe(1);
+  });
+
+  it("follows its object, measured from an anchor", () => {
+    const batch = new AfterburnerBatch();
+    const object = new Object3D();
+
+    object.position.set(5_000_000, 10, 20);
+    object.updateMatrixWorld();
+
+    batch.add({ object });
+    render(batch, 1);
+
+    expect(slot_of(batch, AFTERBURNER_ATTRIBUTES.place, 0).slice(0, 3)).toEqual(
+      [0, 0, 0],
+    );
+    expect(batch.mesh.matrixWorld.elements[12]).toBe(5_000_000);
+
+    object.position.x += 3;
+    object.updateMatrixWorld();
+    render(batch, 2);
+
+    expect(slot_of(batch, AFTERBURNER_ATTRIBUTES.place, 0)[0]).toBeCloseTo(3);
+  });
+
+  it("scales a scaled nozzle's lengths", () => {
+    const batch = new AfterburnerBatch();
+    const object = new Object3D();
+
+    object.scale.setScalar(2);
+    object.updateMatrixWorld();
+
+    batch.add({ object, params: { nozzle_radius_m: 0.5 } });
+    render(batch, 1);
+
+    expect(slot_of(batch, AFTERBURNER_ATTRIBUTES.shape, 0)[0]).toBe(1);
+  });
+
+  it("only builds the haze variant when a nozzle refracts", () => {
+    const batch = new AfterburnerBatch();
+    const clear = batch.mesh.material;
+
+    batch.add({ params: { refraction_m: 0 } });
+    expect(batch.mesh.material).toBe(clear);
+
+    batch.add({ params: { refraction_m: 0.1 } });
+    expect(batch.mesh.material).not.toBe(clear);
+  });
+
+  it("advances its clock once a frame", () => {
+    const batch = new AfterburnerBatch();
+
+    batch.add();
+    render(batch, 1);
+
+    const before = batch.uniforms.time.value;
+
+    render(batch, 1);
+
+    expect(batch.uniforms.time.value).toBe(before);
+  });
+});
+
+describe("AfterburnerNozzle placement", () => {
+  it("sits on its object at the offset given", () => {
+    const batch = new AfterburnerBatch();
+    const hull = new Object3D();
+
+    hull.position.set(10, 0, 0);
+    hull.rotation.set(0, Math.PI / 2, 0);
+    hull.updateMatrixWorld();
+
+    const nozzle = batch.add({
+      object: hull,
+      offset: { position: [-2, 0, 0], direction: [-1, 0, 0] },
+    });
+
+    const world = nozzle.world_matrix();
+    const exit = new Vector3().setFromMatrixPosition(world);
+    const along = new Vector3(1, 0, 0).transformDirection(world);
+
+    // Two metres back along the hull's -X, which the turn has put on +Z
+    expect(exit.x).toBeCloseTo(10);
+    expect(exit.z).toBeCloseTo(2);
+    expect(along.z).toBeCloseTo(1);
+  });
+
+  it("follows an object attached later, and holds still when let go", () => {
+    const batch = new AfterburnerBatch();
+    const hull = new Object3D();
+    const nozzle = batch.add();
+
+    hull.position.set(0, 5, 0);
+    hull.updateMatrixWorld();
+    nozzle.attach(hull, { position: [1, 0, 0] });
+
+    expect(
+      new Vector3().setFromMatrixPosition(nozzle.world_matrix()).toArray(),
+    ).toEqual([1, 5, 0]);
+
+    nozzle.attach(null);
+    hull.position.set(0, 50, 0);
+    hull.updateMatrixWorld();
+
+    expect(
+      new Vector3().setFromMatrixPosition(nozzle.world_matrix()).toArray(),
+    ).toEqual([1, 5, 0]);
+  });
+
+  it("changes some params and keeps the rest", () => {
+    const batch = new AfterburnerBatch();
+    const nozzle = batch.add({ params: { nozzle_radius_m: 0.7 } });
+
+    nozzle.update_params({ exit_mach: 1.8 });
+
+    expect(nozzle.params.exit_mach).toBe(1.8);
+    expect(nozzle.params.nozzle_radius_m).toBe(0.7);
+  });
+
+  it("changes some of the profile and keeps the rest", () => {
+    const batch = new AfterburnerBatch({ profile: { airspeed_m_s: 200 } });
+
+    batch.update_profile({ altitude_m: 9000 });
+
+    expect(batch.profile.altitude_m).toBe(9000);
+    expect(batch.profile.airspeed_m_s).toBe(200);
+  });
+});

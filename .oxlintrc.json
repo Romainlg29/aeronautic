@@ -1,0 +1,52 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "oxc", "vitest"],
+  "ignorePatterns": [
+    "**/dist",
+    "**/node_modules",
+    "**/.next",
+    "**/out",
+    "**/.source"
+  ],
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "warn",
+    "react/only-export-components": [
+      "warn",
+      {
+        "allowConstantExport": true
+      }
+    ],
+    "typescript/no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_",
+        "caughtErrorsIgnorePattern": "^_"
+      }
+    ],
+    "typescript/no-explicit-any": "error"
+  },
+  "overrides": [
+    {
+      "files": ["apps/docs/examples/**", "apps/docs/components/**"],
+      "rules": {
+        "react/immutability": "off"
+      }
+    },
+    {
+      "files": ["apps/docs/app/**"],
+      "rules": {
+        "react/only-export-components": "off"
+      }
+    },
+    {
+      "files": ["packages/afterburner/src/**"],
+      "rules": {
+        "react/only-export-components": "off",
+        "react/immutability": "off",
+        "react/refs": "off"
+      }
+    }
+  ]
+}

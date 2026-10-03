@@ -1,0 +1,16 @@
+{
+  "title": "Guides",
+  "icon": "BookOpen",
+  "pages": [
+    "placement",
+    "nozzle-shapes",
+    "refs",
+    "flight-and-altitude",
+    "presets-and-propellants",
+    "tuning-the-look",
+    "performance",
+    "half-resolution",
+    "without-react",
+    "shader-hooks"
+  ]
+}

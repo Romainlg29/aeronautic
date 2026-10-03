@@ -1,0 +1,102 @@
+---
+title: 2. On a model
+description: "Sit plumes on nodes of a moving model, from outside its JSX."
+---
+
+A real scene's engines are nodes of a loaded model: a glTF's meshes, groups or
+bones. They aren't in your JSX, so you can't nest an `<Afterburner>` inside
+them. Use `target` instead.
+
+<Example name="on-a-model" />
+
+## Nesting, when you can
+
+If the engine is in your JSX, nest the plume in it. `<Afterburner>` is a group,
+and follows its parent like any child:
+
+```tsx
+<group ref={aircraft}>
+  <AircraftModel />
+  <Afterburner position={[-7, 0, 0]} direction={[-1, 0, 0]} />
+</group>
+```
+
+## `target`, when you can't
+
+`target` takes any `Object3D`. The plume is portalled into it, so it follows the
+node however the model moves. Its `position` and `rotation` (or `direction`)
+are then **in that node's frame**:
+
+```tsx
+import { useGLTF } from "@react-three/drei";
+
+const { scene, nodes } = useGLTF("/fighter.glb");
+
+<>
+  <primitive object={scene} />
+  <Afterburner
+    target={nodes.FX_Exhaust_L}
+    position={[0, 0, 0.18]} // a little up the throat, in the node's frame
+    direction={[0, 0, -1]} // exhaust down the node's -Z, out of the back
+    params={{ nozzle_radius_m: 0.27, nozzle_aspect: 1.4 }} // the exit as modelled
+  />
+</>;
+```
+
+The easiest numbers are none at all. Give the model an empty on each nozzle
+exit, pointing the way the exhaust goes, and the plume sits on it at the
+origin. That is what the model above does: `FX_Exhaust_L` and `FX_Exhaust_R`
+are empties in Blender, exported as glTF nodes, and parented to the nozzles'
+vectoring gimbals, so the plumes follow the nozzles as they swivel.
+
+Without one, open the model in a viewer and read the exit plane's position off
+the engine node, in that node's own axes. Measure the exit's radius too, and
+pass it as `nozzle_radius_m`, so the flame leaves the nozzle that is drawn.
+
+This model's exits are ovals, 0.32 m wide and 0.23 m high. `nozzle_aspect`
+gives the plume that shape, width over height, and `nozzle_radius_m` is the
+round exit of the same area, `√(0.16 × 0.115)`. The width runs along the
+plume frame's z, which this anchor's `direction` leaves level. See
+[Shaped nozzles](../../guides/nozzle-shapes/) for flat, square and any other
+outline.
+
+## When the node arrives later
+
+A node you get from a ref only exists after the first render. Keep it in state,
+so the plume re-renders onto it once it exists. A callback ref does that
+directly:
+
+```tsx
+const [engine, set_engine] = useState<Object3D | null>(null);
+
+<>
+  <mesh ref={set_engine}>…</mesh>
+  <Afterburner target={engine} position={[1, 0, 0]} direction={[1, 0, 0]} />
+</>;
+```
+
+Until `target` is set, the plume sits where it would without it.
+
+## Several engines
+
+Nozzles with the same scene and preset share one batch, so two engines are
+still one draw:
+
+```tsx
+{
+  [left, right].map((engine, index) => (
+    <Afterburner
+      key={index}
+      target={engine}
+      position={[1, 0, 0]}
+      direction={[1, 0, 0]}
+      params={{ nozzle_radius_m: 0.35 }}
+    />
+  ));
+}
+```
+
+A different `nozzle_radius_m` scales every length of the plume with it. A
+smaller engine gives a smaller plume of the same shape.
+
+Next: [drive it from code](../driving-it/).

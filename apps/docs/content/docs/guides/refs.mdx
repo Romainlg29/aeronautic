@@ -1,0 +1,76 @@
+---
+title: Driving from code
+description: "The nozzle handle and the batch ref, and which to use for what."
+---
+
+There are two refs. Each value lives on one of them:
+
+| what changes                          | where it lives      | how to change it per frame               |
+| ------------------------------------- | ------------------- | ---------------------------------------- |
+| throttle                              | the nozzle          | `handle.throttle = …`                    |
+| where it sits, which way it points    | the nozzle          | `handle.set_offset`, `set_direction`     |
+| the engine (radius, Mach, soot…)      | the nozzle's params | `handle.update_params` (not every frame) |
+| altitude, airspeed, the day, exposure | the batch's profile | `batch.update_profile`                   |
+| step counts                           | the batch's quality | `batch.set_quality`                      |
+
+## The nozzle handle
+
+```tsx
+import { Afterburner, type AfterburnerHandle } from "r3f-afterburner";
+
+const engine = useRef<AfterburnerHandle>(null);
+
+<Afterburner ref={engine} preset="afterburner" />;
+```
+
+| member                   | what it does                                                    |
+| ------------------------ | --------------------------------------------------------------- |
+| `throttle`               | Read or write, 0 to 1. Cheap enough to write every frame.       |
+| `update_params(partial)` | Merges into the current params. Rewrites this one instance.     |
+| `set_params(params)`     | Replaces the params over the preset.                            |
+| `set_offset(offset)`     | Moves or turns the nozzle in the frame it sits in.              |
+| `set_direction([x,y,z])` | Points the exhaust.                                             |
+| `params`                 | The resolved params, or `null` before the nozzle is in a batch. |
+| `object`                 | The nozzle's `Group`.                                           |
+| `nozzle`                 | The core `AfterburnerNozzle`, for anything else.                |
+| `batch`                  | The `AfterburnerBatchCore` it draws with.                       |
+
+The handle is stable for the component's life. It's safe to use before the
+nozzle has joined a batch.
+
+<Example name="throttle-ref" />
+
+## The batch ref
+
+`<AfterburnerBatch ref>` is the `AfterburnerBatchCore` itself:
+
+```tsx
+import { AfterburnerBatch, type AfterburnerBatchCore } from "r3f-afterburner";
+
+const batch = useRef<AfterburnerBatchCore>(null);
+
+useFrame(() => {
+  batch.current?.update_profile({ altitude_m: aircraft.position.y });
+});
+
+<AfterburnerBatch ref={batch} preset="afterburner">
+  <Afterburner />
+  <Afterburner position={[0, 0, 1.2]} />
+</AfterburnerBatch>;
+```
+
+`update_profile` merges the fields you give and only writes uniforms. Calling
+it every frame is fine. `batch.stats()` returns
+`{ nozzles, near, mid, far, culled }`, handy for an overlay.
+
+Without an `<AfterburnerBatch>` you can still reach the shared batch through
+any nozzle's `handle.batch`. Inside one, `useAfterburnerBatch()` returns the
+nearest.
+
+## Props versus refs
+
+A prop is applied when it changes, and **wins** when it does. If something
+writes `update_params({ soot_per_m })` and the `params` prop later changes,
+the prop's value replaces it. The same goes for `profile` and
+`update_profile`. Let one owner set each field: props for settings, refs for
+what a simulation drives.

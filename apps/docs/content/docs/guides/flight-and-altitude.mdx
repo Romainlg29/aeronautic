@@ -1,0 +1,125 @@
+---
+title: Flight and altitude
+description: "What altitude, airspeed and the day do to a plume, and how to fly one."
+---
+
+The **profile** puts the engines in the air. Three of its fields describe
+flight:
+
+| field                  | default | what it is                                        |
+| ---------------------- | ------- | ------------------------------------------------- |
+| `altitude_m`           | `0`     | Metres above sea level.                           |
+| `airspeed_m_s`         | `0`     | How fast the engines move through the air.        |
+| `temperature_offset_k` | `0`     | How much warmer the day is than the standard day. |
+
+From these, the International Standard Atmosphere gives the air's pressure,
+temperature and density, to 86 km. `atmosphere(profile)` returns them on the
+main thread if you want them yourself.
+
+<Example name="altitude-sweep" />
+
+## Why a reheat flame turns blue up high
+
+The yellow-orange of an afterburner at the runway is nearly all **soot**,
+glowing at the flame's temperature. Its violet-blue is the gas's own **band
+emission** (CH and C₂ radicals), and that doesn't depend on the soot.
+
+A hydrocarbon flame makes soot roughly as the pressure it burns at, to a power
+between one and two. An afterburner burns at about the ambient pressure times
+its inlet's ram. So for an air-breathing engine, the library scales
+`soot_per_m` by `(pressure × ram)^1.5`, capped at three times the sea-level
+value:
+
+| condition           | soot made, against sea level |
+| ------------------- | ---------------------------- |
+| sea level, standing | 1 (the preset's look)        |
+| 9 km, standing      | about ⅙                      |
+| 9 km at 250 m/s     | about ¼                      |
+
+With less soot glowing, the band emission shows through: the flame turns
+violet-blue, and the diamonds stay. At sea level, standing, the factor is
+exactly one, so every preset looks there as it was tuned.
+
+A **rocket** doesn't breathe air. Its chamber sets its own pressure, so its
+soot doesn't change with altitude. Something else does: its exit pressure is
+fixed, so as the air thins the pressure ratio climbs and the plume balloons
+wide and thin. The fuel left in its exhaust also stops burning once there is
+too little oxygen, so a kerosene rocket's bright sheath fades as it climbs.
+
+Whether an engine "breathes" comes out of its own params. An engine whose
+`dry_temperature_k` is well below its `exit_temperature_k` has a burner, so it
+is treated as a jet. Equal temperatures mean a rocket.
+
+## Airspeed
+
+Air already moving with the jet shears it less. The mixing layer grows more
+slowly, so the potential core and the shock train last further: a jet in
+cruise draws a longer, tighter plume than the same engine on the stand.
+Airspeed also rams the inlet, which raises a jet's exit pressure and,
+through the formula above, its soot.
+
+## Flying it
+
+The profile belongs to the batch. Write it every frame through a batch ref:
+
+```tsx
+const batch = useRef<AfterburnerBatchCore>(null);
+
+useFrame(() => {
+  batch.current?.update_profile({
+    altitude_m: aircraft.position.y,
+    airspeed_m_s: aircraft.velocity.length(),
+  });
+});
+
+<AfterburnerBatch ref={batch} preset="afterburner">
+  <Afterburner target={left_engine} />
+  <Afterburner target={right_engine} />
+</AfterburnerBatch>;
+```
+
+`update_profile` only writes uniforms. Calling it every frame is cheap.
+
+For a fixed altitude, use the prop:
+
+```tsx
+<AfterburnerBatch preset="afterburner" profile={{ altitude_m: 9000, airspeed_m_s: 250 }}>
+```
+
+## Engines that go the other way
+
+The trend above is the general one, but engines differ. Some burners run
+cleaner at the ground and smokier up high: blue on the runway, orange at
+altitude. That depends on how the engine schedules its fuel, which the air
+alone can't tell.
+
+To draw one, schedule the engine's own soot with altitude. `update_params`
+rewrites one instance, so call it when the value has moved enough to matter,
+not every frame:
+
+```tsx
+const engine = useRef<AfterburnerHandle>(null);
+const last = useRef(-Infinity);
+
+useFrame(() => {
+  const altitude_m = aircraft.position.y;
+
+  if (Math.abs(altitude_m - last.current) < 200) return;
+  last.current = altitude_m;
+
+  // Clean at the ground, sootier with height. Counters the thinning air,
+  // which on its own takes soot away
+  const height = Math.min(altitude_m / 11000, 1);
+  engine.current?.update_params({ soot_per_m: 0.15 + 4 * height });
+});
+```
+
+`soot_per_m` is the soot at sea level, standing. The pressure scaling is
+applied on top of it, so this curve has to outrun it to turn the flame orange.
+Watch the result and tune the numbers by eye.
+
+## The day
+
+`temperature_offset_k` warms the air at the same pressure. A hot day is a
+thinner one, and that changes the expansion and the haze a little. It matters
+most for rockets standing on the pad.

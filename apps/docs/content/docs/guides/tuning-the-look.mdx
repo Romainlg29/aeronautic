@@ -1,0 +1,83 @@
+---
+title: Tuning the look
+description: "Which param to reach for, for each thing you want to change."
+---
+
+Every param is a physical quantity. That makes them a little indirect, but
+nothing about a plume's shape is an independent art dial. Change the engine
+and the plume follows. This page maps what you see to what to change. The
+[params reference](../../reference/params/) has every field and its default.
+
+## Size and shape
+
+| you want                    | change                                                                        |
+| --------------------------- | ----------------------------------------------------------------------------- |
+| a bigger or smaller plume   | `nozzle_radius_m`. Every length scales with it.                               |
+| an oval, flat or square jet | `nozzle_aspect`, `nozzle_squareness`: see [Shaped nozzles](../nozzle-shapes/) |
+| a longer, faster jet        | `exit_mach` up, or `molar_mass_g_mol` down (lighter gas is faster)            |
+| a jet that balloons         | `pressure_ratio` above 1 (underexpanded)                                      |
+| a jet that pinches          | `pressure_ratio` below 1 (overexpanded)                                       |
+| a longer core, longer train | profile `core_scale`, `shock_persistence`; or `airspeed_m_s`                  |
+| a wider spread              | profile `spread_scale`                                                        |
+| a hard length cap           | profile `max_length_d`, in exit diameters                                     |
+
+## Shock diamonds
+
+The **pressure ratio** decides how strong the diamonds are. At exactly 1 the
+jet leaves clean and they all but vanish. Above or below, a train of shocks
+forms.
+
+| you want                   | change                                               |
+| -------------------------- | ---------------------------------------------------- |
+| stronger diamonds          | `pressure_ratio` further from 1                      |
+| some diamonds even at 1    | profile `shock_floor`                                |
+| sharp disks with dark gaps | profile `shock_relaxation` up                        |
+| smeared, glowing cells     | profile `shock_relaxation` down                      |
+| brighter Mach disks        | `exit_temperature_k` up; profile `activation_k` down |
+
+Diamonds read best from the side. From behind they read as rings. See
+[shock diamonds](../../how-it-works/shock-diamonds/) for why.
+
+## Colour
+
+Colour comes from **temperature**, through Planck's law, plus one line
+spectrum you choose.
+
+| you want                         | change                                         |
+| -------------------------------- | ---------------------------------------------- |
+| hotter, whiter                   | `exit_temperature_k` up                        |
+| more yellow-orange, more opaque  | `soot_per_m` up                                |
+| a smoke trail                    | `soot_survival` up                             |
+| a blue / violet / cyan glow      | `band_color`, `band_strength`                  |
+| a bright sheath round the jet    | `afterburning_k` up                            |
+| white, scattering smoke          | `particles_per_m` up, `particle_albedo` near 1 |
+| brighter or dimmer overall       | profile `exposure`                             |
+| a dry engine that glows a little | `dry_temperature_k` up                         |
+
+Altitude changes colour too: see
+[Flight and altitude](../flight-and-altitude/).
+
+## Motion
+
+| you want            | change                                                |
+| ------------------- | ----------------------------------------------------- |
+| a laminar jet       | `turbulence` 0                                        |
+| a churning one      | `turbulence` 1 or more                                |
+| a tail that wanders | `meander`; profile `meander_scale`                    |
+| longer streaks      | profile `shutter_s` (the motion blur), `eddy_stretch` |
+| slow motion         | batch `time_scale`                                    |
+
+## Heat haze
+
+`refraction_m` is how far the hot exhaust bends what is behind it, in metres.
+`0.05` is subtle. Zero on every nozzle compiles the haze out entirely, and so
+does `haze={false}` on the batch.
+
+## Colours in params
+
+`band_color` takes any three.js `ColorRepresentation`: a hex string, a number,
+or a `Color`.
+
+```tsx
+<Afterburner params={{ band_color: "#4dd8ff", band_strength: 0.4 }} />
+```

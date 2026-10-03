@@ -1,0 +1,17 @@
+---
+title: Basic jet
+description: "One engine with a throttle slider: the smallest complete scene."
+---
+
+<Example name="basic-jet" />
+
+One nozzle, the `afterburner` preset, and a throttle in React state. Drag the throttle below 0.55 and the burner goes out.
+
+## The stage
+
+Every example on these pages shares this canvas: a `WebGPURenderer`, bloom,
+AgX tone mapping, an orbit camera, and a frame loop that only runs while the
+example is on screen. `Nozzle` is a bare engine can with its exit at the
+origin.
+
+<Source file="stage.tsx" />

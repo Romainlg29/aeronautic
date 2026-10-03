@@ -1,0 +1,22 @@
+packages:
+  - packages/*
+  - apps/*
+
+# Supply-chain hardening
+# https://pnpm.io/settings
+
+# Only resolve versions published at least 3 days ago (in minutes)
+minimumReleaseAge: 4320
+
+# Refuse a version whose trust evidence (trusted publisher / provenance) is weaker than an earlier release
+trustPolicy: no-downgrade
+
+# Transitive dependencies must come from the registry (no git / tarball URLs)
+blockExoticSubdeps: true
+
+# Fail the install when a dependency wants to run build scripts that are not explicitly allowed
+strictDepBuilds: true
+
+# Dependencies allowed to run their install scripts
+allowBuilds:
+  esbuild: true

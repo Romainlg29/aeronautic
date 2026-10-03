@@ -1,0 +1,10 @@
+---
+title: On a moving model
+description: "Two plumes on nodes of a model, placed from outside with `target`."
+---
+
+<Example name="on-a-model" />
+
+The model is a glTF with an empty node on each nozzle exit. Each plume is told to sit on one with `target`, and follows it as the model banks and yaws. The gear retracts with the model's own clip, through drei's `useAnimations`. The nozzles are ovals, and `nozzle_aspect: 1.4` gives the plumes their shape: see [Shaped nozzles](../../guides/nozzle-shapes/). See [Placing plumes](../../guides/placement/).
+
+`Stage` is the [shared stage](../basic-jet/#the-stage); `reflections` gives it an environment map, without which a metal skin looks flat.
