@@ -84,6 +84,19 @@ const MULTIPLE_SCATTERING = 4;
 // smears the droplets' forward peak
 const ISOTROPIC_SHARE = 0.5;
 
+// Where the sunlight's path through the vapour is sampled, metres towards
+// the sun, and how much of the path each stands for: close, where the
+// shading varies fastest, and out to a thick cloud's depth
+const SHADOW_SAMPLES: [number, number][] = [
+  [0.4, 0.8],
+  [1.4, 1.6],
+  [4, 4],
+];
+
+// How much less the multiply scattered light is dimmed than the direct beam
+// by the same cloud: it goes round as much as through
+const MULTIPLE_SHADE = 0.25;
+
 // The least step, in metres per metre of distance from the camera: a pixel
 const PIXEL_STEP = 0.0015;
 
@@ -510,15 +523,17 @@ export const create_vapor_material = (
 
     // The light, the same for every sample: sun and sky, per unit of scattering
     const cosine = dot(direction, u.sun_direction as unknown as V3);
-    const phase = mix(
-      henyey_greenstein(cosine, u.anisotropy as unknown as F),
-      float(1 / (4 * Math.PI)),
-      ISOTROPIC_SHARE,
-    );
-    const source = (u.sun as unknown as V3)
-      .mul(phase.mul(MULTIPLE_SCATTERING))
-      .add(u.sky as unknown as V3)
+    // The sun's light, split as clouds' is: the droplets' forward peak, which
+    // a cloud in the way blocks, and what has scattered many times, which
+    // diffuses round it and is dimmed far less
+    const sun = (u.sun as unknown as V3).mul(MULTIPLE_SCATTERING);
+    const sun_single = sun
+      .mul(henyey_greenstein(cosine, u.anisotropy as unknown as F))
+      .mul(1 - ISOTROPIC_SHARE)
       .toVar();
+    const sun_multiple = sun.mul(ISOTROPIC_SHARE / (4 * Math.PI)).toVar();
+    const sky = (u.sky as unknown as V3).toVar();
+    const sun_ray = (u.sun_direction as unknown as V3).toVar();
 
     // The air moves aft past the aircraft at the airspeed, along the free
     // stream, and the patches move with it. The shutter streaks them
@@ -527,6 +542,23 @@ export const create_vapor_material = (
     const streak = (u.eddy_m as unknown as F).add(
       f.speed_m_s.mul(u.shutter_s as unknown as F),
     );
+
+    // The condensation table at one deficit: grams per cubic metre in the
+    // drier, the day's and the moister parcel
+    const water_at = (deficit: F) => {
+      const ratio = float(1).sub(clamp(deficit, 0, 1 - CONDENSATION_MIN_RATIO));
+
+      const u_table = clamp(
+        ratio.sub(CONDENSATION_MIN_RATIO).div(1 - CONDENSATION_MIN_RATIO),
+        0,
+        1,
+      )
+        .mul(CONDENSATION_TEXELS - 1)
+        .add(0.5)
+        .div(CONDENSATION_TEXELS);
+
+      return texture(table, vec2(u_table, 0.5)).level(float(0));
+    };
 
     const light = vec3(0).toVar();
     const transmittance = float(1).toVar();
@@ -572,18 +604,7 @@ export const create_vapor_material = (
 
         // Only below the dew point's deficit is there anything to look up
         If(sample.x.greaterThan(f.saturation_deficit), () => {
-          const ratio = float(1).sub(min(sample.x, 1 - CONDENSATION_MIN_RATIO));
-
-          const u_table = clamp(
-            ratio.sub(CONDENSATION_MIN_RATIO).div(1 - CONDENSATION_MIN_RATIO),
-            0,
-            1,
-          )
-            .mul(CONDENSATION_TEXELS - 1)
-            .add(0.5)
-            .div(CONDENSATION_TEXELS);
-
-          const water = texture(table, vec2(u_table, 0.5)).level(float(0));
+          const water = water_at(sample.x);
 
           // The moisture's patches, in the air's own frame
           const air = point
@@ -616,6 +637,34 @@ export const create_vapor_material = (
 
           const extinction = max(grams, 0).mul(u.extinction as unknown as F);
           const through = exp(extinction.mul(here).negate());
+
+          // How much cloud the sunlight crossed to get here
+          const shade = float(0).toVar();
+
+          if (effects.self_shadow) {
+            If((u.detail as unknown as F).greaterThan(0.5), () => {
+              for (const [distance, length] of SHADOW_SAMPLES) {
+                const toward = vapor_field(
+                  f,
+                  shape,
+                  trails,
+                  point.add(sun_ray.mul(distance)),
+                  effects,
+                ).x;
+
+                shade.addAssign(
+                  water_at(toward)
+                    .y.mul(u.extinction as unknown as F)
+                    .mul(length),
+                );
+              }
+            });
+          }
+
+          const source = sun_single
+            .mul(exp(shade.negate()))
+            .add(sun_multiple.mul(exp(shade.mul(-MULTIPLE_SHADE))))
+            .add(sky);
 
           // Every droplet scatters what it stops: an albedo of one
           light.addAssign(source.mul(transmittance.mul(through.oneMinus())));

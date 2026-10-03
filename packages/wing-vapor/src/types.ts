@@ -184,6 +184,10 @@ export type VaporEffects = {
 
   // The bell round the whole aircraft near the speed of sound
   cone: boolean;
+
+  // Whether the vapour shades itself from the sun: what gives a thick cone
+  // its volume. Three more looks at the field for every sample that fogs
+  self_shadow: boolean;
 };
 
 /**
@@ -264,4 +268,5 @@ export const default_vapor_effects = (): VaporEffects => ({
   leading_edge_vortices: true,
   wing: true,
   cone: true,
+  self_shadow: true,
 });
