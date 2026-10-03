@@ -7,7 +7,7 @@ import { Nozzle, Stage } from "./stage";
  * @returns The example
  */
 export const BasicJet: FC = () => {
-  const [throttle, set_throttle] = useState(1);
+  const [throttle, set_throttle] = useState(1.1);
 
   return (
     <Stage
@@ -18,7 +18,7 @@ export const BasicJet: FC = () => {
             <input
               type="range"
               min={0}
-              max={1}
+              max={1.1}
               step={0.01}
               value={throttle}
               onChange={(event) => set_throttle(Number(event.target.value))}

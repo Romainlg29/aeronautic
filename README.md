@@ -118,7 +118,7 @@ const engine = useRef<AfterburnerHandle>(null);
 
 useFrame(({ clock }) => {
   if (engine.current)
-    engine.current.throttle = 0.8 + 0.2 * Math.sin(clock.elapsedTime);
+    engine.current.throttle = 0.95 + 0.15 * Math.sin(clock.elapsedTime);
 });
 
 <Afterburner ref={engine} preset="afterburner" />;

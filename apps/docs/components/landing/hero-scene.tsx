@@ -1,16 +1,17 @@
 "use client";
 
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
+import { OrbitControls } from "@react-three/drei";
 import {
   Afterburner,
   AFTERBURNER_PRESETS,
   type AfterburnerParamsInput,
   type AfterburnerPresetName,
 } from "r3f-afterburner";
-import { type FC, useState } from "react";
+import { type FC, useEffect, useState } from "react";
 import { WebGPURenderer } from "three/webgpu";
 import { cn } from "@/lib/cn";
-import { Grade, Nozzle } from "@/examples/stage";
+import { Aim, Grade, Nozzle } from "@/examples/stage";
 
 const PRESETS: { name: AfterburnerPresetName; label: string }[] = [
   { name: "afterburner", label: "Afterburner" },
@@ -22,34 +23,33 @@ const PRESETS: { name: AfterburnerPresetName; label: string }[] = [
 ];
 
 /**
- * A camera that drifts slowly round the plume, framed for its size.
- * @param props How far back the plume needs the camera
+ * Let a vertical swipe over the scene scroll the page, as the orbit controls
+ * would otherwise take every touch. A sideways drag still orbits.
  * @returns Nothing
  */
-const Drift: FC<{ reach: number }> = ({ reach }) => {
-  useFrame(({ camera, clock }) => {
-    const t = clock.elapsedTime * 0.12;
+const TouchScroll: FC = () => {
+  const { gl, controls } = useThree();
 
-    camera.position.set(
-      reach * (0.42 + Math.sin(t) * 0.12),
-      reach * (0.14 + Math.sin(t * 0.7) * 0.05),
-      reach * (0.78 + Math.cos(t) * 0.08),
-    );
-    camera.lookAt(reach * 0.38, 0, 0);
-  });
+  useEffect(() => {
+    // Set after the controls connect, which turn touch scrolling off
+    if (controls) {
+      gl.domElement.style.touchAction = "pan-y";
+    }
+  }, [gl, controls]);
 
   return null;
 };
 
 /**
- * The landing page's plume: pick a preset, drag the throttle.
+ * The landing page's plume: pick a preset, drag the throttle, orbit it.
  * @returns The scene and its controls
  */
 export const HeroScene: FC = () => {
   const [name, set_name] = useState<AfterburnerPresetName>("afterburner");
-  const [throttle, set_throttle] = useState(1);
+  const [throttle, set_throttle] = useState(1.1);
   const params: AfterburnerParamsInput = AFTERBURNER_PRESETS[name].params;
   const radius = params.nozzle_radius_m ?? 0.5;
+  const reach = radius * 40;
 
   return (
     <div className="relative h-full w-full">
@@ -70,7 +70,17 @@ export const HeroScene: FC = () => {
         <color attach="background" args={["#05070b"]} />
         <hemisphereLight args={["#8090b0", "#101010", 0.6]} />
         <directionalLight position={[5, 10, 5]} intensity={1.2} />
-        <Drift reach={radius * 40} />
+        <OrbitControls
+          makeDefault
+          enablePan={false}
+          minDistance={radius * 4}
+          maxDistance={reach * 2}
+        />
+        <TouchScroll />
+        <Aim
+          camera={[reach * 0.42, reach * 0.14, reach * 0.86]}
+          target={[reach * 0.38, 0, 0]}
+        />
         <Nozzle radius_m={radius} />
         <Afterburner preset={name} throttle={throttle} />
         <Grade />
@@ -99,7 +109,7 @@ export const HeroScene: FC = () => {
           <input
             type="range"
             min={0}
-            max={1}
+            max={1.1}
             step={0.01}
             value={throttle}
             onChange={(event) => set_throttle(Number(event.target.value))}

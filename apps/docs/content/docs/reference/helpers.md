@@ -52,7 +52,12 @@ The same physics the shader runs, for gameplay and UI:
 | export                                                     | what it is                                                                             |
 | ---------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | `jet_state(params, throttle, profile, scale?)`             | `JetState`: the expanded jet, core length, spreads, shock spacing, reach, soot formed… |
-| `burner_lit(throttle, profile)`                            | How much reheat is lit, 0 to 1.                                                        |
+| `burner_lit(throttle, profile)`                            | How much reheat is lit, 0 to 1: none up to the threshold, then `PLUME_MIN_REHEAT` on.  |
+| `PLUME_LIGHT_OFF`, `PLUME_MIN_REHEAT`                      | The first zone fades in over 0.03 of throttle, to 0.35 of full reheat.                 |
+| `PLUME_IDLE_GLOW`                                          | How much of the dry turbine glow is left at idle, against military power: 0.3.         |
+| `clamp_throttle(throttle)`, `AFTERBURNER_MAX_THROTTLE`     | Holds a throttle inside its travel, 0 to 1.1. Anything not a number reads as idle.     |
+| `dry_temperature(params, setting, profile, ambient_k)`     | The exit temperature on dry thrust, idle to military power, in kelvin.                 |
+| `plume_adaptation(metered_k, full_k, adaptation)`          | The gain the camera opens up by for a plume dimmer than at full power.                 |
 | `jet_half_width(x_m, state)`, `jet_centreline(x_m, state)` | The width and centreline excess at a station.                                          |
 | `plume_extent(params)`                                     | How far out the field reaches, in half-widths.                                         |
 | `nozzle_outline_fit(aspect, squareness)`                   | `{ area_scale, reach }`: a shaped exit against the round one of its area.              |

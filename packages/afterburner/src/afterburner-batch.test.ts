@@ -1,5 +1,5 @@
 import { Matrix4, Object3D, Vector3 } from "three";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { AFTERBURNER_ATTRIBUTES } from "./afterburner-material";
 import { AfterburnerBatch } from "./afterburner-batch";
 
@@ -42,12 +42,46 @@ describe("AfterburnerBatch", () => {
   });
 
   it("writes the throttle into the instance", () => {
-    const batch = new AfterburnerBatch();
+    const batch = new AfterburnerBatch({ response_s: 0 });
     const nozzle = batch.add({ throttle: 0.4 });
 
     nozzle.throttle = 0.7;
 
     expect(slot_of(batch, AFTERBURNER_ATTRIBUTES.place, 0)[3]).toBeCloseTo(0.7);
+  });
+
+  it("eases the drawn throttle toward the one asked for", () => {
+    const now = vi.spyOn(performance, "now");
+
+    try {
+      const batch = new AfterburnerBatch({ response_s: 0.25 });
+      const nozzle = batch.add({ throttle: 1 });
+      const drawn = () => slot_of(batch, AFTERBURNER_ATTRIBUTES.place, 0)[3];
+
+      now.mockReturnValue(0);
+      render(batch, 1);
+
+      nozzle.throttle = 1.1;
+
+      expect(nozzle.throttle).toBeCloseTo(1.1);
+      expect(drawn()).toBeCloseTo(1);
+
+      now.mockReturnValue(50);
+      render(batch, 2);
+
+      expect(drawn()).toBeGreaterThan(1);
+      expect(drawn()).toBeLessThan(1.05);
+      expect(nozzle.drawn_throttle).toBeCloseTo(drawn());
+
+      for (let frame = 3; frame < 60; frame++) {
+        now.mockReturnValue(frame * 50);
+        render(batch, frame);
+      }
+
+      expect(drawn()).toBeCloseTo(1.1);
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it("moves the last nozzle into a removed one's slot", () => {

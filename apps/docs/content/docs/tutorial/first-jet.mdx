@@ -28,7 +28,7 @@ export const App = () => (
       return renderer;
     }}
   >
-    <Scene throttle={1} />
+    <Scene throttle={1.1} />
   </Canvas>
 );
 ```
@@ -112,17 +112,20 @@ the right size.
 
 ## The throttle
 
-`throttle` runs from 0 to 1. A jet's burner lights past the profile's
-`burner_threshold`, 0.55 by default. Below that the engine is on dry thrust and
-barely glows. Keep it in state and pass it down:
+`throttle` runs from 0 to 1.1. Up to 1 the engine is on dry thrust, from idle to
+military power. Its exhaust is too cool to see, as a real one is: only the
+turbine glows a dull red up the nozzle, seen from behind. Past the profile's
+`burner_threshold`, 1 by default, the burner lights, and it is in fully at 1.1.
+The plume eases toward a new throttle over a quarter of a second, the batch's
+`response_s`, so the light-off is a moment rather than a frame. Keep it in state and pass it down:
 
 ```tsx
-const [throttle, set_throttle] = useState(1);
+const [throttle, set_throttle] = useState(1.1);
 
 <input
   type="range"
   min={0}
-  max={1}
+  max={1.1}
   step={0.01}
   value={throttle}
   onChange={(event) => set_throttle(Number(event.target.value))}

@@ -43,16 +43,16 @@ Diamonds read best from the side. From behind they read as rings. See
 Colour comes from **temperature**, through Planck's law, plus one line
 spectrum you choose.
 
-| you want                         | change                                         |
-| -------------------------------- | ---------------------------------------------- |
-| hotter, whiter                   | `exit_temperature_k` up                        |
-| more yellow-orange, more opaque  | `soot_per_m` up                                |
-| a smoke trail                    | `soot_survival` up                             |
-| a blue / violet / cyan glow      | `band_color`, `band_strength`                  |
-| a bright sheath round the jet    | `afterburning_k` up                            |
-| white, scattering smoke          | `particles_per_m` up, `particle_albedo` near 1 |
-| brighter or dimmer overall       | profile `exposure`                             |
-| a dry engine that glows a little | `dry_temperature_k` up                         |
+| you want                        | change                                         |
+| ------------------------------- | ---------------------------------------------- |
+| hotter, whiter                  | `exit_temperature_k` up                        |
+| more yellow-orange, more opaque | `soot_per_m` up                                |
+| a smoke trail                   | `soot_survival` up                             |
+| a blue / violet / cyan glow     | `band_color`, `band_strength`                  |
+| a bright sheath round the jet   | `afterburning_k` up                            |
+| white, scattering smoke         | `particles_per_m` up, `particle_albedo` near 1 |
+| brighter or dimmer overall      | profile `exposure`                             |
+| a dry engine that glows more    | profile `dry_glow` up                          |
 
 Altitude changes colour too: see
 [Flight and altitude](../flight-and-altitude/).
@@ -66,6 +66,7 @@ Altitude changes colour too: see
 | a tail that wanders | `meander`; profile `meander_scale`                    |
 | longer streaks      | profile `shutter_s` (the motion blur), `eddy_stretch` |
 | slow motion         | batch `time_scale`                                    |
+| a snappier throttle | batch `response_s` down, 0 to follow at once          |
 
 ## Heat haze
 

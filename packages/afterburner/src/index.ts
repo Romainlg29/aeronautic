@@ -53,18 +53,25 @@ export {
   type Propellant,
 } from "./propellant";
 export {
+  AFTERBURNER_MAX_THROTTLE,
   burner_lit,
+  clamp_throttle,
+  dry_temperature,
   jet_centreline,
   jet_half_width,
   jet_state,
+  plume_adaptation,
   plume_extent,
   plume_lod,
   plume_screen_span,
   type JetState,
+  PLUME_IDLE_GLOW,
+  PLUME_LIGHT_OFF,
   PLUME_LOD_CULLED,
   PLUME_LOD_FAR,
   PLUME_LOD_MID,
   PLUME_LOD_NEAR,
+  PLUME_MIN_REHEAT,
 } from "./plume-profile";
 export {
   AFTERBURNER_PRESETS,

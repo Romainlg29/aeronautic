@@ -13,7 +13,7 @@ A group with a nozzle at its origin. The plume streams along the group's local
 | ----------- | -------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------- |
 | `preset`    | `AfterburnerPresetName \| AfterburnerPreset` | the defaults | Which look to start from. Outside an `<AfterburnerBatch>` it also picks the batch, and so the profile.   |
 | `params`    | `AfterburnerParamsInput`                     | —            | How this plume looks, over the preset. See [Params](../params/).                                         |
-| `throttle`  | `number`                                     | `1`          | 0 to 1. A jet's burner lights past about 0.55; a rocket's is always lit.                                 |
+| `throttle`  | `number`                                     | `1.1`        | 0 to 1 is dry thrust, idle to military power; 1 to 1.1 is reheat. A rocket's burner is always lit.       |
 | `batch`     | `AfterburnerBatchCore`                       | nearest      | Draw with this batch rather than the nearest one.                                                        |
 | `target`    | `Object3D \| null`                           | —            | Sit on this mesh, group or bone from anywhere in the scene. `position`/`rotation` are then in its frame. |
 | `direction` | `[x, y, z]`                                  | —            | Which way the exhaust streams, in the frame it sits in. Wins over `rotation`.                            |
@@ -68,6 +68,7 @@ and preset.
 | `haze`                | `boolean`                                                               | `true`   | Heat haze. Compiled in only when some nozzle has `refraction_m > 0`.                                        |
 | `hooks`               | `AfterburnerHooks`                                                      | —        | TSL to change the field or the pixel. A change recompiles. See [Shader hooks](../../guides/shader-hooks/).  |
 | `time_scale`          | `number`                                                                | `1`      | Seconds of flame per second.                                                                                |
+| `response_s`          | `number`                                                                | `0.25`   | Seconds a plume takes to follow its throttle, so a burner lights over a moment. `0` follows at once.        |
 | `detail_distance_m`   | `number`                                                                | `900`    | Past this, eddies are dropped.                                                                              |
 | `cheap_distance_m`    | `number`                                                                | `3000`   | Past this, a plume is a single sample.                                                                      |
 | `min_screen_fraction` | `number`                                                                | `0.001`  | Plumes smaller than this share of the screen height are not drawn.                                          |

@@ -170,6 +170,23 @@ export type AfterburnerProfile = {
   // tone curve sees
   exposure: number;
 
+  // How far the camera opens up for a burner dimmer than at full power, 0 to 1
+  //
+  // A burner just lit is far dimmer than one at the stop, its gas a few
+  // hundred kelvin cooler. A camera filming meters it and opens up, so the
+  // light-off shows. Zero holds the exposure where it is, one draws every
+  // stage as bright as full power, the colour still the gas's own
+  adaptation: number;
+
+  // How bright the dry engine's glow is, as it reaches the screen
+  //
+  // On dry thrust the exhaust is a thousand kelvin or less, too cool to see
+  // but as a shimmer. What shows is the hardware: the last turbine stage and
+  // the jet pipe glowing a dull red, only up the nozzle from nearly astern.
+  // Brighter the harder the engine runs, gone once the burner lights. Zero
+  // leaves a dry engine dark
+  dry_glow: number;
+
   // How much sky light the particles scatter, in the same units
   // The reason a solid motor's smoke is white in daylight and black at night
   sky_light: number;
@@ -183,12 +200,23 @@ export type AfterburnerProfile = {
   max_length_d: number;
 
   // Below this throttle the engine is on dry thrust; a rocket's is zero
+  //
+  // The throttle runs from 0 at idle to 1 at military power, the most the dry
+  // engine makes, and on to 1.1 at full reheat. The burner lights past here,
+  // its first zone fading in over `PLUME_LIGHT_OFF` and the rest staging in up
+  // to the stop
   burner_threshold: number;
 
   // What is left of the exit pressure at zero throttle, as a share of full
   // A rocket throttled down is a lower chamber pressure, and so a more
   // overexpanded nozzle with a shorter, tighter shock train
   idle_pressure: number;
+
+  // What is left of the dry exhaust's heat over the air at zero throttle, as
+  // a share of what it is at military power. An idling turbine is barely warm;
+  // pushed to the detent it leaves at `dry_temperature_k`, still too cool for
+  // the gas to show beside the turbine's glow (`dry_glow`)
+  idle_temperature: number;
 
   // A multiplier on the potential core length the correlation gives
   core_scale: number;
@@ -274,10 +302,11 @@ export const default_afterburner_params = (): AfterburnerParams => ({
   pressure_ratio: 1.35,
 
   // A full burner's stagnation temperature is about 2250 K, so after the nozzle
-  // has expanded it to Mach 1.45 the gas leaves at about 1700. A dry turbofan's
-  // mixed exhaust is about 750 K, which glows not at all
+  // has expanded it to Mach 1.45 the gas leaves at about 1700. An unmixed
+  // turbojet at military power leaves at about 1000 K, which a camera exposed
+  // for a burner does not see at all: see `dry_glow` for what does show
   exit_temperature_k: 1700,
-  dry_temperature_k: 750,
+  dry_temperature_k: 1000,
 
   gamma: 1.3,
   molar_mass_g_mol: 28.8,
@@ -321,13 +350,16 @@ export const default_afterburner_profile = (): AfterburnerProfile => ({
   // A camera exposed for a night sky with a jet in it, wide open enough that
   // the core and the disks clip to yellow-white, as they do in footage
   exposure: 120,
+  adaptation: 0.6,
+  dry_glow: 0.35,
   sky_light: 0.0005,
 
   visible_temperature_k: 850,
   max_length_d: 40,
 
-  burner_threshold: 0.55,
+  burner_threshold: 1,
   idle_pressure: 0.65,
+  idle_temperature: 0.4,
 
   core_scale: 1,
   spread_scale: 1,

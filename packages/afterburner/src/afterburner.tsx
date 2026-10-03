@@ -26,6 +26,7 @@ import type {
 } from "./presets";
 import type { AfterburnerParams } from "./types";
 import type { AfterburnerPass } from "./afterburner-pass";
+import { AFTERBURNER_MAX_THROTTLE } from "./plume-profile";
 
 // The friendly API
 //
@@ -115,6 +116,9 @@ export type AfterburnerBatchProps = Omit<
   /** Seconds of flame per second, one being real time */
   time_scale?: number;
 
+  /** How long, in seconds, a plume takes to follow its throttle. Zero is at once */
+  response_s?: number;
+
   /** Plumes smaller than this share of the screen height are not drawn */
   min_screen_fraction?: number;
 
@@ -142,6 +146,7 @@ export const AfterburnerBatch: FC<AfterburnerBatchProps> = ({
   haze = true,
   hooks,
   time_scale = 1,
+  response_s = 0.25,
   min_screen_fraction = 0.001,
   detail_distance_m = 900,
   cheap_distance_m = 3000,
@@ -195,6 +200,7 @@ export const AfterburnerBatch: FC<AfterburnerBatchProps> = ({
 
   if (batch !== null) {
     batch.time_scale = time_scale;
+    batch.response_s = response_s;
     batch.min_screen_fraction = min_screen_fraction;
     batch.detail_distance_m = detail_distance_m;
     batch.cheap_distance_m = cheap_distance_m;
@@ -263,7 +269,10 @@ const acquire_shared = (
  * its batch: whatever was written is applied when it gets there.
  */
 export type AfterburnerHandle = {
-  /** How hard the engine is running, 0 to 1. Cheap to write every frame */
+  /**
+   * How hard the engine is running: 0 to 1 dry, on to 1.1 at full reheat.
+   * Cheap to write every frame
+   */
   throttle: number;
 
   /** Retune the nozzle, over its preset and the defaults: replaces them all */
@@ -311,7 +320,7 @@ export type AfterburnerProps = Omit<ThreeElements["group"], "ref"> & {
   /** How this plume looks, over the preset. Compared field by field */
   params?: AfterburnerParamsInput;
 
-  /** How hard the engine is running, 0 to 1 */
+  /** How hard the engine is running: 0 to 1 dry, on to 1.1 at full reheat */
   throttle?: number;
 
   /** Draw it with this batch rather than the nearest one */
@@ -343,7 +352,7 @@ export type AfterburnerProps = Omit<ThreeElements["group"], "ref"> & {
 export const Afterburner: FC<AfterburnerProps> = ({
   preset,
   params,
-  throttle = 1,
+  throttle = AFTERBURNER_MAX_THROTTLE,
   batch: explicit_batch,
   target,
   direction,

@@ -9,28 +9,31 @@ The profile is **the world the engines run in and the camera seeing them**. It r
 
 Pass any subset as the batch's `profile`. The rest come from the batch's preset, then from these defaults (`default_afterburner_profile()`).
 
-| field                                             | default  | in short                                                                    |
-| ------------------------------------------------- | -------- | --------------------------------------------------------------------------- |
-| [`altitude_m`](#altitude_m)                       | `0`      | How high the engines are, in metres above sea level.                        |
-| [`temperature_offset_k`](#temperature_offset_k)   | `0`      | How much warmer the day is than the standard one, in kelvin.                |
-| [`airspeed_m_s`](#airspeed_m_s)                   | `0`      | How fast the engines move through the air, in metres per second.            |
-| [`exposure`](#exposure)                           | `120`    | How bright the plume is drawn, as a multiplier on its radiance.             |
-| [`sky_light`](#sky_light)                         | `0.0005` | How much sky light the particles scatter, in the same units.                |
-| [`visible_temperature_k`](#visible_temperature_k) | `850`    | Below this the gas no longer glows enough to see, in kelvin.                |
-| [`max_length_d`](#max_length_d)                   | `40`     | The longest any plume is drawn, in exit diameters.                          |
-| [`burner_threshold`](#burner_threshold)           | `0.55`   | Below this throttle the engine is on dry thrust; a rocket's is zero.        |
-| [`idle_pressure`](#idle_pressure)                 | `0.65`   | What is left of the exit pressure at zero throttle, as a share of full.     |
-| [`core_scale`](#core_scale)                       | `1`      | A multiplier on the potential core length the correlation gives.            |
-| [`spread_scale`](#spread_scale)                   | `1`      | A multiplier on how fast the mixing layer spreads.                          |
-| [`shock_floor`](#shock_floor)                     | `0.1`    | How strong the shock train of a perfectly expanded nozzle still is, 0 to 1. |
-| [`shock_persistence`](#shock_persistence)         | `2`      | A multiplier on how far down the plume the shock train lasts.               |
-| [`shock_relaxation`](#shock_relaxation)           | `4.5`    | How quickly the gas behind a shock cools as it expands again, per cell.     |
-| [`activation_k`](#activation_k)                   | `18000`  | The activation temperature of the band emission, in kelvin.                 |
-| [`eddy_stretch`](#eddy_stretch)                   | `2.5`    | How much longer an eddy is than it is wide, before the shutter.             |
-| [`shutter_s`](#shutter_s)                         | `1 / 60` | How long the shutter is open for, in seconds.                               |
-| [`meander_scale`](#meander_scale)                 | `5`      | How long a meander is, in local plume widths.                               |
-| [`step_safety`](#step_safety)                     | `0.8`    | How far a sphere trace trusts its own distance estimate, 0 to 1.            |
-| [`dither_scale`](#dither_scale)                   | `37`     | How finely the march's dither is decorrelated, in inverse metres.           |
+| field                                             | default  | in short                                                                                                          |
+| ------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------- |
+| [`altitude_m`](#altitude_m)                       | `0`      | How high the engines are, in metres above sea level.                                                              |
+| [`temperature_offset_k`](#temperature_offset_k)   | `0`      | How much warmer the day is than the standard one, in kelvin.                                                      |
+| [`airspeed_m_s`](#airspeed_m_s)                   | `0`      | How fast the engines move through the air, in metres per second.                                                  |
+| [`exposure`](#exposure)                           | `120`    | How bright the plume is drawn, as a multiplier on its radiance.                                                   |
+| [`adaptation`](#adaptation)                       | `0.6`    | How far the camera opens up for a burner dimmer than at full power, 0 to 1.                                       |
+| [`dry_glow`](#dry_glow)                           | `0.35`   | How bright the dry engine's glow is, as it reaches the screen.                                                    |
+| [`sky_light`](#sky_light)                         | `0.0005` | How much sky light the particles scatter, in the same units.                                                      |
+| [`visible_temperature_k`](#visible_temperature_k) | `850`    | Below this the gas no longer glows enough to see, in kelvin.                                                      |
+| [`max_length_d`](#max_length_d)                   | `40`     | The longest any plume is drawn, in exit diameters.                                                                |
+| [`burner_threshold`](#burner_threshold)           | `1`      | Below this throttle the engine is on dry thrust; a rocket's is zero.                                              |
+| [`idle_pressure`](#idle_pressure)                 | `0.65`   | What is left of the exit pressure at zero throttle, as a share of full.                                           |
+| [`idle_temperature`](#idle_temperature)           | `0.4`    | What is left of the dry exhaust's heat over the air at zero throttle, as a share of what it is at military power. |
+| [`core_scale`](#core_scale)                       | `1`      | A multiplier on the potential core length the correlation gives.                                                  |
+| [`spread_scale`](#spread_scale)                   | `1`      | A multiplier on how fast the mixing layer spreads.                                                                |
+| [`shock_floor`](#shock_floor)                     | `0.1`    | How strong the shock train of a perfectly expanded nozzle still is, 0 to 1.                                       |
+| [`shock_persistence`](#shock_persistence)         | `2`      | A multiplier on how far down the plume the shock train lasts.                                                     |
+| [`shock_relaxation`](#shock_relaxation)           | `4.5`    | How quickly the gas behind a shock cools as it expands again, per cell.                                           |
+| [`activation_k`](#activation_k)                   | `18000`  | The activation temperature of the band emission, in kelvin.                                                       |
+| [`eddy_stretch`](#eddy_stretch)                   | `2.5`    | How much longer an eddy is than it is wide, before the shutter.                                                   |
+| [`shutter_s`](#shutter_s)                         | `1 / 60` | How long the shutter is open for, in seconds.                                                                     |
+| [`meander_scale`](#meander_scale)                 | `5`      | How long a meander is, in local plume widths.                                                                     |
+| [`step_safety`](#step_safety)                     | `0.8`    | How far a sphere trace trusts its own distance estimate, 0 to 1.                                                  |
+| [`dither_scale`](#dither_scale)                   | `37`     | How finely the march's dither is decorrelated, in inverse metres.                                                 |
 
 ## altitude_m
 
@@ -62,6 +65,22 @@ How bright the plume is drawn, as a multiplier on its radiance.
 
 A camera's exposure, in linear units: the radiance itself is physical, a blackbody at 2000 K having a luminance of one, and a real plume runs from a thousandth of that to a thousand times it. This picks which part of it the tone curve sees.
 
+## adaptation
+
+`number` · default `0.6`
+
+How far the camera opens up for a burner dimmer than at full power, 0 to 1.
+
+A burner just lit is far dimmer than one at the stop, its gas a few hundred kelvin cooler. A camera filming meters it and opens up, so the light-off shows. Zero holds the exposure where it is, one draws every stage as bright as full power, the colour still the gas's own.
+
+## dry_glow
+
+`number` · default `0.35`
+
+How bright the dry engine's glow is, as it reaches the screen.
+
+On dry thrust the exhaust is a thousand kelvin or less, too cool to see but as a shimmer. What shows is the hardware: the last turbine stage and the jet pipe glowing a dull red, only up the nozzle from nearly astern. Brighter the harder the engine runs, gone once the burner lights. Zero leaves a dry engine dark.
+
 ## sky_light
 
 `number` · default `0.0005`
@@ -82,15 +101,23 @@ The longest any plume is drawn, in exit diameters. A smoky plume never ends on i
 
 ## burner_threshold
 
-`number` · default `0.55`
+`number` · default `1`
 
 Below this throttle the engine is on dry thrust; a rocket's is zero.
+
+The throttle runs from 0 at idle to 1 at military power, the most the dry engine makes, and on to 1.1 at full reheat. The burner lights past here, its first zone fading in over `PLUME_LIGHT_OFF` and the rest staging in up to the stop.
 
 ## idle_pressure
 
 `number` · default `0.65`
 
 What is left of the exit pressure at zero throttle, as a share of full. A rocket throttled down is a lower chamber pressure, and so a more overexpanded nozzle with a shorter, tighter shock train.
+
+## idle_temperature
+
+`number` · default `0.4`
+
+What is left of the dry exhaust's heat over the air at zero throttle, as a share of what it is at military power. An idling turbine is barely warm; pushed to the detent it leaves at `dry_temperature_k`, still too cool for the gas to show beside the turbine's glow (`dry_glow`)
 
 ## core_scale
 

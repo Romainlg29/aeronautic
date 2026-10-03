@@ -19,7 +19,7 @@ Pass any subset as `params`. The rest come from the preset, then from the defaul
 | [`exit_mach`](#exit_mach)                         | `1.45`      | The Mach number the nozzle is built to, at its exit plane.                                                                            |
 | [`pressure_ratio`](#pressure_ratio)               | `1.35`      | Exit pressure over ambient, at full power, standing still at sea level.                                                               |
 | [`exit_temperature_k`](#exit_temperature_k)       | `1700`      | The gas's static temperature at the exit plane at full power, in kelvin.                                                              |
-| [`dry_temperature_k`](#dry_temperature_k)         | `750`       | And on dry thrust, with the burner out.                                                                                               |
+| [`dry_temperature_k`](#dry_temperature_k)         | `1000`      | And on dry thrust, with the burner out.                                                                                               |
 | [`gamma`](#gamma)                                 | `1.3`       | The exhaust's ratio of specific heats, about 1.3 for a jet and 1.2 for a rocket's hot, dissociated products.                          |
 | [`molar_mass_g_mol`](#molar_mass_g_mol)           | `28.8`      | The exhaust's mean molar mass, in grams per mole.                                                                                     |
 | [`soot_per_m`](#soot_per_m)                       | `0.5`       | Soot in the exhaust, as its absorption coefficient at 550 nm, per metre.                                                              |
@@ -95,7 +95,7 @@ Static, not stagnation: a nozzle trades heat for speed, so a rocket whose chambe
 
 ## dry_temperature_k
 
-`number` · default `750`
+`number` · default `1000`
 
 And on dry thrust, with the burner out. A rocket has no burner, so for a rocket this is the same as the above.
 

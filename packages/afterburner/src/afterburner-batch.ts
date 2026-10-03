@@ -26,6 +26,8 @@ import { clamp_nozzle_squareness, nozzle_outline_fit } from "./nozzle-outline";
 import { anchor_adrift } from "./plume-anchor";
 import { build_plume_hull } from "./plume-hull";
 import {
+  AFTERBURNER_MAX_THROTTLE,
+  clamp_throttle,
   jet_state,
   plume_lod,
   PLUME_LOD_FAR,
@@ -82,6 +84,13 @@ const DEFAULT_CAPACITY = 64;
 // background does not jump the plume a minute downstream
 const MAX_DELTA_S = 0.1;
 
+// How long a plume takes to follow its throttle, about as long as a burner
+// takes to light
+const DEFAULT_RESPONSE_S = 0.25;
+
+// Close enough to the throttle asked for to stop easing
+const RESPONSE_SETTLED = 1e-4;
+
 /**
  * Where a nozzle is: following an object, or held at a fixed matrix.
  */
@@ -122,7 +131,7 @@ export type AfterburnerNozzleOptions = {
   // Which look to start from, under `params`. Defaults to the batch's
   preset?: AfterburnerPresetName | AfterburnerPreset;
 
-  // How hard the engine runs, 0 to 1
+  // How hard the engine runs: 0 to 1 dry, on to 1.1 at full reheat
   throttle?: number;
 };
 
@@ -145,8 +154,11 @@ export class AfterburnerNozzle {
   /** @internal The preset that was resolved under it */
   _preset: AfterburnerPresetName | AfterburnerPreset | undefined;
 
-  /** @internal */
+  /** @internal What was asked for */
   _throttle: number;
+
+  /** @internal What is drawn, easing toward what was asked for */
+  _drawn: number;
 
   /** @internal */
   readonly _seed: number;
@@ -183,7 +195,10 @@ export class AfterburnerNozzle {
     this._batch = batch;
     this._seed = seed;
     this.object = options.object ?? null;
-    this._throttle = clamp01(options.throttle ?? 1);
+    this._throttle = clamp_throttle(
+      options.throttle ?? AFTERBURNER_MAX_THROTTLE,
+    );
+    this._drawn = this._throttle;
     this._input = options.params;
     this._preset = options.preset;
     this._params = resolve_afterburner_params(
@@ -203,20 +218,32 @@ export class AfterburnerNozzle {
     this._written.fill(Number.NaN);
   }
 
-  /** How hard the engine is running, 0 to 1. Cheap to write every frame */
+  /**
+   * How hard the engine is asked to run, 0 to 1.1. Cheap to write every frame.
+   * The plume eases toward it over the batch's `response_s`
+   */
   get throttle(): number {
     return this._throttle;
   }
 
   set throttle(value: number) {
-    const throttle = clamp01(value);
+    const throttle = clamp_throttle(value);
 
     if (throttle === this._throttle) {
       return;
     }
 
     this._throttle = throttle;
-    this._batch?._write_throttle(this);
+
+    if (!this._batch || this._batch.response_s <= 0) {
+      this._drawn = throttle;
+      this._batch?._write_throttle(this);
+    }
+  }
+
+  /** The throttle the plume is drawn at, on its way to `throttle` */
+  get drawn_throttle(): number {
+    return this._drawn;
   }
 
   /** The params this nozzle is drawn with. Read-only: use `set_params` */
@@ -350,6 +377,9 @@ export type AfterburnerBatchOptions = {
   // How many nozzles to make room for up front. It grows past this
   capacity?: number;
 
+  // How long, in seconds, a plume takes to follow its throttle. Zero is at once
+  response_s?: number;
+
   // The opaque scene drawn in a pass of its own, for plumes drawn in another,
   // as `afterburner_pass` sets up. Fixed for the batch's life
   backdrop?: AfterburnerBackdrop;
@@ -384,6 +414,13 @@ export class AfterburnerBatch {
 
   /** How fast the flame's clock runs, one being real time */
   time_scale = 1;
+
+  /**
+   * How long, in seconds, a plume takes to follow its throttle: the time
+   * constant it eases in by, so a burner lights over a few tenths of a second
+   * as a real one does, rather than in a frame. Zero follows at once
+   */
+  response_s = DEFAULT_RESPONSE_S;
 
   /** Plumes shorter than this share of the screen height are not drawn */
   min_screen_fraction = 0.001;
@@ -435,6 +472,7 @@ export class AfterburnerBatch {
 
   constructor(options: AfterburnerBatchOptions = {}) {
     this.preset = options.preset;
+    this.response_s = options.response_s ?? DEFAULT_RESPONSE_S;
     this._profile = resolve_afterburner_profile(
       options.profile,
       options.preset,
@@ -649,7 +687,7 @@ export class AfterburnerBatch {
 
       const reach = jet_state(
         nozzle._params,
-        nozzle._throttle,
+        nozzle._drawn,
         this._profile,
         nozzle._scale,
       ).reach_m;
@@ -731,7 +769,7 @@ export class AfterburnerBatch {
   /** @internal */
   _write_throttle(nozzle: AfterburnerNozzle) {
     this._dynamic.array[nozzle._slot * DYNAMIC_STRIDE + PLACE + 3] =
-      nozzle._throttle;
+      nozzle._drawn;
 
     this.mark_dynamic(nozzle._slot);
   }
@@ -766,14 +804,41 @@ export class AfterburnerBatch {
     const now = performance.now();
 
     if (this._last_ms >= 0) {
-      this.uniforms.time.value +=
+      const delta_s =
         Math.min(MAX_DELTA_S, (now - this._last_ms) / 1000) * this.time_scale;
+
+      this.uniforms.time.value += delta_s;
+      this.respond(delta_s);
     }
 
     this._last_ms = now;
 
     this.place();
     this.upload();
+  }
+
+  /**
+   * Ease every nozzle's drawn throttle toward the one asked for.
+   * @param delta_s How far the flame's clock moved this frame
+   */
+  private respond(delta_s: number) {
+    const follow =
+      this.response_s > 0 ? 1 - Math.exp(-delta_s / this.response_s) : 1;
+
+    for (const nozzle of this._nozzles) {
+      const gap = nozzle._throttle - nozzle._drawn;
+
+      if (gap === 0) {
+        continue;
+      }
+
+      nozzle._drawn =
+        Math.abs(gap) < RESPONSE_SETTLED
+          ? nozzle._throttle
+          : nozzle._drawn + gap * follow;
+
+      this._write_throttle(nozzle);
+    }
   }
 
   /** Follow every nozzle's world matrix, writing only the ones that moved */
@@ -1083,14 +1148,6 @@ export class AfterburnerBatch {
     }
   }
 }
-
-/**
- * Hold a value inside [0, 1], reading anything else as off.
- * @param value The value
- * @returns It, clamped
- */
-const clamp01 = (value: number): number =>
-  Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
 
 /**
  * The world matrix a nozzle is at right now.
