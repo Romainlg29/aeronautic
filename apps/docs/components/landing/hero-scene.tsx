@@ -11,6 +11,7 @@ import {
 import { type FC, useEffect, useState } from "react";
 import { WebGPURenderer } from "three/webgpu";
 import { cn } from "@/lib/cn";
+import { NO_SHADOWS } from "@/lib/no-shadows";
 import { Aim, Grade, Nozzle } from "@/examples/stage";
 
 const PRESETS: { name: AfterburnerPresetName; label: string }[] = [
@@ -55,6 +56,7 @@ export const HeroScene: FC = () => {
     <div className="relative h-full w-full">
       <Canvas
         dpr={[1, 1.5]}
+        shadows={NO_SHADOWS}
         camera={{ position: [12, 3, 20], fov: 40, near: 0.1, far: 5000 }}
         gl={async (props) => {
           const renderer = new WebGPURenderer({

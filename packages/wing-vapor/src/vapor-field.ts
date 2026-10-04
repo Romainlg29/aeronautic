@@ -65,7 +65,7 @@ const MAX_BIAS = 0.7;
 const SIDE_LOADING: [number, number] = [0.2, 1.8];
 
 // The least deficit the bounds follow the field out to
-const BOUND_FLOOR = 0.003;
+export const BOUND_FLOOR = 0.003;
 
 // The most of the lift a second surface is given
 const MAX_SECOND_SHARE = 0.4;

@@ -53,7 +53,11 @@ import {
   viewportDepthTexture,
 } from "three/tsl";
 import { CONDENSATION_MIN_RATIO, CONDENSATION_TEXELS } from "./condensation";
-import { SHAPE_ROWS, vapor_field, type VaporFieldNodes } from "./tsl/field";
+import {
+  SHAPE_ROWS,
+  vapor_field_parts,
+  type VaporFieldNodes,
+} from "./tsl/field";
 import { patchiness } from "./tsl/noise";
 import type { VaporEffects } from "./types";
 import type { EdgePath, VaporConstants, VaporField } from "./vapor-field";
@@ -603,13 +607,22 @@ export const create_vapor_material = (
         });
 
         const point = camera.add(direction.mul(t)).toVar();
-        const sample = vapor_field(f, shape, trails, point, effects).toVar();
+        const sample = vapor_field_parts(f, shape, trails, point, effects);
+
+        // How far the nearest part is: in clear air that is all the march
+        // needs, and the deficits are only worked out past here
+        const outside = sample.outside.toVar();
+
+        // How far the nearest part that can shade is: the field's distances
+        // never claim more than the truth, so a shadow sample nearer than it
+        // is in clear air and adds nothing
+        const untipped = sample.untipped.toVar();
 
         const footprint = t.mul(PIXEL_STEP).toVar();
 
         // Clear air: skip to the nearest part that could fog
-        If(sample.y.greaterThan(0), () => {
-          t.addAssign(max(sample.y, max(footprint, 0.05)));
+        If(outside.greaterThan(0), () => {
+          t.addAssign(max(outside, max(footprint, 0.05)));
           inside.assign(0);
           Continue();
         });
@@ -617,7 +630,7 @@ export const create_vapor_material = (
         // The part's own step, coarsened by what the view can spare, and never
         // finer than a pixel
         const here = min(
-          max(sample.z.mul(u.step_scale as unknown as F), footprint),
+          max(sample.step.mul(u.step_scale as unknown as F), footprint),
           leave.sub(t).add(1e-3),
         ).toVar();
 
@@ -627,9 +640,11 @@ export const create_vapor_material = (
           Continue();
         });
 
+        const deficit = sample.deficit.toVar();
+
         // Only below the dew point's deficit is there anything to look up
-        If(sample.x.greaterThan(f.saturation_deficit), () => {
-          const water = water_at(sample.x);
+        If(deficit.greaterThan(f.saturation_deficit), () => {
+          const water = water_at(deficit);
 
           // The moisture's patches, in the air's own frame
           const air = point
@@ -669,21 +684,29 @@ export const create_vapor_material = (
           if (effects.self_shadow) {
             If((u.detail as unknown as F).greaterThan(0.5), () => {
               for (const [distance, length] of SHADOW_SAMPLES) {
-                // Without the tips: a tube a metre across shades almost
-                // nothing, and its trail is the dearest part to look up
-                const toward = vapor_field(
-                  f,
-                  shape,
-                  trails,
-                  point.add(sun_ray.mul(distance)),
-                  { ...effects, tip_vortices: false },
-                ).x;
+                // Only a sample that may land in something is looked up: in
+                // a trail behind the aircraft, none are
+                If(untipped.lessThan(distance), () => {
+                  // Without the tips: a tube a metre across shades almost
+                  // nothing, and its trail is the dearest part to look up
+                  const toward = vapor_field_parts(
+                    f,
+                    shape,
+                    trails,
+                    point.add(sun_ray.mul(distance)),
+                    { ...effects, tip_vortices: false },
+                  );
 
-                shade.addAssign(
-                  water_at(toward)
-                    .y.mul(u.extinction as unknown as F)
-                    .mul(length),
-                );
+                  // Outside every part nothing condenses: the distance says
+                  // so, and the deficit need not be worked out
+                  If(toward.outside.lessThanEqual(0), () => {
+                    shade.addAssign(
+                      water_at(toward.deficit)
+                        .y.mul(u.extinction as unknown as F)
+                        .mul(length),
+                    );
+                  });
+                });
               }
             });
           }

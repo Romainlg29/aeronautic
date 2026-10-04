@@ -28,6 +28,7 @@ import type { Node } from "three/webgpu";
 import { TRAIL_POINTS } from "../trails";
 import { SHAPE_STATIONS } from "../wing-shape";
 import {
+  BOUND_FLOOR,
   BURST_LENGTH,
   BURST_SWELL,
   CONE_POCKET_LENGTH,
@@ -92,8 +93,25 @@ const BOUND_SAFETY = 0.85;
 // the CPU
 const SIDE_LOADING: [number, number] = [0.2, 1.8];
 
-// And for the tips' trails, which bend
-const TRAIL_SAFETY = 0.5;
+// And for the tips' trails, which bend. Each step onto the tangent cuts the
+// error to its square over the bend's radius, hundreds of metres even in a
+// hard pull: within the few tube widths a step is held to, two leave the
+// nearest point centimetres out
+const TRAIL_SAFETY = 0.85;
+
+/**
+ * One part of the field at one point: its deficit, how far the point is
+ * outside where it can fog, and how fine a step it needs there. Apart, so a
+ * march in clear air works out the distance alone.
+ */
+type Part = { deficit: F; outside: F; step: F };
+
+/**
+ * A part as one vector, as the exported parts give it.
+ * @param part The part
+ * @returns The deficit, the distance and the step
+ */
+const joined = (part: Part): V3 => vec3(part.deficit, part.outside, part.step);
 
 /**
  * A Scully vortex's pressure deficit.
@@ -154,6 +172,38 @@ const trail_at = (trails: Texture, row: number, along: F, spacing: F): V3 => {
   const b = textureLoad(trails, ivec2(int(index).add(1), int(row))).xyz;
 
   return mix(a, b, t) as unknown as V3;
+};
+
+/**
+ * A point along one trail and the point a spacing further on, as two
+ * `trail_at`s would give them, from three texels rather than four: the two
+ * share the middle one.
+ * @param trails The trails' texture, a row each
+ * @param row Which trail
+ * @param along How far along it, metres, within its length
+ * @param spacing How far apart its points are
+ * @returns The point, and the one a spacing on, held at the trail's end
+ */
+const trail_span = (
+  trails: Texture,
+  row: number,
+  along: F,
+  spacing: F,
+): [V3, V3] => {
+  const position = clamp(along.div(max(spacing, 1e-6)), 0, TRAIL_POINTS - 1);
+  const index = min(floor(position), TRAIL_POINTS - 2);
+  const t = position.sub(index);
+
+  // On the last segment the next point is the trail's end: the third texel
+  // is the second again, and mixing it with itself gives it
+  const a = textureLoad(trails, ivec2(int(index), int(row))).xyz;
+  const b = textureLoad(trails, ivec2(int(index).add(1), int(row))).xyz;
+  const c = textureLoad(
+    trails,
+    ivec2(int(min(index.add(2), TRAIL_POINTS - 1)), int(row)),
+  ).xyz;
+
+  return [mix(a, b, t) as unknown as V3, mix(b, c, t) as unknown as V3];
 };
 
 /**
@@ -260,8 +310,9 @@ const tip_side = (
 
   // Onto the straight trail, then twice onto the trail's own tangent, as
   // `nearest_along` does
-  // From the trail's start, the tip's trailing edge, along the stream
-  const start = trail_at(trails, row, float(0), tip.spacing);
+  // From the trail's start, the tip's trailing edge, along the stream: the
+  // first point itself, one texel
+  const start = textureLoad(trails, ivec2(int(0), int(row))).xyz;
   const along = p
     .sub(start)
     .dot(vec3(f.cos_alpha, f.sin_alpha, f.flow_z))
@@ -269,30 +320,28 @@ const tip_side = (
 
   const ahead = along.lessThan(0);
 
-  for (let step = 0; step < 2; step++) {
-    const here = clamp(along, 0, length_m);
-    const at = trail_at(trails, row, here, tip.spacing);
-    const next = trail_at(
-      trails,
-      row,
-      min(here.add(tip.spacing), length_m),
-      tip.spacing,
-    );
-    const tangent = next.sub(at).normalize();
+  // Ahead of the trailing edge the vortex is forming along the tip chord
+  const axis = vec3(
+    clamp(p.x, tip_le, tip_te),
+    tip_y,
+    tip.semispan.mul(side),
+  ).toVar() as unknown as V3;
 
-    along.assign(
-      select(ahead, along, max(here.add(p.sub(at).dot(tangent)), 0)),
-    );
-  }
+  // Behind it, along the trail: its lookups are the dearest part of the
+  // field, and a point ahead, over the wing, has no need of them
+  If(ahead.not(), () => {
+    for (let step = 0; step < 2; step++) {
+      const here = clamp(along, 0, length_m);
+      const [at, next] = trail_span(trails, row, here, tip.spacing);
+      const tangent = next.sub(at).normalize();
+
+      along.assign(max(here.add(p.sub(at).dot(tangent)), 0));
+    }
+
+    axis.assign(trail_at(trails, row, along, tip.spacing));
+  });
 
   const trailed = max(along, 0);
-
-  // Ahead of the trailing edge the vortex is forming along the tip chord
-  const axis = select(
-    ahead,
-    vec3(clamp(p.x, tip_le, tip_te), tip_y, tip.semispan.mul(side)),
-    trail_at(trails, row, trailed, tip.spacing),
-  );
 
   const offset = p.sub(axis);
   const radius2 = offset.dot(offset);
@@ -311,19 +360,32 @@ const tip_side = (
     .add(tip.core2.sub(tip.start2).mul(rolled))
     .add(tip.growth.mul(trailed));
 
-  const deficit = vortex_deficit(
-    f,
-    tip.circulation.mul(formed).mul(side_loading(f, tip.semispan.mul(side))),
-    radius2,
-    core2,
-  );
+  const circulation = tip.circulation
+    .mul(formed)
+    .mul(side_loading(f, tip.semispan.mul(side)));
+  const deficit = vortex_deficit(f, circulation, radius2, core2);
 
-  // A curved trail's nearest point is found in two steps, which can land
-  // past it for a point well off the curve: the distance is trusted only by
-  // half, and never for more than a few tube widths at once
+  // How wide the tube is here, by the bounds' own rule: where this vortex
+  // alone falls to what condenses, Γ²k/(r² + a²) = needed. The bound is the
+  // widest anywhere, at the tip; down the trail the core has grown and the
+  // tube thins, or closes, and the march need not step finely through the
+  // clear air the widest one would hold. It changes slowly along the trail,
+  // a fraction of a metre per metre, well inside the trust below
+  const needed = max(f.saturation_deficit, BOUND_FLOOR);
+  const wide2 = f.vortex_k
+    .mul(circulation)
+    .mul(circulation)
+    .div(needed)
+    .sub(core2);
+  const wide = min(sqrt(max(wide2, 0)).mul(1.15).add(0.1), tip.bound);
+
+  // A curved trail's nearest point is found in two steps, which can land a
+  // little past it, and the tube widens along it as the vortex rolls up: the
+  // distance is not trusted in full, and never for more than a few tube
+  // widths at once, where a point well off the curve would be
   const outside = min(
     sqrt(radius2)
-      .sub(tip.bound)
+      .sub(wide)
       .add(max(along.sub(tip.reach), 0))
       .mul(TRAIL_SAFETY),
     tip.bound.mul(4).add(1),
@@ -352,21 +414,21 @@ export const tip_vortex = (f: VaporFieldNodes, trails: Texture, p: V3): V3 => {
   const add = (which: "wing" | "second") => {
     const tip = tip_nodes(f, which);
 
-    for (const side of [1, -1] as const) {
-      const part = tip_side(f, trails, tip, p, side).toVar();
+    // Only tips that fog pay for their trails: the same for every pixel, so
+    // the branch costs nothing
+    If(tip.bound.greaterThan(0), () => {
+      for (const side of [1, -1] as const) {
+        const part = tip_side(f, trails, tip, p, side).toVar();
 
-      deficit.addAssign(part.x);
-      step.assign(select(part.y.lessThan(outside), part.z, step));
-      outside.assign(min(outside, part.y));
-    }
+        deficit.addAssign(part.x);
+        step.assign(select(part.y.lessThan(outside), part.z, step));
+        outside.assign(min(outside, part.y));
+      }
+    });
   };
 
   add("wing");
-
-  // Only an aircraft with a canard or a tailplane whose tips fog pays for them
-  If(f.second_bound_m.greaterThan(0), () => {
-    add("second");
-  });
+  add("second");
 
   return vec3(deficit, outside, step);
 };
@@ -377,14 +439,14 @@ export const tip_vortex = (f: VaporFieldNodes, trails: Texture, p: V3): V3 => {
  * @param shape The wing's tables
  * @param p The point, z folded
  * @param side Which wing, +1 or -1: the point is folded
- * @returns The deficit, the distance outside its tube and the step
+ * @returns Its part of the field
  */
-export const edge_vortex = (
+const edge_part = (
   f: VaporFieldNodes,
   shape: Texture,
   p: V3,
-  side: F = float(1),
-): V3 => {
+  side: F,
+): Part => {
   const along = p.x.sub(f.edge_apex_m);
   const length_m = max(f.edge_length_m, 1e-3);
 
@@ -437,12 +499,27 @@ export const edge_vortex = (
     .add(max(past.sub(length_m.mul(0.6)), 0))
     .mul(BOUND_SAFETY);
 
-  return vec3(
+  return {
     deficit,
-    select(f.edge_bound_m.greaterThan(0), outside, float(FAR)),
-    clamp(core.mul(0.4), 0.03, 1),
-  );
+    outside: select(f.edge_bound_m.greaterThan(0), outside, float(FAR)),
+    step: clamp(core.mul(0.4), 0.03, 1),
+  };
 };
+
+/**
+ * A leading-edge vortex at one point.
+ * @param f The field
+ * @param shape The wing's tables
+ * @param p The point, z folded
+ * @param side Which wing, +1 or -1: the point is folded
+ * @returns The deficit, the distance outside its tube and the step
+ */
+export const edge_vortex = (
+  f: VaporFieldNodes,
+  shape: Texture,
+  p: V3,
+  side: F = float(1),
+): V3 => joined(edge_part(f, shape, p, side));
 
 /**
  * The wing's upper surface at one point.
@@ -450,15 +527,14 @@ export const edge_vortex = (
  * @param shape The wing's tables
  * @param p The point, z folded
  * @param side Which wing, +1 or -1: the point is folded
- * @returns The deficit, the distance outside the layer it can fog in and the
- *   step
+ * @returns Its part of the field
  */
-export const wing_sheet = (
+const wing_part = (
   f: VaporFieldNodes,
   shape: Texture,
   p: V3,
-  side: F = float(1),
-): V3 => {
+  side: F,
+): Part => {
   const span = p.z;
   const eta = span.div(f.semispan_m);
 
@@ -579,21 +655,36 @@ export const wing_sheet = (
     max(f.root_span_m.sub(span), span.sub(f.semispan_m)),
   ).mul(BOUND_SAFETY);
 
-  return vec3(
+  return {
     deficit,
-    select(f.wing_bound_m.greaterThan(0), outside, float(FAR)),
-    clamp(reach.mul(0.25), 0.04, 1),
-  );
+    outside: select(f.wing_bound_m.greaterThan(0), outside, float(FAR)),
+    step: clamp(reach.mul(0.25), 0.04, 1),
+  };
 };
+
+/**
+ * The wing's upper surface at one point.
+ * @param f The field
+ * @param shape The wing's tables
+ * @param p The point, z folded
+ * @param side Which wing, +1 or -1: the point is folded
+ * @returns The deficit, the distance outside the layer it can fog in and the
+ *   step
+ */
+export const wing_sheet = (
+  f: VaporFieldNodes,
+  shape: Texture,
+  p: V3,
+  side: F = float(1),
+): V3 => joined(wing_part(f, shape, p, side));
 
 /**
  * The slender body's field at one point: the vapour cone.
  * @param f The field
  * @param p The point
- * @returns The deficit, the distance outside the cylinder it can fog in and
- *   the step
+ * @returns Its part of the field
  */
-export const vapor_cone = (f: VaporFieldNodes, p: V3): V3 => {
+const cone_part = (f: VaporFieldNodes, p: V3): Part => {
   const xi = p.x.add(f.nose_m).div(f.body_length_m);
   const along = clamp(xi, 1e-3, 1 - 1e-3);
 
@@ -645,11 +736,89 @@ export const vapor_cone = (f: VaporFieldNodes, p: V3): V3 => {
     max(f.nose_m.negate().sub(p.x), p.x.sub(shock_x)),
   ).mul(BOUND_SAFETY);
 
-  return vec3(
+  return {
     deficit,
-    select(f.cone_bound_m.greaterThan(0), outside, float(FAR)),
-    clamp(f.cone_bound_m.div(14), 0.1, 1.5),
-  );
+    outside: select(f.cone_bound_m.greaterThan(0), outside, float(FAR)),
+    step: clamp(f.cone_bound_m.div(14), 0.1, 1.5),
+  };
+};
+
+/**
+ * The slender body's field at one point: the vapour cone.
+ * @param f The field
+ * @param p The point
+ * @returns The deficit, the distance outside the cylinder it can fog in and
+ *   the step
+ */
+export const vapor_cone = (f: VaporFieldNodes, p: V3): V3 =>
+  joined(cone_part(f, p));
+
+/**
+ * The whole field at one point, apart: a march in clear air needs the
+ * distance alone, and need not work out the rest.
+ * @param f The field
+ * @param shape The wing's tables, as `create_shape_texture` makes them
+ * @param trails The tip vortices' trails, as `create_trail_texture` makes them
+ * @param point The point, z not folded
+ * @param effects Which parts are compiled in
+ * @returns The deficit; how far the point is from anything that can fog; the
+ *   step to take there if it is inside something; and how far it is from
+ *   anything but the tips that can fog
+ */
+export const vapor_field_parts = (
+  f: VaporFieldNodes,
+  shape: Texture,
+  trails: Texture,
+  point: V3,
+  effects: Pick<
+    VaporEffects,
+    "tip_vortices" | "leading_edge_vortices" | "wing" | "cone"
+  >,
+): Part & { untipped: F } => {
+  const folded = vec3(point.x, point.y, abs(point.z));
+
+  // Which wing: the field is folded, but a roll or a sideslip loads one more
+  const side = select(point.z.lessThan(0), float(-1), float(1));
+
+  const tips: Part[] = [];
+  const rest: Part[] = [];
+
+  if (effects.tip_vortices) {
+    const tip = tip_vortex(f, trails, point);
+
+    tips.push({ deficit: tip.x, outside: tip.y, step: tip.z });
+  }
+
+  if (effects.leading_edge_vortices) {
+    rest.push(edge_part(f, shape, folded, side));
+  }
+
+  if (effects.wing) {
+    rest.push(wing_part(f, shape, folded, side));
+  }
+
+  if (effects.cone) {
+    rest.push(cone_part(f, point));
+  }
+
+  const parts = [...tips, ...rest];
+
+  const nearest = (from: Part[]) =>
+    from.reduce<F>((closest, part) => min(closest, part.outside), float(FAR));
+
+  return {
+    deficit: parts.reduce<F>((sum, part) => sum.add(part.deficit), float(0)),
+    outside: nearest(parts),
+    step: parts.reduce<F>(
+      (finest, part) =>
+        min(
+          finest,
+          select(part.outside.lessThanEqual(0), part.step, float(FAR)),
+        ),
+      float(FAR),
+    ),
+    untipped: nearest(rest),
+  };
 };
 
 /**
@@ -671,43 +840,4 @@ export const vapor_field = (
     VaporEffects,
     "tip_vortices" | "leading_edge_vortices" | "wing" | "cone"
   >,
-): V3 => {
-  const folded = vec3(point.x, point.y, abs(point.z));
-
-  // Which wing: the field is folded, but a roll or a sideslip loads one more
-  const side = select(point.z.lessThan(0), float(-1), float(1));
-
-  const parts: V3[] = [];
-
-  if (effects.tip_vortices) {
-    parts.push(tip_vortex(f, trails, point));
-  }
-
-  if (effects.leading_edge_vortices) {
-    parts.push(edge_vortex(f, shape, folded, side));
-  }
-
-  if (effects.wing) {
-    parts.push(wing_sheet(f, shape, folded, side));
-  }
-
-  if (effects.cone) {
-    parts.push(vapor_cone(f, point));
-  }
-
-  if (parts.length === 0) {
-    return vec3(0, FAR, 1);
-  }
-
-  let deficit: F = parts[0].x;
-  let outside: F = parts[0].y;
-  let step: F = select(parts[0].y.lessThanEqual(0), parts[0].z, float(FAR));
-
-  for (const part of parts.slice(1)) {
-    deficit = deficit.add(part.x);
-    outside = min(outside, part.y);
-    step = min(step, select(part.y.lessThanEqual(0), part.z, float(FAR)));
-  }
-
-  return vec3(deficit, outside, step);
-};
+): V3 => joined(vapor_field_parts(f, shape, trails, point, effects));

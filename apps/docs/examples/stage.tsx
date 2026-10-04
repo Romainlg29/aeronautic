@@ -19,6 +19,7 @@ import { bloom } from "three/addons/tsl/display/BloomNode.js";
 import { pass } from "three/tsl";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { PMREMGenerator, RenderPipeline, WebGPURenderer } from "three/webgpu";
+import { NO_SHADOWS } from "@/lib/no-shadows";
 
 // What every live example on these pages shares: a WebGPU canvas, the tone
 // map and bloom the plumes are graded for, an orbit camera, and a frame loop
@@ -138,6 +139,7 @@ export const Stage: FC<StageProps> = ({
       <Canvas
         frameloop={visible ? "always" : "never"}
         dpr={[1, 1.5]}
+        shadows={NO_SHADOWS}
         camera={{ position: camera, fov, near: 0.1, far: 5000 }}
         gl={async (props) => {
           const renderer = new WebGPURenderer({
