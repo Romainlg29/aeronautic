@@ -11,7 +11,7 @@ const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 export const metadata: Metadata = {
   metadataBase: new URL(`${site_url}/`),
   title: {
-    default: `${app_name}: jet afterburner and rocket exhaust for three.js`,
+    default: `${app_name}: afterburners and wing vapor for three.js`,
     template: `%s · ${app_name}`,
   },
   description,
@@ -21,6 +21,10 @@ export const metadata: Metadata = {
     "r3f",
     "jet engine exhaust",
     "rocket exhaust plume",
+    "wing vapor",
+    "wingtip vortex",
+    "vapor cone",
+    "Prandtl-Glauert",
     "shock diamonds",
     "Mach diamonds",
     "WebGPU",

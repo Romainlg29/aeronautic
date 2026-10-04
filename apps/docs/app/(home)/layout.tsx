@@ -1,14 +1,10 @@
-import { HomeLayout } from "fumadocs-ui/layouts/home";
 import type { ReactNode } from "react";
-import { base_options } from "@/lib/layout.shared";
 
 /**
- * The landing page's frame: the nav bar, without the sidebar.
+ * The landing page's frame: none, the page being the sky.
  * @param props The page
  * @returns The layout
  */
-const Layout = ({ children }: { children: ReactNode }) => (
-  <HomeLayout {...base_options()}>{children}</HomeLayout>
-);
+const Layout = ({ children }: { children: ReactNode }) => children;
 
 export default Layout;

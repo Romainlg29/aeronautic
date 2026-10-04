@@ -1,5 +1,9 @@
 # @aeronautic/afterburner
 
+[![npm](https://img.shields.io/npm/v/@aeronautic/afterburner)](https://www.npmjs.com/package/@aeronautic/afterburner)
+[![CI](https://github.com/Romainlg29/aeronautic/actions/workflows/ci.yml/badge.svg)](https://github.com/Romainlg29/aeronautic/actions/workflows/ci.yml)
+[![MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 <!-- An absolute URL: npm shows this README without the repo around it -->
 
 ![A twin-engined fighter banking, both afterburners lit, rendered with @aeronautic/afterburner](https://raw.githubusercontent.com/Romainlg29/aeronautic/main/.github/assets/afterburner.gif)
@@ -15,10 +19,13 @@ turbulent reheat, kerolox, hydrolox and methalox rockets, a solid booster and a
 plasma thruster, and the shader is exported piece by piece for building your
 own.
 
-**[Docs and live examples](https://romainlg29.github.io/aeronautic/)**
+**[Docs](https://romainlg29.github.io/aeronautic/docs/afterburner/start/introduction/)** ·
+**[Live examples](https://romainlg29.github.io/aeronautic/docs/afterburner/examples/basic-jet/)**
 
 The docs have a tutorial, guides, live examples, the full reference and how
-the shader works. This README is the short version.
+the shader works. This README is the short version. For the vapor a wing pulls
+in humid air, see
+[`@aeronautic/wing-vapor`](https://www.npmjs.com/package/@aeronautic/wing-vapor).
 
 ## Install
 
@@ -405,7 +412,7 @@ its mesh to `split.scene`.
 
 ## How it works
 
-[How it works](https://romainlg29.github.io/aeronautic/docs/how-it-works/the-plume/), in
+[How it works](https://romainlg29.github.io/aeronautic/docs/afterburner/how-it-works/the-plume/), in
 the docs, covers why the plume is a distance field, what each dial means physically, why
 shock diamonds need the camera nearly abeam, and how the tiers work.
 
@@ -418,4 +425,4 @@ time was measured.
 
 ## License
 
-MIT
+[MIT](LICENSE) © Romain Le Gall

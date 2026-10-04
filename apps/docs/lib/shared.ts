@@ -3,11 +3,11 @@
 export const app_name = "aeronautic";
 
 export const tagline =
-  "Raymarched jet and rocket plumes for React Three Fiber, in TSL for WebGPU.";
+  "Physically based aircraft effects for React Three Fiber, raymarched in TSL for WebGPU.";
 
 // What search engines and link previews show
 export const description =
-  "Realistic jet engine afterburner and rocket exhaust plumes for three.js and React Three Fiber: raymarched in TSL for WebGPU, with shock diamonds, heat haze and one instanced draw.";
+  "Physically based aircraft effects for three.js and React Three Fiber, raymarched in TSL for WebGPU: jet afterburners and rocket plumes with shock diamonds and heat haze, and wing vapor with vortex trails, shock vapor and the vapor cone.";
 
 // The base path, for URLs Next does not prefix itself (plain <a>, fetch)
 export const base_path = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
