@@ -1,0 +1,5 @@
+{
+  "title": "Guides",
+  "icon": "BookOpen",
+  "pages": ["flying-it", "any-shape", "the-day", "performance", "without-react"]
+}

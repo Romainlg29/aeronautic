@@ -1,44 +1,35 @@
-# @aeronautic/afterburner
+# aeronautic
 
-[![npm](https://img.shields.io/npm/v/@aeronautic/afterburner)](https://www.npmjs.com/package/@aeronautic/afterburner)
 [![CI](https://github.com/Romainlg29/aeronautic/actions/workflows/ci.yml/badge.svg)](https://github.com/Romainlg29/aeronautic/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-![A twin-engined fighter banking, both afterburners lit, rendered with @aeronautic/afterburner](.github/assets/afterburner.gif)
-
-Realistic **jet engine afterburner** and **rocket exhaust plumes** for
-**three.js** and **React Three Fiber**. They are raymarched in TSL for
-WebGPU, with shock diamonds (Mach diamonds), heat haze, soot and eddies.
-Every plume in a batch is one instanced draw.
+Physically based **aircraft effects** for **three.js** and **React Three
+Fiber**, raymarched in TSL for WebGPU. Describe the engine, the airframe and
+the day: the look comes out of them.
 
 **[Docs and live examples](https://romainlg29.github.io/aeronautic/)**
 
-- **Library:** [`packages/afterburner`](packages/afterburner), published to npm as
-  [`@aeronautic/afterburner`](https://www.npmjs.com/package/@aeronautic/afterburner).
-- **Wing vapor:** [`packages/wing-vapor`](packages/wing-vapor), `@aeronautic/wing-vapor`:
-  tip and leading-edge vortex trails, shock vapor over the wing and the vapor
-  cone, from the aircraft's planform, its flight and the day's humidity. See
-  [its README](packages/wing-vapor/README.md).
-- **Docs:** [`apps/docs`](apps/docs), a [Fumadocs](https://fumadocs.dev) site
-  (Next.js, exported static) with a tutorial, guides, live examples, the
-  reference and how the shader works. Deployed to GitHub Pages at
-  <https://romainlg29.github.io/aeronautic/>.
+| Package                                                  | npm                                                                                                                   | What it draws                                                     |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| [`@aeronautic/afterburner`](packages/afterburner#readme) | [![npm](https://img.shields.io/npm/v/@aeronautic/afterburner)](https://www.npmjs.com/package/@aeronautic/afterburner) | Jet afterburners and rocket exhaust plumes                        |
+| [`@aeronautic/wing-vapor`](packages/wing-vapor#readme)   | [![npm](https://img.shields.io/npm/v/@aeronautic/wing-vapor)](https://www.npmjs.com/package/@aeronautic/wing-vapor)   | Vortex trails, shock vapor and the vapor cone a wing pulls in air |
+
+Each installs on its own, with the same peers: `react` 19, `three` 0.186 and
+`@react-three/fiber` 9. Each release supports one three minor, because TSL
+changes between them. Both need three's `WebGPURenderer`, which falls back to
+WebGL 2 by itself. They don't run on the classic `WebGLRenderer`.
+
+## Afterburner
+
+![A twin-engined fighter banking, both afterburners lit, rendered with @aeronautic/afterburner](.github/assets/afterburner.gif)
+
+Realistic **jet engine afterburner** and **rocket exhaust plumes**, with
+shock diamonds (Mach diamonds), heat haze, soot and eddies. Every plume in a
+batch is one instanced draw.
 
 ```bash
 pnpm add @aeronautic/afterburner
 ```
-
-Start with the [docs](https://romainlg29.github.io/aeronautic/), or the
-[library README](packages/afterburner/README.md) for the full API.
-
-## Usage
-
-Peer dependencies: `react` 19, `three` 0.186 and `@react-three/fiber` 9. Each
-release supports one three minor, because TSL changes between them.
-The plumes need three's `WebGPURenderer`, which falls back to WebGL 2 by
-itself. They don't run on the classic `WebGLRenderer`.
-
-### A first plume
 
 `<Afterburner>` is a group where a nozzle sits. The plume streams out along the
 group's local **+X**, and every distance is in metres:
@@ -61,76 +52,64 @@ export const App = () => (
 );
 ```
 
-The colours are graded for a filmic tone map (`AgXToneMapping`), and look best
-with a little bloom.
+Seven presets, from a fighter's reheat to a methalox booster, and physical
+params in SI units: the plume's length and its shock spacing come out of them.
+Sit it on any node of a loaded model with `target`, shape the exit, and drive
+the throttle every frame through a ref.
 
-### Presets
+[Afterburner docs](https://romainlg29.github.io/aeronautic/docs/afterburner/start/introduction/)
+· [README](packages/afterburner/README.md)
+· [How the plume works](https://romainlg29.github.io/aeronautic/docs/afterburner/how-it-works/the-plume/)
 
-`afterburner`, `afterburner_turbulent`, `rocket_kerolox`, `rocket_hydrolox`,
-`rocket_methalox`, `solid_booster` and `plasma`. A preset is a starting point,
-and `params` override it:
+## Wing vapor
 
-```tsx
-<Afterburner preset="rocket_kerolox" params={{ nozzle_radius_m: 1.2 }} />
+![A delta fighter in a hard pull, trailing vapor from both wingtips and over the wing, rendered with @aeronautic/wing-vapor](.github/assets/wing-vapor.gif)
+
+The vapor a wing pulls out of humid air: **tip vortex trails** that follow the
+flight path, **leading-edge vortices** over a swept wing, **shock vapor** over
+the wing and the **vapor cone** near Mach one. Nothing is drawn to a shape: it
+works out the pressure round the aircraft from its planform, its airspeed and
+its angle of attack, and expands the day's moist air through it.
+
+```bash
+pnpm add @aeronautic/wing-vapor
 ```
 
-The params are physical, in SI units: nozzle radius, exit Mach, exit pressure
-ratio, temperature, soot and so on. The plume's length and its shock spacing
-come out of them. So a bigger radius gives a bigger rocket, not a stubby one.
-
-### On a model
-
-Pass a node of a loaded model as `target`. `position` and `direction` are then
-in that node's frame:
+Put `<WingVapor>` at the aircraft's reference point. It can measure the
+planform off the model itself:
 
 ```tsx
-const { nodes } = useGLTF("/jet.glb");
+import { useGLTF } from "@react-three/drei";
+import { WingVapor } from "@aeronautic/wing-vapor";
 
-<Afterburner
-  target={nodes.Engine}
-  position={[0, 0, -4.2]} // the nozzle exit
-  direction={[0, 0, -1]} // exhaust out of the back
-/>;
+export const Jet = () => {
+  const { scene } = useGLTF("/jet.glb");
+
+  return (
+    <group>
+      <primitive object={scene} />
+      <WingVapor
+        capture={scene}
+        flight={{ airspeed_m_s: 170, angle_of_attack_rad: 0.35 }}
+        air={{ altitude_m: 300, relative_humidity: 0.9 }}
+      />
+    </group>
+  );
+};
 ```
 
-### Shaped nozzles
+[Wing vapor docs](https://romainlg29.github.io/aeronautic/docs/wing-vapor/start/introduction/)
+· [README](packages/wing-vapor/README.md)
+· [How the vapor forms](https://romainlg29.github.io/aeronautic/docs/wing-vapor/how-it-works/the-air/)
 
-Exits needn't be round. Set an oval, a flat slot or a rounded rectangle with
-four params:
+## The repository
 
-```tsx
-<Afterburner
-  preset="afterburner"
-  params={{
-    nozzle_radius_m: 0.27, // the round exit of the same area
-    nozzle_aspect: 1.4, // width over height
-    nozzle_squareness: 2, // 1 a diamond, 2 an ellipse, 4+ a rounded rectangle
-    nozzle_roll: 0, // radians about the plume's axis
-    nozzle_outline_length: 1, // how long the shape lasts, in core lengths
-  }}
-/>
-```
-
-For any other outline, use the `outline` hook on `<AfterburnerBatch>`.
-
-### Throttle every frame
-
-A ref takes the throttle without a React render:
-
-```tsx
-const engine = useRef<AfterburnerHandle>(null);
-
-useFrame(({ clock }) => {
-  if (engine.current)
-    engine.current.throttle = 0.95 + 0.15 * Math.sin(clock.elapsedTime);
-});
-
-<Afterburner ref={engine} preset="afterburner" />;
-```
-
-All the nozzles under one `<AfterburnerBatch>` (or, without one, all those
-sharing a preset) are drawn in **one instanced draw call**. The batch also
-holds the altitude, the airspeed, the quality setting and the shader hooks.
+- [`packages/afterburner`](packages/afterburner): `@aeronautic/afterburner`.
+- [`packages/wing-vapor`](packages/wing-vapor): `@aeronautic/wing-vapor`.
+- [`apps/docs`](apps/docs): a [Fumadocs](https://fumadocs.dev) site (Next.js,
+  exported static) with a section per library: getting started, guides, live
+  examples, the reference and how the shaders work. Deployed to GitHub Pages at
+  <https://romainlg29.github.io/aeronautic/>.
 
 ## Development
 
@@ -167,7 +146,7 @@ Pages workflow sets.
 
 ## How it was made
 
-This library was written with AI, under human supervision throughout. The AI
+These libraries were written with AI, under human supervision throughout. The AI
 wrote much of the code. A human set the direction, reviewed every change,
 checked each result in the browser and decided what shipped. The physics, the
 look and the API were argued over and reworked until they were right, not
@@ -183,7 +162,7 @@ Performance was the main objective from the start:
 
 Each of these was measured in GPU time, not FPS, from the worst-case viewpoint
 (close up, astern) as well as the common one (abeam).
-[Frame budget](https://romainlg29.github.io/aeronautic/docs/how-it-works/frame-budget/)
+[Frame budget](https://romainlg29.github.io/aeronautic/docs/afterburner/how-it-works/frame-budget/)
 in the docs shows where the time goes.
 
 ## Contributing
@@ -194,7 +173,8 @@ add a preset and how to measure performance. Report security issues privately,
 as [SECURITY.md](SECURITY.md) describes.
 
 The docs deploy on every push to `main`. Releases to npm are
-the maintainer's, from a `v*` tag (see "Releasing" in CONTRIBUTING.md).
+the maintainer's, each package from a tag naming it, `afterburner-v*` or
+`wing-vapor-v*` (see "Releasing" in CONTRIBUTING.md).
 
 ## License
 

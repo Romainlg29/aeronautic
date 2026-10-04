@@ -17,7 +17,15 @@ export const base_options = (): BaseLayoutProps => ({
   },
   githubUrl: repository,
   links: [
-    { text: "Docs", url: "/docs/start/introduction/", active: "nested-url" },
-    { text: "Examples", url: "/docs/examples/basic-jet/" },
+    {
+      text: "Afterburner",
+      url: "/docs/afterburner/start/introduction/",
+      active: "none",
+    },
+    {
+      text: "Wing vapor",
+      url: "/docs/wing-vapor/start/introduction/",
+      active: "none",
+    },
   ],
 });

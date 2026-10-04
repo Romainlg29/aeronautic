@@ -30,8 +30,12 @@ shows up in the examples straight away, with no build.
 | `apps/docs/examples`             | Each live example. Its page runs the file and shows it as the code        |
 | `apps/docs/scripts/reference.ts` | Generates the params, profile and quality reference pages from `types.ts` |
 
-The reference pages are generated from the comments in
+The docs hold one section per library, `content/docs/afterburner` and
+`content/docs/wing-vapor`, each with its own sidebar. Afterburner's params,
+profile and quality pages are generated from the comments in
 `packages/afterburner/src/types.ts`. Edit the comments there, not the pages.
+Wing vapor's reference is written by hand: change its dials page with
+`packages/wing-vapor/src/types.ts`.
 
 ## Before you open a PR
 
@@ -73,7 +77,7 @@ A preset is an engine. To add one:
    and so on. Start from the closest existing preset.
 2. Add a row to the presets tables in `README.md`,
    `packages/afterburner/README.md` and
-   `apps/docs/content/docs/guides/presets-and-propellants.mdx`.
+   `apps/docs/content/docs/afterburner/guides/presets-and-propellants.mdx`.
 3. Check it in the docs' [Every preset](apps/docs/examples/presets-gallery.tsx)
    example, which picks it up by itself, from abeam and from astern.
 
@@ -91,8 +95,8 @@ Performance PRs are very welcome. Please include:
   the plume, looking up it) is the worst case, and abeam is the common one.
 - Screenshots from both, so the look can be compared.
 
-[Frame budget](apps/docs/content/docs/how-it-works/frame-budget.md) and
-[Hull and tiers](apps/docs/content/docs/how-it-works/hull-and-tiers.md) explain
+[Frame budget](apps/docs/content/docs/afterburner/how-it-works/frame-budget.md) and
+[Hull and tiers](apps/docs/content/docs/afterburner/how-it-works/hull-and-tiers.md) explain
 where the time goes today.
 
 ## AI-assisted PRs

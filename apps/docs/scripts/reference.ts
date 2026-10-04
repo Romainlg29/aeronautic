@@ -39,7 +39,10 @@ const written: string[] = [];
 
 const page_path = (name: string): string =>
   fileURLToPath(
-    new URL(`../content/docs/reference/${name}.mdx`, import.meta.url),
+    new URL(
+      `../content/docs/afterburner/reference/${name}.mdx`,
+      import.meta.url,
+    ),
   );
 
 /**

@@ -1,5 +1,13 @@
 # @aeronautic/wing-vapor
 
+[![npm](https://img.shields.io/npm/v/@aeronautic/wing-vapor)](https://www.npmjs.com/package/@aeronautic/wing-vapor)
+[![CI](https://github.com/Romainlg29/aeronautic/actions/workflows/ci.yml/badge.svg)](https://github.com/Romainlg29/aeronautic/actions/workflows/ci.yml)
+[![MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+<!-- An absolute URL: npm shows this README without the repo around it -->
+
+![A delta fighter in a hard pull, trailing vapor from both wingtips and over the wing, rendered with @aeronautic/wing-vapor](https://raw.githubusercontent.com/Romainlg29/aeronautic/main/.github/assets/wing-vapor.gif)
+
 Physically based **wing vapor** for [React Three Fiber](https://r3f.docs.pmnd.rs)
 and three.js, written in TSL for three's `WebGPURenderer`.
 
@@ -21,7 +29,12 @@ day's moist air through that pressure field, and draws cloud wherever the air
 passes its dew point. Dry air stays clear however hard the pull, and in humid
 air a gentle turn trails its tips.
 
-**[Live example on the docs' fighter](https://romainlg29.github.io/aeronautic/docs/examples/wing-vapor/)**
+**[Docs](https://romainlg29.github.io/aeronautic/docs/wing-vapor/start/introduction/)** ·
+**[Live example on the docs' fighter](https://romainlg29.github.io/aeronautic/docs/wing-vapor/examples/on-the-fighter/)**
+
+The docs have guides, live examples, the full reference and how the vapor
+forms. This README is the short version. For the jet and rocket plumes, see
+[`@aeronautic/afterburner`](https://www.npmjs.com/package/@aeronautic/afterburner).
 
 ## Install
 
@@ -199,6 +212,9 @@ speed of sound), the flight (Mach number, lift coefficient, load factor,
 circulation) and every part of the field.
 
 ## How it works
+
+[How it works](https://romainlg29.github.io/aeronautic/docs/wing-vapor/how-it-works/the-air/), in the
+docs, goes through each step in more detail.
 
 1. **The air.** The International Standard Atmosphere, with the vapour on top:
    its partial pressure from the relative humidity, Magnus's saturation

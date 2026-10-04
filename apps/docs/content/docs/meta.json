@@ -1,16 +1,3 @@
 {
-  "pages": [
-    "---[Rocket]Start here---",
-    "...start",
-    "---[GraduationCap]Tutorial---",
-    "...tutorial",
-    "---[BookOpen]Guides---",
-    "...guides",
-    "---[Play]Examples---",
-    "...examples",
-    "---[Braces]Reference---",
-    "...reference",
-    "---[Atom]How it works---",
-    "...how-it-works"
-  ]
+  "pages": ["afterburner", "wing-vapor"]
 }

@@ -52,3 +52,6 @@ engine glows orange at the ground and blue-violet up high: see
 | [How it works](../../how-it-works/the-plume/) | You want to know why the plume is drawn the way it is. |
 
 Every distance in the API is in **metres**.
+
+For the vapor a wing pulls out of humid air, on the same aircraft, see
+[`@aeronautic/wing-vapor`](../../../wing-vapor/start/introduction/).

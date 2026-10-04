@@ -66,23 +66,26 @@ const reflect = (scene: Scene, texture: Texture | null, intensity: number) => {
 
 /**
  * Give metal something to reflect: a lit room, dimly, the sky being night.
+ * @param props How strongly
  * @returns Nothing; it sets the scene's environment
  */
-const Reflections: FC = () => {
+export const Reflections: FC<{ intensity?: number }> = ({
+  intensity = 0.35,
+}) => {
   const { gl, scene } = useThree();
 
   useEffect(() => {
     const generator = new PMREMGenerator(gl as unknown as WebGPURenderer);
     const target = generator.fromScene(new RoomEnvironment(), 0.04);
 
-    reflect(scene, target.texture, 0.35);
+    reflect(scene, target.texture, intensity);
 
     return () => {
       reflect(scene, null, 0);
       target.dispose();
       generator.dispose();
     };
-  }, [gl, scene]);
+  }, [gl, scene, intensity]);
 
   return null;
 };
