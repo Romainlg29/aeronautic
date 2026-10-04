@@ -4,7 +4,7 @@
 // n = 2, a rounded rectangle as n climbs, a diamond at n = 1. Its width a runs
 // along the nozzle frame's z and its height b along its y, before the roll
 //
-// `nozzle_radius_m` stays the nozzle's size, as the radius of the round exit of
+// `nozzleRadiusM` stays the nozzle's size, as the radius of the round exit of
 // the same area: the same mass flow, so every length the jet works out from it
 // holds, and a preset's radius fits any outline
 
@@ -12,11 +12,13 @@
  * What the shader needs to draw one outline, worked out once per nozzle.
  */
 export type NozzleOutlineFit = {
-  // The outline's mean semi-axis, √(ab), over the round radius of its area
-  area_scale: number;
+  /** The outline's mean semi-axis, √(ab), over the round radius of its area */
+  areaScale: number;
 
-  // Its furthest point from the axis, over that same radius: what the bounds
-  // around the plume are widened by
+  /**
+   * Its furthest point from the axis, over that same radius: what the bounds
+   * around the plume are widened by
+   */
   reach: number;
 };
 
@@ -85,5 +87,5 @@ export const nozzle_outline_fit = (
   const longer = area_scale * Math.max(stretch, 1 / stretch);
   const reach = longer * 2 ** Math.max(0, 0.5 - 1 / n);
 
-  return { area_scale, reach };
+  return { areaScale: area_scale, reach };
 };

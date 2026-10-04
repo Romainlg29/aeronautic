@@ -129,7 +129,7 @@ const vortex_deficit = (
   radius2: F,
   core2: F,
 ): F =>
-  f.vortex_k
+  f.vortexK
     .mul(circulation)
     .mul(circulation)
     .div(max(radius2.add(core2), 1e-6));
@@ -217,10 +217,10 @@ const trail_span = (
  */
 const side_loading = (f: VaporFieldNodes, span: F): F =>
   clamp(
-    f.roll_bias
+    f.rollBias
       .mul(span)
-      .div(max(f.semispan_m, 1e-3))
-      .add(f.slip_bias.mul(sign(span)))
+      .div(max(f.semispanM, 1e-3))
+      .add(f.slipBias.mul(sign(span)))
       .add(1),
     SIDE_LOADING[0],
     SIDE_LOADING[1],
@@ -243,7 +243,7 @@ type TipNodes = {
   bound: F;
   spacing: F;
 
-  // Its first row in the trails' texture: +z there, -z the next
+  /** Its first row in the trails' texture: +z there, -z the next */
   row: number;
 };
 
@@ -256,33 +256,33 @@ type TipNodes = {
 const tip_nodes = (f: VaporFieldNodes, which: "wing" | "second"): TipNodes =>
   which === "wing"
     ? {
-        leading: f.tip_leading_m,
-        chord: f.tip_chord_m,
-        height: f.tip_height_m,
-        semispan: f.semispan_m,
-        circulation: f.tip_circulation,
-        core2: f.tip_core2_m2,
-        start2: f.tip_start2_m2,
-        rollup: f.tip_rollup_m,
-        growth: f.tip_growth_m,
-        reach: f.tip_reach_m,
-        bound: f.tip_bound_m,
-        spacing: f.trail_spacing_m,
+        leading: f.tipLeadingM,
+        chord: f.tipChordM,
+        height: f.tipHeightM,
+        semispan: f.semispanM,
+        circulation: f.tipCirculation,
+        core2: f.tipCore2M2,
+        start2: f.tipStart2M2,
+        rollup: f.tipRollupM,
+        growth: f.tipGrowthM,
+        reach: f.tipReachM,
+        bound: f.tipBoundM,
+        spacing: f.trailSpacingM,
         row: 0,
       }
     : {
-        leading: f.second_tip_leading_m,
-        chord: f.second_tip_chord_m,
-        height: f.second_tip_height_m,
-        semispan: f.second_semispan_m,
-        circulation: f.second_circulation,
-        core2: f.second_core2_m2,
-        start2: f.second_start2_m2,
-        rollup: f.second_rollup_m,
-        growth: f.second_growth_m,
-        reach: f.second_reach_m,
-        bound: f.second_bound_m,
-        spacing: f.second_spacing_m,
+        leading: f.secondTipLeadingM,
+        chord: f.secondTipChordM,
+        height: f.secondTipHeightM,
+        semispan: f.secondSemispanM,
+        circulation: f.secondCirculation,
+        core2: f.secondCore2M2,
+        start2: f.secondStart2M2,
+        rollup: f.secondRollupM,
+        growth: f.secondGrowthM,
+        reach: f.secondReachM,
+        bound: f.secondBoundM,
+        spacing: f.secondSpacingM,
         row: 2,
       };
 
@@ -317,7 +317,7 @@ const tip_side = (
   const start = textureLoad(trails, ivec2(int(0), int(row))).xyz;
   const along = p
     .sub(start)
-    .dot(vec3(f.cos_alpha, f.sin_alpha, f.flow_z))
+    .dot(vec3(f.cosAlpha, f.sinAlpha, f.flowZ))
     .toVar();
 
   const ahead = along.lessThan(0);
@@ -373,8 +373,8 @@ const tip_side = (
   // tube thins, or closes, and the march need not step finely through the
   // clear air the widest one would hold. It changes slowly along the trail,
   // a fraction of a metre per metre, well inside the trust below
-  const needed = max(f.saturation_deficit, BOUND_FLOOR);
-  const wide2 = f.vortex_k
+  const needed = max(f.saturationDeficit, BOUND_FLOOR);
+  const wide2 = f.vortexK
     .mul(circulation)
     .mul(circulation)
     .div(needed)
@@ -449,11 +449,11 @@ const edge_part = (
   p: V3,
   side: F,
 ): Part => {
-  const along = p.x.sub(f.edge_apex_m);
-  const length_m = max(f.edge_length_m, 1e-3);
+  const along = p.x.sub(f.edgeApexM);
+  const length_m = max(f.edgeLengthM, 1e-3);
 
-  const on_wing = clamp(along, 0, f.edge_length_m);
-  const past = max(along.sub(f.edge_length_m), 0);
+  const on_wing = clamp(along, 0, f.edgeLengthM);
+  const past = max(along.sub(f.edgeLengthM), 0);
 
   // Where along the edge's own path: its core, the surface under it, and how
   // far out the edge is there
@@ -462,19 +462,19 @@ const edge_part = (
   const reach = path.z;
 
   const vy = path.y
-    .add(f.edge_height.mul(reach))
-    .add(past.mul(f.sin_alpha.div(max(f.cos_alpha, 0.1))));
+    .add(f.edgeHeight.mul(reach))
+    .add(past.mul(f.sinAlpha.div(max(f.cosAlpha, 0.1))));
 
   const across = vec2(p.y.sub(vy), p.z.sub(vz));
   const radius2 = across.dot(across);
 
   const burst = smoothstep(
-    f.edge_burst_m,
-    f.edge_burst_m.add(length_m.mul(BURST_LENGTH)),
+    f.edgeBurstM,
+    f.edgeBurstM.add(length_m.mul(BURST_LENGTH)),
     along,
   );
 
-  const core = max(f.edge_core.mul(reach), 0.02).mul(
+  const core = max(f.edgeCore.mul(reach), 0.02).mul(
     burst.mul(BURST_SWELL).add(1),
   );
 
@@ -484,7 +484,7 @@ const edge_part = (
     along.greaterThan(0),
     vortex_deficit(
       f,
-      f.edge_gradient
+      f.edgeGradient
         .mul(side_loading(f, vz.mul(side)))
         .mul(on_wing)
         .mul(burst.mul(-0.3).add(1))
@@ -496,14 +496,14 @@ const edge_part = (
   );
 
   const outside = sqrt(radius2)
-    .sub(f.edge_bound_m)
+    .sub(f.edgeBoundM)
     .add(max(along.negate(), 0))
     .add(max(past.sub(length_m.mul(0.6)), 0))
     .mul(BOUND_SAFETY);
 
   return {
     deficit,
-    outside: select(f.edge_bound_m.greaterThan(0), outside, float(FAR)),
+    outside: select(f.edgeBoundM.greaterThan(0), outside, float(FAR)),
     step: clamp(core.mul(0.4), 0.03, 1),
   };
 };
@@ -538,7 +538,7 @@ const wing_part = (
   side: F,
 ): Part => {
   const span = p.z;
-  const eta = span.div(f.semispan_m);
+  const eta = span.div(f.semispanM);
 
   // The station: leading edge, chord, mid-plane and thickness; and its loading
   const station = shape_row(shape, eta, 0);
@@ -557,7 +557,7 @@ const wing_part = (
 
   const height = p.y.sub(surface);
 
-  const section = f.section_lift_m
+  const section = f.sectionLiftM
     .mul(loading)
     .mul(side_loading(f, span.mul(side)))
     .div(chord);
@@ -575,9 +575,9 @@ const wing_part = (
         .div(-Math.PI)
         .mul(lift_shape(at))
         .sub(thickness.mul(1.3).mul(sin(at.mul(Math.PI))))
-        .div(f.cos2_sweep),
-      f.wing_beta,
-      f.wing_kt,
+        .div(f.cos2Sweep),
+      f.wingBeta,
+      f.wingKt,
     );
 
   const here = normal(along);
@@ -585,10 +585,10 @@ const wing_part = (
 
   // The shock: where the subsonic suction comes back through sonic, pushed
   // aft as Mach one nears. Thin-airfoil theory inverted, as `shock_station`
-  const target = f.wing_sonic
-    .mul(f.wing_beta)
-    .div(f.wing_kt.mul(f.wing_sonic).oneMinus())
-    .mul(f.cos2_sweep);
+  const target = f.wingSonic
+    .mul(f.wingBeta)
+    .div(f.wingKt.mul(f.wingSonic).oneMinus())
+    .mul(f.cos2Sweep);
 
   const q = target.mul(-Math.PI).div(max(section, 1e-6));
   const q2 = q.mul(q);
@@ -604,9 +604,9 @@ const wing_part = (
   );
 
   const shock = select(
-    f.wing_supersonic.greaterThan(0.5).or(f.wing_sonic.greaterThanEqual(0)),
+    f.wingSupersonic.greaterThan(0.5).or(f.wingSonic.greaterThanEqual(0)),
     float(1),
-    sonic_at.add(sonic_at.oneMinus().mul(f.wing_travel)),
+    sonic_at.add(sonic_at.oneMinus().mul(f.wingTravel)),
   );
 
   // Behind it the droplets last a few milliseconds before they have
@@ -621,21 +621,21 @@ const wing_part = (
       max(along.sub(shock), 0)
         .mul(chord)
         .negate()
-        .div(max(f.evaporation_m, 1e-3)),
+        .div(max(f.evaporationM, 1e-3)),
     ),
   );
 
-  const pocket = mix(max(here, f.wing_sonic), min(here, peak), ahead);
+  const pocket = mix(max(here, f.wingSonic), min(here, peak), ahead);
 
-  const coefficient = select(peak.lessThan(f.wing_sonic), pocket, here);
+  const coefficient = select(peak.lessThan(f.wingSonic), pocket, here);
 
-  const reach = f.wing_reach
-    .mul(min(chord, f.reach_chord_m))
+  const reach = f.wingReach
+    .mul(min(chord, f.reachChordM))
     .mul(min(along.add(NOSE_RADIUS).div(NOSE_REACH), 1));
 
-  const root = f.root_span_m.div(f.semispan_m);
+  const root = f.rootSpanM.div(f.semispanM);
 
-  const blur = height.mul(ROOT_BLUR).div(f.semispan_m);
+  const blur = height.mul(ROOT_BLUR).div(f.semispanM);
 
   const fade = smoothstep(root.sub(blur), root.add(ROOT_FADE).add(blur), eta)
     .mul(smoothstep(0.9, 1, eta).oneMinus())
@@ -645,11 +645,11 @@ const wing_part = (
   // What it would be at the surface, and so how high up it still fogs: it
   // falls off as exp(-height / reach)
   const at_surface = capped(
-    coefficient.mul(f.wing_scale).negate(),
-    f.wing_cap,
+    coefficient.mul(f.wingScale).negate(),
+    f.wingCap,
   ).mul(fade);
   const top = reach.mul(
-    log(max(at_surface, 1e-6).div(max(f.saturation_deficit, 1e-6))),
+    log(max(at_surface, 1e-6).div(max(f.saturationDeficit, 1e-6))),
   );
 
   const deficit = select(
@@ -661,15 +661,15 @@ const wing_part = (
   // The layer over the planform, as far up as it can fog
   const outside = max(
     max(
-      max(height.negate(), height.sub(f.wing_bound_m)),
+      max(height.negate(), height.sub(f.wingBoundM)),
       max(xi.negate(), xi.sub(1.06)).mul(chord),
     ),
-    max(f.root_span_m.sub(span), span.sub(f.semispan_m)),
+    max(f.rootSpanM.sub(span), span.sub(f.semispanM)),
   ).mul(BOUND_SAFETY);
 
   return {
     deficit,
-    outside: select(f.wing_bound_m.greaterThan(0), outside, float(FAR)),
+    outside: select(f.wingBoundM.greaterThan(0), outside, float(FAR)),
     // Fine in the sheet, to resolve it, and coarser the further above where
     // it still fogs: in the clear air over the body, or over a lightly loaded
     // station, the sheet's own steps would refine the march through whatever
@@ -701,69 +701,69 @@ export const wing_sheet = (
  * @returns Its part of the field
  */
 const cone_part = (f: VaporFieldNodes, p: V3): Part => {
-  const xi = p.x.add(f.nose_m).div(f.body_length_m);
+  const xi = p.x.add(f.noseM).div(f.bodyLengthM);
   const along = clamp(xi, 1e-3, 1 - 1e-3);
 
-  const r = length(vec2(p.y.sub(f.body_height_m), p.z));
+  const r = length(vec2(p.y.sub(f.bodyHeightM), p.z));
 
   const u = max(along.mul(along.oneMinus()).mul(4), 1e-3);
-  const radius = f.body_radius_m.mul(pow(u, 0.75));
+  const radius = f.bodyRadiusM.mul(pow(u, 0.75));
 
-  const shock = f.cone_shock.add(r.mul(CONE_SHOCK_LEAN).div(f.body_length_m));
+  const shock = f.coneShock.add(r.mul(CONE_SHOCK_LEAN).div(f.bodyLengthM));
   const ahead = max(
     smoothstep(
       shock.sub(CONE_SHOCK_THICKNESS),
-      shock.add(f.cone_shock_width),
+      shock.add(f.coneShockWidth),
       xi,
     ).oneMinus(),
     exp(
       max(xi.sub(shock), 0)
-        .mul(f.body_length_m)
+        .mul(f.bodyLengthM)
         .negate()
-        .div(max(f.evaporation_m, 1e-3)),
+        .div(max(f.evaporationM, 1e-3)),
     ),
   );
 
   const pocket = smoothstep(shock.sub(CONE_POCKET_LENGTH), shock, xi);
 
-  const reach = f.cone_reach_m.mul(pocket.mul(0.8).add(0.2));
+  const reach = f.coneReachM.mul(pocket.mul(0.8).add(0.2));
   const lateral = log(reach.div(max(r, radius)).add(1)).div(
     log(reach.div(max(radius, 1e-3)).add(1)),
   );
 
   const coefficient = karman_tsien(
-    f.cone_strength.mul(pocket).negate(),
-    f.cone_beta,
-    f.cone_kt,
+    f.coneStrength.mul(pocket).negate(),
+    f.coneBeta,
+    f.coneKt,
   );
 
   const inside = xi.greaterThan(0).and(xi.lessThan(1));
 
   const deficit = select(
     inside,
-    capped(coefficient.mul(f.cone_scale).negate(), f.cone_cap)
+    capped(coefficient.mul(f.coneScale).negate(), f.coneCap)
       .mul(lateral)
       .mul(lateral)
       .mul(ahead)
-      .mul(f.cone_fade),
+      .mul(f.coneFade),
     float(0),
   );
 
   const shock_x = shock
-    .add(f.cone_shock_width)
+    .add(f.coneShockWidth)
     .add(0.02)
-    .mul(f.body_length_m)
-    .sub(f.nose_m);
+    .mul(f.bodyLengthM)
+    .sub(f.noseM);
 
   const outside = max(
-    r.sub(f.cone_bound_m),
-    max(f.nose_m.negate().sub(p.x), p.x.sub(shock_x)),
+    r.sub(f.coneBoundM),
+    max(f.noseM.negate().sub(p.x), p.x.sub(shock_x)),
   ).mul(BOUND_SAFETY);
 
   return {
     deficit,
-    outside: select(f.cone_bound_m.greaterThan(0), outside, float(FAR)),
-    step: clamp(f.cone_bound_m.div(14), 0.1, 1.5),
+    outside: select(f.coneBoundM.greaterThan(0), outside, float(FAR)),
+    step: clamp(f.coneBoundM.div(14), 0.1, 1.5),
   };
 };
 
@@ -796,7 +796,7 @@ export const vapor_field_parts = (
   point: V3,
   effects: Pick<
     VaporEffects,
-    "tip_vortices" | "leading_edge_vortices" | "wing" | "cone"
+    "tipVortices" | "leadingEdgeVortices" | "wing" | "cone"
   >,
 ): Part & { untipped: F } => {
   const folded = vec3(point.x, point.y, abs(point.z));
@@ -807,13 +807,13 @@ export const vapor_field_parts = (
   const tips: Part[] = [];
   const rest: Part[] = [];
 
-  if (effects.tip_vortices) {
+  if (effects.tipVortices) {
     const tip = tip_vortex(f, trails, point);
 
     tips.push({ deficit: tip.x, outside: tip.y, step: tip.z });
   }
 
-  if (effects.leading_edge_vortices) {
+  if (effects.leadingEdgeVortices) {
     rest.push(edge_part(f, shape, folded, side));
   }
 
@@ -862,6 +862,6 @@ export const vapor_field = (
   point: V3,
   effects: Pick<
     VaporEffects,
-    "tip_vortices" | "leading_edge_vortices" | "wing" | "cone"
+    "tipVortices" | "leadingEdgeVortices" | "wing" | "cone"
   >,
 ): V3 => joined(vapor_field_parts(f, shape, trails, point, effects));

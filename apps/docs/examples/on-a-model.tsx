@@ -1,6 +1,6 @@
 import { useAnimations, useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { Afterburner } from "@aeronautic/afterburner";
+import { Afterburner } from "@aeronautic/afterburner/react";
 import { type FC, useEffect, useRef } from "react";
 import { type Group, LoopOnce } from "three";
 import { base_path } from "@/lib/shared";
@@ -64,7 +64,7 @@ const Fighter: FC = () => {
           direction={[0, 0, -1]}
           // The exit as modelled, inside the petals: an oval 0.76 m wide and 0.45 m high, sized
           // as the round exit of its area
-          params={{ nozzle_radius_m: 0.29, nozzle_aspect: 1.67 }}
+          params={{ nozzleRadiusM: 0.29, nozzleAspect: 1.67 }}
         />
       ))}
     </group>

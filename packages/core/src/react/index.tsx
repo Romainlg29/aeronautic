@@ -7,11 +7,13 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type Context,
   type FC,
   type ReactNode,
   type RefObject,
 } from "react";
 import type { Object3D } from "three";
+import { WebGPURenderer } from "three/webgpu";
 import {
   Flight,
   type FlightInput,
@@ -27,7 +29,25 @@ import {
 // `useFlight` is for the UI, and renders only when what it selects changes,
 // at most `hz` times a second
 
-const FlightContext = createContext<Flight | null>(null);
+/**
+ * A context shared by every copy of the libraries on the page: two bundled
+ * copies of one package, or of `@aeronautic/core`, still find each other's
+ * providers. Keyed on the global symbol registry.
+ * @param name What it holds, unique across the libraries
+ * @param fallback What it reads outside a provider
+ * @returns The one context of that name
+ */
+export const shared_context = <T,>(name: string, fallback: T): Context<T> => {
+  const key = Symbol.for(`@aeronautic/context/${name}`);
+  const registry = globalThis as unknown as Record<
+    symbol,
+    Context<T> | undefined
+  >;
+
+  return (registry[key] ??= createContext(fallback));
+};
+
+const FlightContext = shared_context<Flight | null>("flight", null);
 
 /**
  * What an engine gives the effects inside it: where its exhaust leaves, and
@@ -46,7 +66,7 @@ export type Thrust = {
  * The nearest engine's thrust, for an effect that sits on it. Provide one
  * with `<ThrustContext value={…}>` for an engine of your own.
  */
-export const ThrustContext = createContext<Thrust | null>(null);
+export const ThrustContext = shared_context<Thrust | null>("thrust", null);
 
 /**
  * The nearest engine's thrust.
@@ -108,7 +128,7 @@ const FlightTracker: FC<{
     }
   }, -1);
 
-  useLayoutEffect(() => () => store.reset_tracking(), [store]);
+  useLayoutEffect(() => () => store.resetTracking(), [store]);
 
   return null;
 };
@@ -128,9 +148,9 @@ export const FlightProvider: FC<FlightProviderProps> = ({
   track,
   forward,
   up,
-  sea_level_y,
+  seaLevelY: sea_level_y,
   wind,
-  world_up,
+  worldUp: world_up,
   children,
 }) => {
   const [own] = useState(() => new Flight(initial));
@@ -139,7 +159,13 @@ export const FlightProvider: FC<FlightProviderProps> = ({
   // Read in the frame, so options written inline don't resubscribe it
   const options = useRef<FlightTrackOptions>({});
 
-  options.current = { forward, up, sea_level_y, wind, world_up };
+  options.current = {
+    forward,
+    up,
+    seaLevelY: sea_level_y,
+    wind,
+    worldUp: world_up,
+  };
 
   return (
     <FlightContext value={store}>
@@ -282,5 +308,81 @@ export const useFlight = <T,>(
 
   return useSyncExternalStore(subscribe, snapshot, snapshot);
 };
+
+/**
+ * Whether two flat objects hold the same values.
+ * @param a One
+ * @param b The other
+ * @returns Whether every key matches
+ */
+export const shallow_equal = (
+  a: object | undefined,
+  b: object | undefined,
+): boolean => {
+  if (a === b) return true;
+  if (a === undefined || b === undefined) return false;
+
+  const a_keys = Object.keys(a);
+
+  if (a_keys.length !== Object.keys(b).length) return false;
+
+  return a_keys.every(
+    (key) =>
+      (a as Record<string, unknown>)[key] ===
+      (b as Record<string, unknown>)[key],
+  );
+};
+
+/**
+ * Hold on to a value until one arrives that differs field by field, so an
+ * object written inline does not count as a change every render.
+ * @param value The value as given this render
+ * @returns The same object for as long as its fields hold
+ */
+export const useShallowStable = <T extends object | string | undefined>(
+  value: T,
+): T => {
+  const held = useRef(value);
+
+  const same =
+    held.current === value ||
+    (typeof value === "object" &&
+      typeof held.current === "object" &&
+      shallow_equal(held.current, value));
+
+  if (!same) {
+    held.current = value;
+  }
+
+  return held.current;
+};
+
+/**
+ * Options for `webgpu_gl`: any `WebGPURenderer` option.
+ */
+export type WebGPUGLOptions = ConstructorParameters<typeof WebGPURenderer>[0];
+
+/**
+ * A `<Canvas gl>` that draws with WebGPU, as the effects need:
+ * `<Canvas gl={webgpu_gl()}>`. Antialiasing is off by default, the plumes
+ * and the vapour being soft already; pass `{ antialias: true }` for hard
+ * edges elsewhere. Falls back to WebGL 2 where WebGPU is missing, as three's
+ * renderer does.
+ * @param options The renderer's options, over the canvas's own
+ * @returns The `gl` factory
+ */
+export const webgpu_gl =
+  (options: WebGPUGLOptions = {}) =>
+  async (props: object): Promise<WebGPURenderer> => {
+    const renderer = new WebGPURenderer({
+      ...(props as WebGPUGLOptions),
+      antialias: false,
+      ...options,
+    });
+
+    await renderer.init();
+
+    return renderer;
+  };
 
 export { Flight, type FlightInput, type FlightValues };

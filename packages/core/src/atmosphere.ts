@@ -44,41 +44,43 @@ const CEILING_M = 120_000;
  * The air at one altitude, with the water in it.
  */
 export type MoistAir = {
-  // In kelvin, the day's offset included
-  temperature_k: number;
+  /** In kelvin, the day's offset included */
+  temperatureK: number;
 
-  // In pascals
-  pressure_pa: number;
+  /** In pascals */
+  pressurePa: number;
 
-  // In kilograms per cubic metre
-  density_kg_m3: number;
+  /** In kilograms per cubic metre */
+  densityKgPerM3: number;
 
-  // How fast sound runs in it, metres per second
-  sound_m_s: number;
+  /** How fast sound runs in it, metres per second */
+  soundMPerS: number;
 
-  // The vapour's partial pressure, in pascals
-  vapour_pa: number;
+  /** The vapour's partial pressure, in pascals */
+  vapourPa: number;
 
-  // Kilograms of vapour per kilogram of dry air
-  mixing_ratio: number;
+  /** Kilograms of vapour per kilogram of dry air */
+  mixingRatio: number;
 
-  // Where the vapour would start to condense if the air were cooled at this
-  // pressure, in kelvin
-  dew_point_k: number;
+  /**
+   * Where the vapour would start to condense if the air were cooled at this
+   * pressure, in kelvin
+   */
+  dewPointK: number;
 
-  // The relative humidity it was made with, 0 to 1
-  relative_humidity: number;
+  /** The relative humidity it was made with, 0 to 1 */
+  relativeHumidity: number;
 };
 
 /**
  * The standard atmosphere at one altitude.
  */
 export type StandardAir = {
-  // In kelvin
-  temperature_k: number;
+  /** In kelvin */
+  temperatureK: number;
 
-  // In pascals, and as a share of sea level's
-  pressure_pa: number;
+  /** In pascals, and as a share of sea level's */
+  pressurePa: number;
   pressure: number;
 };
 
@@ -114,7 +116,11 @@ export const standard_atmosphere = (altitude_m: number): StandardAir => {
     temperature_k = next_k;
   }
 
-  return { temperature_k, pressure_pa: pressure * SEA_LEVEL_PA, pressure };
+  return {
+    temperatureK: temperature_k,
+    pressurePa: pressure * SEA_LEVEL_PA,
+    pressure,
+  };
 };
 
 /**
@@ -199,7 +205,7 @@ export const moist_air = (
   const standard = standard_atmosphere(altitude_m);
 
   const temperature_k = Math.max(
-    standard.temperature_k + temperature_offset_k,
+    standard.temperatureK + temperature_offset_k,
     150,
   );
 
@@ -208,21 +214,21 @@ export const moist_air = (
   // Never more than the air's own pressure, however hot the day
   const vapour_pa = Math.min(
     humidity * saturation_pressure(temperature_k),
-    standard.pressure_pa * 0.5,
+    standard.pressurePa * 0.5,
   );
 
   const density_kg_m3 =
-    (standard.pressure_pa - 0.378 * vapour_pa) /
+    (standard.pressurePa - 0.378 * vapour_pa) /
     (AIR_GAS_CONSTANT * temperature_k);
 
   return {
-    temperature_k,
-    pressure_pa: standard.pressure_pa,
-    density_kg_m3,
-    sound_m_s: speed_of_sound(temperature_k),
-    vapour_pa,
-    mixing_ratio: mixing_ratio(vapour_pa, standard.pressure_pa),
-    dew_point_k: dew_point(vapour_pa),
-    relative_humidity: humidity,
+    temperatureK: temperature_k,
+    pressurePa: standard.pressurePa,
+    densityKgPerM3: density_kg_m3,
+    soundMPerS: speed_of_sound(temperature_k),
+    vapourPa: vapour_pa,
+    mixingRatio: mixing_ratio(vapour_pa, standard.pressurePa),
+    dewPointK: dew_point(vapour_pa),
+    relativeHumidity: humidity,
   };
 };

@@ -26,43 +26,43 @@ const render = (vapor: WingVapor, frame: number) => {
 describe("WingVapor with a source", () => {
   it("flies the source's flight and air", () => {
     const flight = new Flight({
-      airspeed_m_s: 120,
-      angle_of_attack_rad: 0.1,
-      altitude_m: 1234,
-      relative_humidity: 0.9,
+      airspeedMPerS: 120,
+      angleOfAttackRad: 0.1,
+      altitudeM: 1234,
+      relativeHumidity: 0.9,
     });
 
     const vapor = new WingVapor({ source: flight });
 
     render(vapor, 1);
 
-    expect(vapor.flight.airspeed_m_s).toBe(120);
-    expect(vapor.flight.angle_of_attack_rad).toBe(0.1);
-    expect(vapor.air.relative_humidity).toBe(0.9);
+    expect(vapor.flight.airspeedMPerS).toBe(120);
+    expect(vapor.flight.angleOfAttackRad).toBe(0.1);
+    expect(vapor.air.relativeHumidity).toBe(0.9);
 
     // To the nearest ten metres, so the table is not rebuilt every frame
-    expect(vapor.air.altitude_m).toBe(1230);
+    expect(vapor.air.altitudeM).toBe(1230);
 
     vapor.dispose();
   });
 
   it("turns the flight's sideslip, from the right, into its own, from +z", () => {
-    const flight = new Flight({ sideslip_rad: 0.05 });
+    const flight = new Flight({ sideslipRad: 0.05 });
     const vapor = new WingVapor({ source: flight });
 
     render(vapor, 1);
 
-    expect(vapor.flight.sideslip_rad).toBe(-0.05);
+    expect(vapor.flight.sideslipRad).toBe(-0.05);
 
     vapor.dispose();
   });
 
   it("flies only what is written with no source", () => {
-    const vapor = new WingVapor({ flight: { airspeed_m_s: 80 } });
+    const vapor = new WingVapor({ flight: { airspeedMPerS: 80 } });
 
     render(vapor, 1);
 
-    expect(vapor.flight.airspeed_m_s).toBe(80);
+    expect(vapor.flight.airspeedMPerS).toBe(80);
 
     vapor.dispose();
   });

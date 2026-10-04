@@ -10,8 +10,8 @@ it follows the same flight:
 
 ```tsx
 import { FlightProvider } from "@aeronautic/core/react";
-import { Afterburner } from "@aeronautic/afterburner";
-import { WingVapor } from "@aeronautic/wing-vapor";
+import { Afterburner } from "@aeronautic/afterburner/react";
+import { WingVapor } from "@aeronautic/wing-vapor/react";
 import { ControlSurfaces } from "@aeronautic/controls/react";
 import { useGLTF } from "@react-three/drei";
 
@@ -19,7 +19,7 @@ const Jet = () => {
   const gltf = useGLTF("/fighter.glb");
 
   return (
-    <FlightProvider initial={{ airspeed_m_s: 200, altitude_m: 3000 }}>
+    <FlightProvider initial={{ airspeedMPerS: 200, altitudeM: 3000 }}>
       <primitive object={gltf.scene} />
       <ControlSurfaces object={gltf.scene} animations={gltf.animations} />
       <Afterburner position={[0, 0, 6]} />
@@ -47,9 +47,9 @@ const Pilot = () => {
 
   useFrame(() => {
     flight?.set({
-      airspeed_m_s: model.speed,
-      angle_of_attack_rad: model.alpha,
-      load_factor: model.g,
+      airspeedMPerS: model.speed,
+      angleOfAttackRad: model.alpha,
+      loadFactor: model.g,
       throttle: input.throttle,
       pitch: input.stick_y,
       roll: input.stick_x,
@@ -69,7 +69,7 @@ moves, each frame before anything reads them:
 ```tsx
 const jet = useRef<Group>(null);
 
-<FlightProvider track={jet} sea_level_y={0}>
+<FlightProvider track={jet} seaLevelY={0}>
   <group ref={jet}>
     <primitive object={gltf.scene} />
   </group>

@@ -10,11 +10,14 @@ and nothing re-renders.
 ## Throttle and aim, per engine
 
 `<Afterburner ref>` gives you an `AfterburnerHandle`. Its `throttle` is a plain
-field, cheap to write every frame. `set_direction` turns the nozzle:
+field, cheap to write every frame. `setDirection` turns the nozzle:
 
 ```tsx
 import { useFrame } from "@react-three/fiber";
-import { Afterburner, type AfterburnerHandle } from "@aeronautic/afterburner";
+import {
+  Afterburner,
+  type AfterburnerHandle,
+} from "@aeronautic/afterburner/react";
 
 const engine = useRef<AfterburnerHandle>(null);
 
@@ -24,7 +27,7 @@ useFrame(({ clock }) => {
   const t = clock.elapsedTime;
 
   engine.current.throttle = 0.55 + 0.55 * Math.sin(t * 0.9);
-  engine.current.set_direction([1, 0.08 * Math.sin(t * 0.6), 0]);
+  engine.current.setDirection([1, 0.08 * Math.sin(t * 0.6), 0]);
 });
 
 <Afterburner ref={engine} preset="afterburner" />;
@@ -39,21 +42,21 @@ nozzle is in a batch: the value is kept and applied once it is.
 
 Altitude, airspeed and the day's temperature belong to the **profile**, which
 all of a batch's nozzles share. Take a ref to an `<AfterburnerBatch>` and call
-`update_profile`. It merges the fields you give and only writes uniforms:
+`updateProfile`. It merges the fields you give and only writes uniforms:
 
 ```tsx
 import {
   Afterburner,
   AfterburnerBatch,
-  type AfterburnerBatchCore,
-} from "@aeronautic/afterburner";
+  type AfterburnerBatchHandle,
+} from "@aeronautic/afterburner/react";
 
-const batch = useRef<AfterburnerBatchCore>(null);
+const batch = useRef<AfterburnerBatchHandle>(null);
 
 useFrame(() => {
-  batch.current?.update_profile({
-    altitude_m: aircraft.position.y,
-    airspeed_m_s: aircraft.speed,
+  batch.current?.updateProfile({
+    altitudeM: aircraft.position.y,
+    airspeedMPerS: aircraft.speed,
   });
 });
 
@@ -71,19 +74,19 @@ changes.
 
 ## Changing the engine
 
-`update_params` on the handle merges new params into the nozzle's and keeps the
+`updateParams` on the handle merges new params into the nozzle's and keeps the
 rest. It rewrites that one instance: cheap, but not free. Call it when
 something changes, not every frame:
 
 ```ts
-engine.current?.update_params({ exit_mach: 1.6, soot_per_m: 1.2 });
+engine.current?.updateParams({ exitMach: 1.6, sootPerM: 1.2 });
 ```
 
-`set_params` replaces them all.
+`setParams` replaces them all.
 
 <Callout type="warn">
   A prop wins again whenever it changes. If you pass `params` and also call
-  `update_params`, the next change to the `params` prop overwrites what you
+  `updateParams`, the next change to the `params` prop overwrites what you
   wrote. Give each field one owner.
 </Callout>
 

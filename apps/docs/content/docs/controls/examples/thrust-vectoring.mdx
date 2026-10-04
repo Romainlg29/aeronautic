@@ -18,14 +18,14 @@ circle, not at its corner.
   power and opens them wide in reheat.
 
 The plume is put on each engine's exhaust anchor, so it turns with the
-nozzle. The readout comes from `on_vector`, called in the frame the nozzle
+nozzle. The readout comes from `onVector`, called in the frame the nozzle
 turns:
 
 ```tsx
 <ControlSurfaces
   object={scene}
   animations={animations}
-  engine={{ on_vector: (pitch_deg, yaw_deg) => show(pitch_deg, yaw_deg) }}
+  engine={{ onVector: (pitch_deg, yaw_deg) => show(pitch_deg, yaw_deg) }}
   exhaust={<Afterburner preset="afterburner" direction={[0, 0, -1]} />}
 />
 ```

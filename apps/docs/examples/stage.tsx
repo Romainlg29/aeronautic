@@ -35,7 +35,7 @@ export const Grade: FC = () => {
 
   const pipeline = useMemo(() => {
     const color = pass(scene, camera).getTextureNode("output");
-    const glow = bloom(color, 0.45, 0.2, 1);
+    const glow = bloom(color, 0.3, 0.2, 1);
     const render_pipeline = new RenderPipeline(renderer);
 
     render_pipeline.outputNode = color.add(glow);
@@ -74,18 +74,24 @@ export const Reflections: FC<{ intensity?: number }> = ({
 }) => {
   const { gl, scene } = useThree();
 
+  // Built once: taking the map away and back recompiles every material that
+  // reflects it, so a new strength only changes the strength
   useEffect(() => {
     const generator = new PMREMGenerator(gl as unknown as WebGPURenderer);
     const target = generator.fromScene(new RoomEnvironment(), 0.04);
 
-    reflect(scene, target.texture, intensity);
+    reflect(scene, target.texture, scene.environmentIntensity);
 
     return () => {
       reflect(scene, null, 0);
       target.dispose();
       generator.dispose();
     };
-  }, [gl, scene, intensity]);
+  }, [gl, scene]);
+
+  useEffect(() => {
+    scene.environmentIntensity = intensity;
+  }, [scene, intensity]);
 
   return null;
 };
@@ -112,8 +118,8 @@ type StageProps = {
  */
 export const Stage: FC<StageProps> = ({
   children,
-  camera = [10, 4, 16],
-  target = [8, 0, 0],
+  camera = [-16, 4, 10],
+  target = [0, 0, 8],
   fov = 40,
   floor = -3,
   overlay,
@@ -158,7 +164,7 @@ export const Stage: FC<StageProps> = ({
         <color attach="background" args={[daylight ? "#6f9fd8" : "#05070b"]} />
         <hemisphereLight args={["#8090b0", "#101010", daylight ? 1.6 : 0.6]} />
         <directionalLight
-          position={[5, 10, 5]}
+          position={[-5, 10, 5]}
           intensity={daylight ? 3 : 1.2}
         />
         {floor !== null && (
@@ -179,12 +185,12 @@ export const Stage: FC<StageProps> = ({
 };
 
 /**
- * A bare engine can, its exit at the origin, facing +X.
+ * A bare engine can, its exit at the origin, facing +Z.
  * @param props Its exit radius in metres
  * @returns The mesh
  */
 export const Nozzle: FC<{ radius_m?: number }> = ({ radius_m = 0.5 }) => (
-  <mesh position={[-radius_m * 2, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+  <mesh position={[0, 0, -radius_m * 2]} rotation={[-Math.PI / 2, 0, 0]}>
     <cylinderGeometry
       args={[radius_m * 1.08, radius_m * 1.2, radius_m * 4, 32, 1, true]}
     />

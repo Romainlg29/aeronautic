@@ -32,9 +32,17 @@ const config: NextConfig = {
       "@aeronautic/controls": "../../packages/controls/src/index.ts",
       "@aeronautic/afterburner/tsl":
         "../../packages/afterburner/src/tsl/index.ts",
+      "@aeronautic/afterburner/react":
+        "../../packages/afterburner/src/react/index.tsx",
+      "@aeronautic/afterburner/physics":
+        "../../packages/afterburner/src/physics.ts",
       "@aeronautic/afterburner": "../../packages/afterburner/src/index.ts",
       "@aeronautic/wing-vapor/tsl":
         "../../packages/wing-vapor/src/tsl/index.ts",
+      "@aeronautic/wing-vapor/react":
+        "../../packages/wing-vapor/src/react/index.tsx",
+      "@aeronautic/wing-vapor/physics":
+        "../../packages/wing-vapor/src/physics.ts",
       "@aeronautic/wing-vapor": "../../packages/wing-vapor/src/index.ts",
     },
   },

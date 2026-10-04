@@ -40,14 +40,14 @@ export const DEFAULT_HUMIDITY_SPREAD = 0.06;
  * One parcel after its expansion.
  */
 export type Condensate = {
-  // Where it settled, in kelvin, the latent heat given back included
-  temperature_k: number;
+  /** Where it settled, in kelvin, the latent heat given back included */
+  temperatureK: number;
 
-  // Liquid water per kilogram of dry air
+  /** Liquid water per kilogram of dry air */
   liquid: number;
 
-  // Liquid water per cubic metre, in kilograms
-  water_kg_m3: number;
+  /** Liquid water per cubic metre, in kilograms */
+  waterKgPerM3: number;
 };
 
 /**
@@ -64,12 +64,12 @@ export const condensate = (
   humidity_scale = 1,
 ): Condensate => {
   const ratio = Math.min(Math.max(pressure_ratio, 1e-3), 1);
-  const pressure_pa = air.pressure_pa * ratio;
+  const pressure_pa = air.pressurePa * ratio;
 
   // Dry, straight down the adiabat: T p^(-R/cp) is held
-  const dry_k = air.temperature_k * Math.pow(ratio, AIR_GAS_CONSTANT / AIR_CP);
+  const dry_k = air.temperatureK * Math.pow(ratio, AIR_GAS_CONSTANT / AIR_CP);
 
-  const water = air.mixing_ratio * Math.max(humidity_scale, 0);
+  const water = air.mixingRatio * Math.max(humidity_scale, 0);
 
   const saturated = (temperature_k: number) =>
     mixing_ratio(saturation_pressure(temperature_k), pressure_pa);
@@ -78,14 +78,14 @@ export const condensate = (
     pressure_pa / (AIR_GAS_CONSTANT * temperature_k);
 
   if (water <= saturated(dry_k)) {
-    return { temperature_k: dry_k, liquid: 0, water_kg_m3: 0 };
+    return { temperatureK: dry_k, liquid: 0, waterKgPerM3: 0 };
   }
 
   // The heat balance cp (T - T_dry) = L (w - w_s(T)) rises monotonically with
   // T, negative at the dry adiabat and positive at the free stream's own
   // temperature, so a bisection always finds it
   let low = dry_k;
-  let high = Math.max(air.temperature_k, dry_k + 1e-3);
+  let high = Math.max(air.temperatureK, dry_k + 1e-3);
 
   for (let iteration = 0; iteration < 40; iteration++) {
     const middle = (low + high) / 2;
@@ -103,9 +103,9 @@ export const condensate = (
   const liquid = Math.max(water - saturated(temperature_k), 0);
 
   return {
-    temperature_k,
+    temperatureK: temperature_k,
     liquid,
-    water_kg_m3: liquid * density(temperature_k),
+    waterKgPerM3: liquid * density(temperature_k),
   };
 };
 
@@ -123,7 +123,7 @@ export const moistest = (air: MoistAir, spread: number): number =>
   Math.max(
     Math.min(
       1 + Math.max(spread, 0),
-      MOISTEST_HUMIDITY / Math.max(air.relative_humidity, 1e-3),
+      MOISTEST_HUMIDITY / Math.max(air.relativeHumidity, 1e-3),
     ),
     1,
   );
@@ -157,11 +157,11 @@ export const condensation_table = (
     const ratio = condensation_ratio_at(texel);
     const day = condensate(ratio, air, 1);
 
-    target[texel * 4] = condensate(ratio, air, 1 - spread).water_kg_m3 * 1000;
-    target[texel * 4 + 1] = day.water_kg_m3 * 1000;
+    target[texel * 4] = condensate(ratio, air, 1 - spread).waterKgPerM3 * 1000;
+    target[texel * 4 + 1] = day.waterKgPerM3 * 1000;
     target[texel * 4 + 2] =
-      condensate(ratio, air, moistest(air, spread)).water_kg_m3 * 1000;
-    target[texel * 4 + 3] = air.temperature_k - day.temperature_k;
+      condensate(ratio, air, moistest(air, spread)).waterKgPerM3 * 1000;
+    target[texel * 4 + 3] = air.temperatureK - day.temperatureK;
   }
 
   return target;

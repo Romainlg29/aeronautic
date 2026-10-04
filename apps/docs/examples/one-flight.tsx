@@ -5,7 +5,7 @@ import {
   useFlightFrame,
 } from "@aeronautic/core/react";
 import { ControlSurfaces } from "@aeronautic/controls/react";
-import { WingVapor } from "@aeronautic/wing-vapor";
+import { WingVapor } from "@aeronautic/wing-vapor/react";
 import { type FC, useRef, useState } from "react";
 import type { Group } from "three";
 import { airframe_only, Exhaust, Slider, useFighter } from "./fighter";
@@ -27,7 +27,7 @@ const Fighter: FC = () => {
   const body = useRef<Group>(null);
 
   useFlightFrame((flight) => {
-    if (body.current) body.current.rotation.x = flight.angle_of_attack_rad;
+    if (body.current) body.current.rotation.x = flight.angleOfAttackRad;
   });
 
   return (
@@ -40,8 +40,8 @@ const Fighter: FC = () => {
       />
       <WingVapor
         capture={scene}
-        capture_filter={airframe_only}
-        look={{ sun_direction: SUN }}
+        captureFilter={airframe_only}
+        look={{ sunDirection: SUN }}
         forward={[0, 0, -1]}
       />
     </group>
@@ -54,12 +54,12 @@ const Fighter: FC = () => {
  */
 const Readout: FC = () => {
   const mach = useFlight((f) => f.mach.toFixed(2), { hz: 10 });
-  const knots = useFlight((f) => Math.round(f.airspeed_m_s * 1.944), {
+  const knots = useFlight((f) => Math.round(f.airspeedMPerS * 1.944), {
     hz: 10,
   });
-  const air = useFlight((f) => Math.round(f.temperature_k - 273.15));
-  const spread = useFlight((f) => (f.temperature_k - f.dew_point_k).toFixed(1));
-  const density = useFlight((f) => Math.round(f.density_ratio * 100));
+  const air = useFlight((f) => Math.round(f.temperatureK - 273.15));
+  const spread = useFlight((f) => (f.temperatureK - f.dewPointK).toFixed(1));
+  const density = useFlight((f) => Math.round(f.densityRatio * 100));
 
   return (
     <span className="example-note">
@@ -81,7 +81,7 @@ const ALPHA_DEG = 12;
  * @returns In metres per second
  */
 const at_mach = (flight: Flight, mach: number) =>
-  mach * flight.values.sound_m_s;
+  mach * flight.values.soundMPerS;
 
 /**
  * One flight for the whole example, held outside the canvas so the sliders
@@ -91,15 +91,15 @@ const at_mach = (flight: Flight, mach: number) =>
 export const OneFlight: FC = () => {
   const [flight] = useState(() => {
     const made = new Flight({
-      altitude_m: ALTITUDE_M,
-      temperature_offset_k: 10,
-      relative_humidity: 0.9,
-      angle_of_attack_rad: (ALPHA_DEG * Math.PI) / 180,
+      altitudeM: ALTITUDE_M,
+      temperatureOffsetK: 10,
+      relativeHumidity: 0.9,
+      angleOfAttackRad: (ALPHA_DEG * Math.PI) / 180,
       pitch: ALPHA_DEG / 20,
       throttle: 1.1,
     });
 
-    return made.set({ airspeed_m_s: at_mach(made, MACH) });
+    return made.set({ airspeedMPerS: at_mach(made, MACH) });
   });
 
   // The Mach number the slider asks for, kept as the altitude changes the
@@ -125,7 +125,7 @@ export const OneFlight: FC = () => {
                 start={MACH}
                 write={(f, value) => {
                   mach.current = value;
-                  f.set({ airspeed_m_s: at_mach(f, value) });
+                  f.set({ airspeedMPerS: at_mach(f, value) });
                 }}
               />
               <Slider
@@ -136,7 +136,7 @@ export const OneFlight: FC = () => {
                 start={ALPHA_DEG}
                 write={(f, degrees) =>
                   f.set({
-                    angle_of_attack_rad: (degrees * Math.PI) / 180,
+                    angleOfAttackRad: (degrees * Math.PI) / 180,
                     // The stick held back for it, so the elevons show it
                     pitch: degrees / 20,
                   })
@@ -157,8 +157,8 @@ export const OneFlight: FC = () => {
                 step={100}
                 start={ALTITUDE_M}
                 write={(f, altitude_m) => {
-                  f.set({ altitude_m });
-                  f.set({ airspeed_m_s: at_mach(f, mach.current) });
+                  f.set({ altitudeM: altitude_m });
+                  f.set({ airspeedMPerS: at_mach(f, mach.current) });
                 }}
               />
             </div>

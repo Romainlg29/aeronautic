@@ -13,7 +13,7 @@ const { scene } = useGLTF("/jet.glb");
   <WingVapor
     capture={scene}
     // Not the shape the air flies round
-    capture_filter={(mesh) => !/Gear|Pylon|Missile/.test(mesh.name)}
+    captureFilter={(mesh) => !/Gear|Pylon|Missile/.test(mesh.name)}
     flight={flight}
     air={air}
   />
@@ -56,7 +56,7 @@ views, so they stay as given.
 ## What to leave out
 
 Hide the landing gear and the stores, or leave them out with
-`capture_filter`: they are not the shape the air flies round. Engine nacelles
+`captureFilter`: they are not the shape the air flies round. Engine nacelles
 and pods jutting from an edge are cut off by themselves: anything narrower than
 about a seventh of the semispan that juts from an edge is not the wing the air
 lifts on.
@@ -72,9 +72,9 @@ doesn't drop frames. Until it is done the vapor flies `airframe` as given.
 Without React:
 
 ```ts
-const measured = await vapor.capture_async(model, {
+const measured = await vapor.captureAsync(model, {
   filter,
-  budget_ms: 4, // per slice
+  budgetMs: 4, // per slice
   signal: abort.signal,
 });
 ```

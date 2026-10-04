@@ -7,7 +7,7 @@ description: "What a frame costs, and how to measure it."
 
 About a quarter of a millisecond per aircraft per frame: the flight's state,
 both trails and the bounds. The capture and the wing's vortex lattice only run
-when the shape changes. `update_air` rewrites the condensation table, so write
+when the shape changes. `updateAir` rewrites the condensation table, so write
 it when the day changes, not every frame.
 
 ## The GPU
@@ -27,14 +27,14 @@ Two things keep a frame's cost even:
 - **Detail.** Smaller than 6 % of the screen's height, the moisture's patches,
   the dearest part of a sample, are dropped.
 
-`max_steps` (160 by default) caps any one pixel:
+`quality` caps any one pixel: `"low"` (64 steps), `"medium"` (112), `"high"` (160, the default) or `"ultra"` (256), or `{ maxSteps }`:
 
 ```tsx
-<WingVapor max_steps={96} />
+<WingVapor quality="medium" />
 ```
 
 Self-shadowing costs three more looks at the field for every sample that fogs.
-`effects={{ self_shadow: false }}` saves them, at the cost of a thick cone's
+`effects={{ selfShadow: false }}` saves them, at the cost of a thick cone's
 grey underside.
 
 ## Measuring it

@@ -6,28 +6,23 @@ description: "Install the package and its peers."
 ## From npm
 
 ```bash
-pnpm add @aeronautic/controls
+pnpm add @aeronautic/controls @aeronautic/core three@~0.186
 ```
 
-It brings [`@aeronautic/core`](../../../core/start/installation/) with it, for
-the flight. Install the peer dependencies too, if you don't have them yet:
+[`@aeronautic/core`](../../../core/start/installation/) holds the flight it
+reads. For the React components, add React Three Fiber too, if you don't have
+it yet:
 
 ```bash
-pnpm add three@~0.186 @react-three/fiber react react-dom
+pnpm add @react-three/fiber react react-dom
 ```
 
 | peer                 | version | needed for                   |
 | -------------------- | ------- | ---------------------------- |
+| `@aeronautic/core`   | 0.1     | everything                   |
 | `three`              | 0.186.x | everything                   |
 | `react`              | 19      | `@aeronautic/controls/react` |
 | `@react-three/fiber` | 9 or 10 | `@aeronautic/controls/react` |
-
-To write to the flight from your own code, add `@aeronautic/core` to your
-dependencies as well:
-
-```bash
-pnpm add @aeronautic/core
-```
 
 ## Two entry points
 

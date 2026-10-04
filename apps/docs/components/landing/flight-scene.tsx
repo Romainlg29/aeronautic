@@ -1,17 +1,24 @@
 import { OrbitControls } from "@react-three/drei";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { AfterburnerBatch } from "@aeronautic/afterburner";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import {
+  AfterburnerBatch,
+  type AfterburnerBatchHandle,
+} from "@aeronautic/afterburner/react";
 import type { Flight } from "@aeronautic/core";
 import { FlightProvider, useFlightStore } from "@aeronautic/core/react";
 import { ControlSurfaces } from "@aeronautic/controls/react";
-import {
-  angle_of_attack_for_load,
-  moist_air,
-  WingVapor,
-  type WingVaporCore,
-} from "@aeronautic/wing-vapor";
+import { moist_air } from "@aeronautic/core";
+import { WingVapor, type WingVaporHandle } from "@aeronautic/wing-vapor/react";
+import { angle_of_attack_for_load } from "@aeronautic/wing-vapor/physics";
 import { type FC, type RefObject, Suspense, useMemo, useRef } from "react";
-import { Euler, type Group, Quaternion } from "three";
+import {
+  Color,
+  type DirectionalLight,
+  Euler,
+  type Group,
+  type HemisphereLight,
+  Quaternion,
+} from "three";
 import { WebGPURenderer } from "three/webgpu";
 import { airframe_only, Exhaust, useFighter } from "@/examples/fighter";
 import { Grade, Reflections } from "@/examples/stage";
@@ -26,14 +33,14 @@ import type { Keys, Levers } from "./pilot";
 
 // A humid summer day, low over the sea
 const AIR = {
-  altitude_m: 300,
-  temperature_offset_k: 10,
-  relative_humidity: 0.88,
+  altitudeM: 300,
+  temperatureOffsetK: 10,
+  relativeHumidity: 0.88,
 };
 const MOIST = moist_air(
-  AIR.altitude_m,
-  AIR.relative_humidity,
-  AIR.temperature_offset_k,
+  AIR.altitudeM,
+  AIR.relativeHumidity,
+  AIR.temperatureOffsetK,
 );
 
 // Where the sun is, for the skin and the vapor both
@@ -46,14 +53,14 @@ const SKIES = {
     background: "#6f9fd8",
     hemisphere: 1.6,
     sun: 3,
-    sun_color: "#ffffff",
+    sunColor: "#ffffff",
     reflections: 0.35,
     look: {
-      sun_direction: SUN,
-      sun_color: [1, 0.96, 0.9],
-      sun_intensity: 3,
-      sky_color: [0.55, 0.68, 0.9],
-      sky_intensity: 1,
+      sunDirection: SUN,
+      sunColor: [1, 0.96, 0.9],
+      sunIntensity: 3,
+      skyColor: [0.55, 0.68, 0.9],
+      skyIntensity: 1,
     },
     // A plume is far dimmer than the daylit sky round it
     exposure: 6,
@@ -62,20 +69,120 @@ const SKIES = {
     background: "#05070b",
     hemisphere: 0.25,
     sun: 0.5,
-    sun_color: "#b8c8ff",
+    sunColor: "#b8c8ff",
     reflections: 0.12,
     look: {
-      sun_direction: SUN,
-      sun_color: [0.7, 0.78, 1],
-      sun_intensity: 0.6,
-      sky_color: [0.08, 0.1, 0.18],
-      sky_intensity: 0.15,
+      sunDirection: SUN,
+      sunColor: [0.7, 0.78, 1],
+      sunIntensity: 0.6,
+      skyColor: [0.08, 0.1, 0.18],
+      skyIntensity: 0.15,
     },
     exposure: 8,
   },
 } as const;
 
+// How long the sky takes to go from day to night, in seconds
+const FADE_S = 0.6;
+
+/**
+ * How far the sky is from day to night, shared by everything that fades with
+ * it. Written each frame by `SkyFade`, read by whatever draws from it.
+ */
+type Dusk = {
+  // Where it is headed, 0 for day and 1 for night
+  target: number;
+
+  // Where it is, eased, and whether that moved this frame
+  night: number;
+  moved: boolean;
+
+  // How far along the fade, before easing
+  linear: number;
+};
+
+const mix = (from: number, to: number, share: number) =>
+  from + (to - from) * share;
+
+const mix_rgb = (
+  from: readonly number[],
+  to: readonly number[],
+  share: number,
+): [number, number, number] => [
+  mix(from[0], to[0], share),
+  mix(from[1], to[1], share),
+  mix(from[2], to[2], share),
+];
+
+const DAY_BACKGROUND = new Color(SKIES.day.background);
+const NIGHT_BACKGROUND = new Color(SKIES.night.background);
+const DAY_SUN = new Color(SKIES.day.sunColor);
+const NIGHT_SUN = new Color(SKIES.night.sunColor);
+
+/**
+ * Fades the canvas's own sky: its background, its lights and what the metal
+ * reflects. Nothing rebuilds, so the switch is as cheap as any other frame.
+ * @param props The shared fade, and the lights it dims
+ * @returns Nothing
+ */
+const SkyFade: FC<{
+  dusk: Dusk;
+  hemisphere: RefObject<HemisphereLight | null>;
+  sun: RefObject<DirectionalLight | null>;
+}> = ({ dusk, hemisphere, sun }) => {
+  const scene = useThree((three) => three.scene);
+  const background = useMemo(() => new Color(), []);
+  const first = useRef(true);
+
+  // Ahead of everything that reads it
+  useFrame((_, delta) => {
+    const step = Math.min(delta, 0.1) / FADE_S;
+    const linear =
+      dusk.target > dusk.linear
+        ? Math.min(dusk.linear + step, dusk.target)
+        : Math.max(dusk.linear - step, dusk.target);
+
+    dusk.moved = first.current || linear !== dusk.linear;
+    dusk.linear = linear;
+    dusk.night = linear * linear * (3 - 2 * linear);
+    first.current = false;
+
+    if (!dusk.moved) return;
+
+    const night = dusk.night;
+
+    scene.background = background.lerpColors(
+      DAY_BACKGROUND,
+      NIGHT_BACKGROUND,
+      night,
+    );
+    scene.environmentIntensity = mix(
+      SKIES.day.reflections,
+      SKIES.night.reflections,
+      night,
+    );
+
+    if (hemisphere.current) {
+      hemisphere.current.intensity = mix(
+        SKIES.day.hemisphere,
+        SKIES.night.hemisphere,
+        night,
+      );
+    }
+
+    if (sun.current) {
+      sun.current.intensity = mix(SKIES.day.sun, SKIES.night.sun, night);
+      sun.current.color.lerpColors(DAY_SUN, NIGHT_SUN, night);
+    }
+  }, -1);
+
+  return null;
+};
+
 const DEG = Math.PI / 180;
+
+// Where the plumes and the vapor start; `SkyFade` takes them on from there
+const DAY_PROFILE = { exposure: SKIES.day.exposure };
 
 // How the fake flies. The Mach number it settles at, at idle, at military
 // power and at full reheat, less what the gear, the flaps and the air brake
@@ -84,8 +191,9 @@ const DEG = Math.PI / 180;
 const IDLE_MACH = 0.3;
 const DRY_MACH = 0.9;
 const REHEAT_MACH = 1.8;
-// Where it starts: lit, holding just over Mach one, the cone on it
-const START_THROTTLE = 1.012;
+// Where it starts: well into the reheat, holding just over Mach one, the cone
+// on it
+const START_THROTTLE = 1.04;
 const DRAG_MACH = { gear: 0.1, flaps: 0.05, airbrake: 0.15 };
 // How long it takes to get most of the way to that speed, in seconds
 const SPEED_S = 4;
@@ -113,14 +221,15 @@ const ease = (delta: number, time_s: number) => 1 - Math.exp(-delta / time_s);
 
 /**
  * The Mach number a throttle setting settles at, clean: idle to military
- * power, then on through the reheat.
+ * power, then on through the reheat. The drag climbs steeply round Mach one,
+ * so the first of the reheat buys the least speed.
  * @param throttle The throttle, 0 to 1.1
  * @returns The Mach number
  */
 const cruise_mach = (throttle: number) =>
   throttle <= 1
     ? IDLE_MACH + (DRY_MACH - IDLE_MACH) * throttle
-    : DRY_MACH + (REHEAT_MACH - DRY_MACH) * ((throttle - 1) / 0.1);
+    : DRY_MACH + (REHEAT_MACH - DRY_MACH) * ((throttle - 1) / 0.1) ** 2;
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
@@ -133,12 +242,13 @@ type Pilot = { keys: RefObject<Keys>; levers: Levers };
  * @param props The sky, and the pilot's keys and levers
  * @returns The model, its moving parts, its plumes and its vapor
  */
-const Fighter: FC<{ sky: Sky } & Pilot> = ({ sky, keys, levers }) => {
+const Fighter: FC<{ dusk: Dusk } & Pilot> = ({ dusk, keys, levers }) => {
   const { scene, animations } = useFighter();
   const flight = useFlightStore();
   const attitude = useRef<Group>(null);
   const body = useRef<Group>(null);
-  const vapor = useRef<WingVaporCore>(null);
+  const vapor = useRef<WingVaporHandle>(null);
+  const batch = useRef<AfterburnerBatchHandle>(null);
 
   // What the fake carries from frame to frame
   const state = useMemo(
@@ -158,6 +268,23 @@ const Fighter: FC<{ sky: Sky } & Pilot> = ({ sky, keys, levers }) => {
   useFrame((_, frame_delta) => {
     const delta = Math.min(frame_delta, 0.1);
     const input = keys.current;
+
+    // The plumes' exposure and the vapor's light follow the sky as it fades
+    if (dusk.moved) {
+      const night = dusk.night;
+      const day = SKIES.day.look;
+      const dark = SKIES.night.look;
+
+      batch.current?.updateProfile({
+        exposure: mix(SKIES.day.exposure, SKIES.night.exposure, night),
+      });
+      vapor.current?.updateLook({
+        sunColor: mix_rgb(day.sunColor, dark.sunColor, night),
+        sunIntensity: mix(day.sunIntensity, dark.sunIntensity, night),
+        skyColor: mix_rgb(day.skyColor, dark.skyColor, night),
+        skyIntensity: mix(day.skyIntensity, dark.skyIntensity, night),
+      });
+    }
 
     if (!flight || !attitude.current || !body.current) return;
 
@@ -180,7 +307,7 @@ const Fighter: FC<{ sky: Sky } & Pilot> = ({ sky, keys, levers }) => {
 
     state.mach += (mach_target - state.mach) * ease(delta, SPEED_S);
 
-    const airspeed_m_s = state.mach * MOIST.sound_m_s;
+    const airspeed_m_s = state.mach * MOIST.soundMPerS;
     // The g a full stick gives grows with the dynamic pressure
     const authority = (state.mach / 0.9) ** 2;
     const load_factor = clamp(
@@ -205,14 +332,14 @@ const Fighter: FC<{ sky: Sky } & Pilot> = ({ sky, keys, levers }) => {
     const yaw_rate = YAW_RATE * state.yaw;
 
     flight.set({
-      airspeed_m_s,
-      angle_of_attack_rad: state.alpha,
+      airspeedMPerS: airspeed_m_s,
+      angleOfAttackRad: state.alpha,
       // Right pedal yaws the nose right, the air then from the left
-      sideslip_rad: -3 * DEG * state.yaw,
-      load_factor,
-      roll_rate_rad_s: roll_rate,
-      pitch_rate_rad_s: pitch_rate,
-      yaw_rate_rad_s: yaw_rate,
+      sideslipRad: -3 * DEG * state.yaw,
+      loadFactor: load_factor,
+      rollRateRadPerS: roll_rate,
+      pitchRateRadPerS: pitch_rate,
+      yawRateRadPerS: yaw_rate,
       throttle: state.throttle,
       roll: state.roll,
       pitch: state.pitch,
@@ -231,10 +358,7 @@ const Fighter: FC<{ sky: Sky } & Pilot> = ({ sky, keys, levers }) => {
   });
 
   return (
-    <AfterburnerBatch
-      preset="afterburner"
-      profile={{ exposure: SKIES[sky].exposure }}
-    >
+    <AfterburnerBatch ref={batch} preset="afterburner" profile={DAY_PROFILE}>
       <group ref={attitude}>
         <group ref={body}>
           <primitive object={scene} />
@@ -246,8 +370,8 @@ const Fighter: FC<{ sky: Sky } & Pilot> = ({ sky, keys, levers }) => {
           <WingVapor
             ref={vapor}
             capture={scene}
-            capture_filter={airframe_only}
-            look={SKIES[sky].look}
+            captureFilter={airframe_only}
+            look={SKIES.day.look}
             forward={[0, 0, -1]}
           />
         </group>
@@ -268,7 +392,15 @@ const FlightScene: FC<{ sky: Sky; flight: Flight } & Pilot> = ({
   keys,
   levers,
 }) => {
-  const lights = SKIES[sky];
+  const dusk = useMemo<Dusk>(
+    () => ({ target: 0, night: 0, moved: true, linear: 0 }),
+    [],
+  );
+  const hemisphere = useRef<HemisphereLight>(null);
+  const sun = useRef<DirectionalLight>(null);
+
+  // Read by the fade on its next frame
+  dusk.target = sky === "night" ? 1 : 0;
 
   return (
     <Canvas
@@ -287,18 +419,22 @@ const FlightScene: FC<{ sky: Sky; flight: Flight } & Pilot> = ({
         return renderer;
       }}
     >
-      <color attach="background" args={[lights.background]} />
-      <hemisphereLight args={["#8090b0", "#101010", lights.hemisphere]} />
-      <directionalLight
-        position={SUN}
-        intensity={lights.sun}
-        color={lights.sun_color}
+      <SkyFade dusk={dusk} hemisphere={hemisphere} sun={sun} />
+      <hemisphereLight
+        ref={hemisphere}
+        args={["#8090b0", "#101010", SKIES.day.hemisphere]}
       />
-      <Reflections intensity={lights.reflections} />
+      <directionalLight
+        ref={sun}
+        position={SUN}
+        intensity={SKIES.day.sun}
+        color={SKIES.day.sunColor}
+      />
+      <Reflections intensity={SKIES.day.reflections} />
       {/* Context doesn't cross into the canvas: the same flight again */}
       <FlightProvider flight={flight}>
         <Suspense fallback={null}>
-          <Fighter sky={sky} keys={keys} levers={levers} />
+          <Fighter dusk={dusk} keys={keys} levers={levers} />
         </Suspense>
       </FlightProvider>
       <OrbitControls

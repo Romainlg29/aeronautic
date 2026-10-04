@@ -27,21 +27,25 @@ const SLICE_TRIANGLES = 4096;
  * One axis's pair of views: the nearest and furthest surface at every pixel.
  */
 export type DepthView = {
-  // Which axis it looks down: 0 x, 1 y, 2 z
+  /** Which axis it looks down: 0 x, 1 y, 2 z */
   axis: 0 | 1 | 2;
 
-  // The two axes across it, in order, and the pixels along each
+  /** The two axes across it, in order, and the pixels along each */
   across: [number, number];
   width: number;
   height: number;
 
-  // Where pixel (0, 0)'s corner is on the two axes across, and how big a
-  // pixel is, in metres
+  /**
+   * Where pixel (0, 0)'s corner is on the two axes across, and how big a
+   * pixel is, in metres
+   */
   origin: [number, number];
-  cell_m: number;
+  cellM: number;
 
-  // The least and greatest coordinate along the axis, per pixel. NaN where
-  // nothing was hit
+  /**
+   * The least and greatest coordinate along the axis, per pixel. NaN where
+   * nothing was hit
+   */
   near: Float32Array;
   far: Float32Array;
 };
@@ -50,7 +54,7 @@ export type DepthView = {
  * The six views, and the box they were taken in.
  */
 export type AirframeViews = {
-  // Looking along x (ahead and astern), y (from below and above) and z
+  /** Looking along x (ahead and astern), y (from below and above) and z */
   front: DepthView;
   top: DepthView;
   side: DepthView;
@@ -63,10 +67,10 @@ export type AirframeViews = {
  * Which way the airframe's frame faces on the object it is captured from.
  */
 export type CaptureFrame = {
-  // The frame's origin, in the object's frame
+  /** The frame's origin, in the object's frame */
   position?: readonly [number, number, number];
 
-  // Which way it flies, by default -Z, and which way is up, by default +Y
+  /** Which way it flies, by default -Z, and which way is up, by default +Y */
   forward?: readonly [number, number, number];
   up?: readonly [number, number, number];
 };
@@ -75,12 +79,14 @@ export type CaptureFrame = {
  * How to take the views.
  */
 export type CaptureOptions = CaptureFrame & {
-  // Pixels along the longest side of the box. 128 is about 14 cm on a fighter
+  /** Pixels along the longest side of the box. 128 is about 14 cm on a fighter */
   resolution?: number;
 
-  // Which meshes to keep. By default every visible one: hide the landing gear
-  // and the stores first, or leave them out here, as they are not the shape
-  // the air flies round
+  /**
+   * Which meshes to keep. By default every visible one: hide the landing gear
+   * and the stores first, or leave them out here, as they are not the shape
+   * the air flies round
+   */
   filter?: (mesh: Mesh) => boolean;
 };
 
@@ -312,7 +318,7 @@ export function* depth_view_steps(
       }
     }
 
-    return { axis, across, width, height, origin, cell_m, near, far };
+    return { axis, across, width, height, origin, cellM: cell_m, near, far };
   }
 
   const front = yield* view(0, [1, 2]);

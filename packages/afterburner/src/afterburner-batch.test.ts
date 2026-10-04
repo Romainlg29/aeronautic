@@ -1,4 +1,4 @@
-import { Matrix4, Object3D, Vector3 } from "three";
+import { Matrix4, Object3D, Quaternion, Vector3 } from "three";
 import { Flight } from "@aeronautic/core";
 import { describe, expect, it, vi } from "vitest";
 import { AFTERBURNER_ATTRIBUTES } from "./afterburner-material";
@@ -43,7 +43,7 @@ describe("AfterburnerBatch", () => {
   });
 
   it("writes the throttle into the instance", () => {
-    const batch = new AfterburnerBatch({ response_s: 0 });
+    const batch = new AfterburnerBatch({ responseS: 0 });
     const nozzle = batch.add({ throttle: 0.4 });
 
     nozzle.throttle = 0.7;
@@ -55,7 +55,7 @@ describe("AfterburnerBatch", () => {
     const now = vi.spyOn(performance, "now");
 
     try {
-      const batch = new AfterburnerBatch({ response_s: 0.25 });
+      const batch = new AfterburnerBatch({ responseS: 0.25 });
       const nozzle = batch.add({ throttle: 1 });
       const drawn = () => slot_of(batch, AFTERBURNER_ATTRIBUTES.place, 0)[3];
 
@@ -72,7 +72,7 @@ describe("AfterburnerBatch", () => {
 
       expect(drawn()).toBeGreaterThan(1);
       expect(drawn()).toBeLessThan(1.05);
-      expect(nozzle.drawn_throttle).toBeCloseTo(drawn());
+      expect(nozzle.drawnThrottle).toBeCloseTo(drawn());
 
       for (let frame = 3; frame < 60; frame++) {
         now.mockReturnValue(frame * 50);
@@ -88,8 +88,8 @@ describe("AfterburnerBatch", () => {
   it("moves the last nozzle into a removed one's slot", () => {
     const batch = new AfterburnerBatch();
 
-    const first = batch.add({ params: { nozzle_radius_m: 1 } });
-    const last = batch.add({ params: { nozzle_radius_m: 2 } });
+    const first = batch.add({ params: { nozzleRadiusM: 1 } });
+    const last = batch.add({ params: { nozzleRadiusM: 2 } });
 
     first.remove();
 
@@ -101,7 +101,7 @@ describe("AfterburnerBatch", () => {
     const batch = new AfterburnerBatch({ capacity: 2 });
 
     for (let index = 0; index < 5; index++) {
-      batch.add({ params: { nozzle_radius_m: index + 1 } });
+      batch.add({ params: { nozzleRadiusM: index + 1 } });
     }
 
     expect(batch.mesh.geometry.instanceCount).toBe(5);
@@ -138,7 +138,7 @@ describe("AfterburnerBatch", () => {
     object.scale.setScalar(2);
     object.updateMatrixWorld();
 
-    batch.add({ object, params: { nozzle_radius_m: 0.5 } });
+    batch.add({ object, params: { nozzleRadiusM: 0.5 } });
     render(batch, 1);
 
     expect(slot_of(batch, AFTERBURNER_ATTRIBUTES.shape, 0)[0]).toBe(1);
@@ -148,15 +148,15 @@ describe("AfterburnerBatch", () => {
     const batch = new AfterburnerBatch();
     const clear = batch.mesh.material;
 
-    batch.add({ params: { refraction_m: 0 } });
+    batch.add({ params: { refractionM: 0 } });
     expect(batch.mesh.material).toBe(clear);
 
-    batch.add({ params: { refraction_m: 0.1 } });
+    batch.add({ params: { refractionM: 0.1 } });
     expect(batch.mesh.material).not.toBe(clear);
   });
 
   it("draws the furthest plume first", () => {
-    const batch = new AfterburnerBatch({ response_s: 0 });
+    const batch = new AfterburnerBatch({ responseS: 0 });
     const near = new Object3D();
     const far = new Object3D();
 
@@ -165,8 +165,11 @@ describe("AfterburnerBatch", () => {
     near.updateMatrixWorld();
     far.updateMatrixWorld();
 
-    batch.add({ object: near, params: { nozzle_radius_m: 1 } });
-    batch.add({ object: far, params: { nozzle_radius_m: 2 } });
+    // Across the view, so each is as far as its nozzle
+    const offset = { direction: [1, 0, 0] } as const;
+
+    batch.add({ object: near, offset, params: { nozzleRadiusM: 1 } });
+    batch.add({ object: far, offset, params: { nozzleRadiusM: 2 } });
     render(batch, 1);
 
     expect(slot_of(batch, AFTERBURNER_ATTRIBUTES.shape, 0)[0]).toBe(2);
@@ -215,14 +218,36 @@ describe("AfterburnerNozzle placement", () => {
       offset: { position: [-2, 0, 0], direction: [-1, 0, 0] },
     });
 
-    const world = nozzle.world_matrix();
+    const world = nozzle.worldMatrix();
     const exit = new Vector3().setFromMatrixPosition(world);
-    const along = new Vector3(1, 0, 0).transformDirection(world);
+    const along = new Vector3(0, 0, 1).transformDirection(world);
 
     // Two metres back along the hull's -X, which the turn has put on +Z
     expect(exit.x).toBeCloseTo(10);
     expect(exit.z).toBeCloseTo(2);
     expect(along.z).toBeCloseTo(1);
+  });
+
+  it("streams along its object's +Z, drawn down the shader's +X", () => {
+    const batch = new AfterburnerBatch();
+    const hull = new Object3D();
+
+    hull.updateMatrixWorld();
+    batch.add({ object: hull });
+    render(batch, 1);
+
+    const [x = 0, y = 0, z = 0, w = 1] = slot_of(
+      batch,
+      AFTERBURNER_ATTRIBUTES.rotation,
+      0,
+    );
+    const axis = new Vector3(1, 0, 0).applyQuaternion(
+      new Quaternion(x, y, z, w),
+    );
+
+    expect(axis.x).toBeCloseTo(0);
+    expect(axis.y).toBeCloseTo(0);
+    expect(axis.z).toBeCloseTo(1);
   });
 
   it("follows an object attached later, and holds still when let go", () => {
@@ -235,7 +260,7 @@ describe("AfterburnerNozzle placement", () => {
     nozzle.attach(hull, { position: [1, 0, 0] });
 
     expect(
-      new Vector3().setFromMatrixPosition(nozzle.world_matrix()).toArray(),
+      new Vector3().setFromMatrixPosition(nozzle.worldMatrix()).toArray(),
     ).toEqual([1, 5, 0]);
 
     nozzle.attach(null);
@@ -243,63 +268,63 @@ describe("AfterburnerNozzle placement", () => {
     hull.updateMatrixWorld();
 
     expect(
-      new Vector3().setFromMatrixPosition(nozzle.world_matrix()).toArray(),
+      new Vector3().setFromMatrixPosition(nozzle.worldMatrix()).toArray(),
     ).toEqual([1, 5, 0]);
   });
 
   it("changes some params and keeps the rest", () => {
     const batch = new AfterburnerBatch();
-    const nozzle = batch.add({ params: { nozzle_radius_m: 0.7 } });
+    const nozzle = batch.add({ params: { nozzleRadiusM: 0.7 } });
 
-    nozzle.update_params({ exit_mach: 1.8 });
+    nozzle.updateParams({ exitMach: 1.8 });
 
-    expect(nozzle.params.exit_mach).toBe(1.8);
-    expect(nozzle.params.nozzle_radius_m).toBe(0.7);
+    expect(nozzle.params.exitMach).toBe(1.8);
+    expect(nozzle.params.nozzleRadiusM).toBe(0.7);
   });
 
   it("changes some of the profile and keeps the rest", () => {
-    const batch = new AfterburnerBatch({ profile: { airspeed_m_s: 200 } });
+    const batch = new AfterburnerBatch({ profile: { airspeedMPerS: 200 } });
 
-    batch.update_profile({ altitude_m: 9000 });
+    batch.updateProfile({ altitudeM: 9000 });
 
-    expect(batch.profile.altitude_m).toBe(9000);
-    expect(batch.profile.airspeed_m_s).toBe(200);
+    expect(batch.profile.altitudeM).toBe(9000);
+    expect(batch.profile.airspeedMPerS).toBe(200);
   });
 });
 
 describe("AfterburnerBatch with a source", () => {
   it("flies through the source's air", () => {
-    const flight = new Flight({ altitude_m: 0, airspeed_m_s: 0 });
+    const flight = new Flight({ altitudeM: 0, airspeedMPerS: 0 });
     const batch = new AfterburnerBatch({ source: flight });
 
     batch.add();
     render(batch, 1);
 
-    expect(batch.profile.altitude_m).toBe(0);
+    expect(batch.profile.altitudeM).toBe(0);
 
     flight.set({
-      altitude_m: 9000,
-      airspeed_m_s: 250,
-      temperature_offset_k: 5,
+      altitudeM: 9000,
+      airspeedMPerS: 250,
+      temperatureOffsetK: 5,
     });
     render(batch, 2);
 
-    expect(batch.profile.altitude_m).toBe(9000);
-    expect(batch.profile.airspeed_m_s).toBe(250);
-    expect(batch.profile.temperature_offset_k).toBe(5);
+    expect(batch.profile.altitudeM).toBe(9000);
+    expect(batch.profile.airspeedMPerS).toBe(250);
+    expect(batch.profile.temperatureOffsetK).toBe(5);
   });
 
   it("runs only the nozzles that follow at the source's throttle", () => {
     const flight = new Flight({ throttle: 1 });
-    const batch = new AfterburnerBatch({ source: flight, response_s: 0 });
+    const batch = new AfterburnerBatch({ source: flight, responseS: 0 });
 
     const following = batch.add({
       throttle: 1,
-      throttle_from: (values) => values.throttle,
+      throttleFrom: (values) => values.throttle,
     });
     const halved = batch.add({
       throttle: 1,
-      throttle_from: (values) => values.throttle / 2,
+      throttleFrom: (values) => values.throttle / 2,
     });
     const own = batch.add({ throttle: 0.5 });
 
@@ -312,11 +337,11 @@ describe("AfterburnerBatch with a source", () => {
   });
 
   it("is left alone with no source", () => {
-    const batch = new AfterburnerBatch({ profile: { altitude_m: 1200 } });
+    const batch = new AfterburnerBatch({ profile: { altitudeM: 1200 } });
 
     batch.add();
     render(batch, 1);
 
-    expect(batch.profile.altitude_m).toBe(1200);
+    expect(batch.profile.altitudeM).toBe(1200);
   });
 });

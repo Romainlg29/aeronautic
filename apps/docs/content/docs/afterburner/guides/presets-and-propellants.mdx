@@ -53,12 +53,12 @@ or set `exposure` in the batch's `profile` to suit them all.
 <Afterburner preset="rocket_methalox" params={{ turbulence: 0.4 }} />
 ```
 
-A `nozzle_radius_m` different from the preset's **scales every length the
+A `nozzleRadiusM` different from the preset's **scales every length the
 preset set with it**: a bigger engine of the same design, not a stubby one.
 
 ```tsx
 // A bigger booster, same look
-<Afterburner preset="solid_booster" params={{ nozzle_radius_m: 3.7 }} />
+<Afterburner preset="solid_booster" params={{ nozzleRadiusM: 3.7 }} />
 ```
 
 ## A preset of your own
@@ -75,7 +75,7 @@ import {
 export const sunset_booster: AfterburnerPreset = {
   params: {
     ...AFTERBURNER_PRESETS.solid_booster.params,
-    band_color: "#ff5a1f",
+    bandColor: "#ff5a1f",
   },
   profile: AFTERBURNER_PRESETS.solid_booster.profile,
 };
@@ -95,7 +95,7 @@ fuel, by mass) instead of raw soot and afterburning numbers:
 ```tsx
 <Afterburner
   preset="rocket_kerolox"
-  params={{ propellant: { fuel: "kerosene", mixture_ratio: 2.0 } }}
+  params={{ propellant: { fuel: "kerosene", mixtureRatio: 2.0 } }}
 />
 ```
 

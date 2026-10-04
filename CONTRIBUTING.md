@@ -153,9 +153,11 @@ one package. Those tags no longer start a release.
 - **GitHub account:** two-factor authentication on.
 - **Environment:** Settings → Environments → New environment `npm`, with
   **Required reviewers** set to yourself and **Deployment branches and tags**
-  limited to the `afterburner-v*` and `wing-vapor-v*` tag patterns.
+  limited to the `core-v*`, `afterburner-v*`, `wing-vapor-v*` and
+  `controls-v*` tag patterns.
 - **Tag ruleset:** Settings → Rules → Rulesets → New tag ruleset targeting
-  `v*`, `afterburner-v*` and `wing-vapor-v*`, restricting creations, updates
+  `v*`, `core-v*`, `afterburner-v*`, `wing-vapor-v*` and `controls-v*`,
+  restricting creations, updates
   and deletions, with no bypass list except Repository admin.
 - **Branch ruleset** on `main`: require a pull request and the CI check.
 - **Pages:** Settings → Pages → Source: GitHub Actions, for the docs.

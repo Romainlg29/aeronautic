@@ -26,12 +26,15 @@ import {
   PLUME_LIGHT_OFF,
   PLUME_MAX_ADAPTATION,
   PLUME_MIN_REHEAT,
+  PLUME_NOZZLE_MAX_MACH,
   PLUME_PHOTOPIC_K,
   PLUME_FAR_SPREAD,
   PLUME_FIELD_EXTENT,
   PLUME_IDLE_GLOW,
   PLUME_MAX_COFLOW,
   PLUME_QUENCH_DENSITY,
+  PLUME_SOOT_FLAME_K,
+  PLUME_SHOCK_DECAYS,
   PLUME_SOOT_PRESSURE_EXPONENT,
 } from "../plume-profile";
 import { REFERENCE_TEMPERATURE_K } from "../blackbody";
@@ -84,24 +87,28 @@ const SOOT_SPECTRUM: [number, number, number] = [550 / 610, 1, 550 / 465];
  * The air the profile puts the engines in, as `atmosphere` works it out.
  */
 export type PlumeAirNodes = {
-  // In kelvin
-  temperature_k: F;
+  /** In kelvin */
+  temperatureK: F;
 
-  // As shares of sea level's on a standard day
+  /** As shares of sea level's on a standard day */
   pressure: F;
   density: F;
 
-  // Metres per second
+  /** Metres per second */
   sound: F;
 
-  // Stagnation over static pressure, at the inlet
+  /** Stagnation over static pressure, at the inlet */
   ram: F;
 };
 
 /**
- * The profile, one float node per dial, usually uniforms, and the air it is.
+ * The profile, one float node per dial and a vector toward the sun, usually
+ * uniforms, and the air it is.
  */
-export type PlumeProfileNodes = { [K in keyof AfterburnerProfile]: F } & {
+export type PlumeProfileNodes = {
+  [K in Exclude<keyof AfterburnerProfile, "sunDirection">]: F;
+} & {
+  sunDirection: V3;
   air: PlumeAirNodes;
 };
 
@@ -109,15 +116,15 @@ export type PlumeProfileNodes = { [K in keyof AfterburnerProfile]: F } & {
  * One engine's params, as nodes, before the jet is worked out from them.
  */
 export type PlumeEngineNodes = {
-  nozzle_radius: F;
-  exit_mach: F;
-  pressure_ratio: F;
-  exit_temperature: F;
-  dry_temperature: F;
+  nozzleRadius: F;
+  exitMach: F;
+  pressureRatio: F;
+  exitTemperature: F;
+  dryTemperature: F;
   gamma: F;
-  molar_mass: F;
+  molarMass: F;
   soot: F;
-  soot_survival: F;
+  sootSurvival: F;
   particles: F;
   afterburning: F;
   turbulence: F;
@@ -130,70 +137,83 @@ export type PlumeEngineNodes = {
  * Every length is in metres, already scaled to the nozzle's world.
  */
 export type PlumeJetNodes = {
-  // The fully expanded jet: its radius and its speed
+  /** The fully expanded jet: its radius and its speed */
   radius: F;
   velocity: F;
 
-  // How long the potential core is, and how far the plume is drawn
-  core_length: F;
+  /** How long the potential core is, and how far the plume is drawn */
+  coreLength: F;
   reach: F;
 
-  // The fully expanded static temperature, and what afterburning adds to it
+  /** The fully expanded static temperature, and what afterburning adds to it */
   temperature: F;
   afterburning: F;
 
-  // How much thinner the expanded jet is than the exit plane, which dilutes
-  // what it carries: its soot, its particles, its radicals
+  /**
+   * How much thinner the expanded jet is than the exit plane, which dilutes
+   * what it carries: its soot, its particles, its radicals
+   */
   thinning: F;
 
-  // The static temperature at the exit plane, before the jet has expanded
-  // A rocket high up leaves its bell far hotter than it is once expanded
-  exit_temperature: F;
+  /**
+   * The static temperature at the exit plane, before the jet has expanded: a
+   * jet's nozzle opened up by the ram lets the gas out cooler. A rocket high
+   * up leaves its bell far hotter than it is once expanded
+   */
+  lipTemperature: F;
 
-  // How much denser the gas is behind a Mach disk than in the jet, the
-  // normal shock's ratio weighted by how strong the train is
+  /**
+   * How much denser the gas is behind a Mach disk than in the jet, the
+   * normal shock's ratio weighted by how strong the train is
+   */
   compression: F;
 
-  // What burns behind each Mach disk, in kelvin: an air-breathing engine's core
-  // still carries air, and the fuel it has left relights where a disk heats it.
-  // A rocket's core has no oxygen, so its fuel only burns at the edge
+  /**
+   * What burns behind each Mach disk, in kelvin: an air-breathing engine's core
+   * still carries air, and the fuel it has left relights where a disk heats it.
+   * A rocket's core has no oxygen, so its fuel only burns at the edge
+   */
   reheat: F;
 
-  // The shock train: how far the gas swings through a cell as a share of the jet,
-  // how far it lasts, how far apart the cells are, and where the first stands
-  shock_heat: F;
-  shock_length: F;
-  shock_spacing: F;
-  first_disk: F;
+  /**
+   * The shock train: how far the gas swings through a cell as a share of the jet,
+   * how far it lasts, how far apart the cells are, and where the first stands
+   */
+  shockHeat: F;
+  shockLength: F;
+  shockSpacing: F;
+  firstDisk: F;
 
-  // dr½/dx before the core closes and after
-  spread_near: F;
-  spread_far: F;
+  /** dr½/dx before the core closes and after */
+  spreadNear: F;
+  spreadFar: F;
 
-  // What is in the gas: absorption per metre of pure exhaust
+  /** What is in the gas: absorption per metre of pure exhaust */
   soot: F;
-  soot_survival: F;
+  sootSurvival: F;
   particles: F;
   albedo: F;
 
-  band_color: V3;
-  band_strength: F;
+  bandColor: V3;
+  bandStrength: F;
 
-  // How bright the dry engine's turbine glows up the nozzle, the exposure
-  // divided out
+  /**
+   * How bright the dry engine's turbine glows up the nozzle, the exposure
+   * divided out
+   */
   glow: F;
 
   turbulence: F;
   meander: F;
   refraction: F;
 
-  // A per nozzle offset, so no two engines move in step
+  /** A per nozzle offset, so no two engines move in step */
   seed: F;
 
-  // The widest the field reaches at the far end of the plume, outline and all
-  outer_radius: F;
+  /** The widest the field reaches at the far end of the plume, outline and all */
+  outerRadius: F;
 
-  // The exit's outline, for a nozzle that isn't round. Left out, it is
+  /** The exit's outline, for a nozzle that isn't round. Left out, it is */
   outline?: PlumeOutlineNodes;
 };
 
@@ -202,7 +222,7 @@ export type PlumeJetNodes = {
  * @param direction Unit length, in the outline's own axes: x across its width,
  * y up its height
  * @param frame Where the plume is being sampled
- * @returns How far out the outline is that way, over `nozzle_radius_m`
+ * @returns How far out the outline is that way, over `nozzleRadiusM`
  */
 export type PlumeOutlineRadius = (direction: V2, frame: PlumeFrame) => F;
 
@@ -214,22 +234,24 @@ export type PlumeOutlineRadius = (direction: V2, frame: PlumeFrame) => F;
  * against a circle once the outline has relaxed.
  */
 export type PlumeOutlineNodes = {
-  // The roll's cosine and sine: the outline turned about +X, right handed
+  /** The roll's cosine and sine: the outline turned about +X, right handed */
   roll: V2;
 
-  // Width over height, the superellipse's exponent, and its mean semi-axis
-  // over the radius of the round exit of its area
+  /**
+   * Width over height, the superellipse's exponent, and its mean semi-axis
+   * over the radius of the round exit of its area
+   */
   aspect: F;
   squareness: F;
-  area_scale: F;
+  areaScale: F;
 
-  // How far the outline reaches from the axis, in nozzle radii
+  /** How far the outline reaches from the axis, in nozzle radii */
   reach: F;
 
-  // How far downstream it lasts, in potential core lengths, before it is round
+  /** How far downstream it lasts, in potential core lengths, before it is round */
   length: F;
 
-  // Any outline, in place of the superellipse. `reach` must bound it
+  /** Any outline, in place of the superellipse. `reach` must bound it */
   radius?: PlumeOutlineRadius;
 };
 
@@ -240,13 +262,13 @@ export type PlumeContext = {
   jet: PlumeJetNodes;
   profile: PlumeProfileNodes;
 
-  // Seconds, whatever clock the plume runs on
+  /** Seconds, whatever clock the plume runs on */
   time: F;
 
-  // Temperature to radiance, a luminance of one at the reference temperature
+  /** Temperature to radiance, a luminance of one at the reference temperature */
   blackbody: (temperature_k: F) => V3;
 
-  // The sun, for the particles to scatter. Left out, only the sky lights them
+  /** The sun, for the particles to scatter. Left out, only the sky lights them */
   sun?: PlumeSunNodes;
 };
 
@@ -254,11 +276,13 @@ export type PlumeContext = {
  * The sun as one pixel of the plume sees it.
  */
 export type PlumeSunNodes = {
-  // Toward the sun, unit length, in the nozzle's frame
+  /** Toward the sun, unit length, in the nozzle's frame */
   direction: V3;
 
-  // How much of the sun's light the particles send down this ray, against
-  // what they would if they scattered evenly every way: `plume_sun_phase`
+  /**
+   * How much of the sun's light the particles send down this ray, against
+   * what they would if they scattered evenly every way: `plume_sun_phase`
+   */
   phase: F;
 };
 
@@ -331,7 +355,7 @@ const erfc = (x: F): F => {
  * @returns The optical depth to the sun, per primary
  */
 export const plume_sun_depth = (frame: PlumeFrame, axis: V3, sun: V3): V3 => {
-  const width = max(frame.half_width, PLUME_EPSILON);
+  const width = max(frame.halfWidth, PLUME_EPSILON);
 
   // 2^-(r/r½)² as e^-k r²
   const k = float(Math.LN2).div(width.mul(width));
@@ -371,7 +395,7 @@ export const plume_jet = (
   // The dry engine is at its hardest by the detent, and reheat adds to that
   const throttle = min(travel, 1);
 
-  const threshold = profile.burner_threshold;
+  const threshold = profile.burnerThreshold;
 
   // The first zone lights just past the threshold, the rest stage in
   const lit = smoothstep(threshold, threshold.add(PLUME_LIGHT_OFF), travel);
@@ -390,25 +414,21 @@ export const plume_jet = (
   );
 
   // A turbine runs hotter the harder it is pushed
-  const ambient_k = profile.air.temperature_k;
+  const ambient_k = profile.air.temperatureK;
 
   const dry_temperature = mix(
     ambient_k,
-    engine.dry_temperature,
-    mix(profile.idle_temperature, float(1), throttle),
+    engine.dryTemperature,
+    mix(profile.idleTemperature, float(1), throttle),
   );
 
-  const exit_temperature = mix(
-    dry_temperature,
-    engine.exit_temperature,
-    burner,
-  );
+  const exit_temperature = mix(dry_temperature, engine.exitTemperature, burner);
 
   // Only an engine with a dry state breathes air, and only its core has any
   const breathes = smoothstep(
     0,
     0.2,
-    float(1).sub(engine.dry_temperature.div(max(engine.exit_temperature, 1))),
+    float(1).sub(engine.dryTemperature.div(max(engine.exitTemperature, 1))),
   );
 
   const air = profile.air;
@@ -421,9 +441,9 @@ export const plume_jet = (
     breathes,
   );
 
-  const pressure_ratio = max(
-    engine.pressure_ratio
-      .mul(mix(profile.idle_pressure, float(1), throttle))
+  const built_ratio = max(
+    engine.pressureRatio
+      .mul(mix(profile.idlePressure, float(1), throttle))
       .mul(ambient_scale),
     0.05,
   );
@@ -432,11 +452,32 @@ export const plume_jet = (
   const k = gamma.sub(1).mul(0.5);
   const exponent = gamma.div(gamma.sub(1));
 
-  const exit_mach = max(engine.exit_mach, 0.2);
+  const exit_mach = max(engine.exitMach, 0.2);
   const exit_stagnation = k.mul(exit_mach).mul(exit_mach).add(1);
 
   // Isentropic from the exit plane to ambient: stagnation pressure is kept
-  const total_over_ambient = pow(exit_stagnation, exponent).mul(pressure_ratio);
+  const total_over_ambient = pow(exit_stagnation, exponent).mul(built_ratio);
+
+  // A jet's nozzle opens up with the ram, up to as wide as it goes
+  const widest = k.mul(PLUME_NOZZLE_MAX_MACH * PLUME_NOZZLE_MAX_MACH).add(1);
+
+  const lip_stagnation = max(
+    min(
+      exit_stagnation.mul(pow(max(air.ram, 1), breathes.div(exponent))),
+      widest,
+    ),
+    exit_stagnation,
+  );
+
+  const lip_temperature = exit_temperature
+    .mul(exit_stagnation)
+    .div(lip_stagnation);
+
+  // What the gas still has to expand by once it is out
+  const pressure_ratio = max(
+    total_over_ambient.div(pow(lip_stagnation, exponent)),
+    0.05,
+  );
 
   const mach = max(
     sqrt(max(pow(total_over_ambient, float(1).div(exponent)).sub(1), 0).div(k)),
@@ -459,9 +500,9 @@ export const plume_jet = (
 
   const expanded = clamp(area, 0.25, 36);
 
-  const radius = engine.nozzle_radius.mul(sqrt(expanded));
+  const radius = engine.nozzleRadius.mul(sqrt(expanded));
 
-  const gas_constant = float(8314.46).div(max(engine.molar_mass, 1));
+  const gas_constant = float(8314.46).div(max(engine.molarMass, 1));
 
   const sound = sqrt(gamma.mul(gas_constant).mul(temperature));
   const velocity = mach.mul(sound);
@@ -473,8 +514,8 @@ export const plume_jet = (
 
   const thinning = exit_velocity.div(max(expanded.mul(velocity), 1e-3));
 
-  const ambient = air.temperature_k;
-  const airspeed = max(profile.airspeed_m_s, 0);
+  const ambient = air.temperatureK;
+  const airspeed = max(profile.airspeedMPerS, 0);
 
   const convective = max(velocity.sub(airspeed), 0).div(sound.add(air.sound));
 
@@ -488,17 +529,17 @@ export const plume_jet = (
 
   const density = ambient
     .div(max(temperature, 1))
-    .mul(engine.molar_mass.div(28.97));
+    .mul(engine.molarMass.div(28.97));
 
   const diameter = radius.mul(2);
 
-  const core_length = profile.core_scale
+  const core_length = profile.coreScale
     .mul(diameter)
     .mul(mach.mul(mach).mul(1.1).add(4.2))
     .mul(pow(clamp(density, 0.01, 10), 0.28))
     .div(shear);
 
-  const spread_far = profile.spread_scale.mul(PLUME_FAR_SPREAD).mul(shear);
+  const spread_far = profile.spreadScale.mul(PLUME_FAR_SPREAD).mul(shear);
   const spread_near = spread_far.mul(compressibility);
 
   // Pack's spacing, and how strong the train is
@@ -513,7 +554,7 @@ export const plume_jet = (
   // A dry jet's train is too cool to glow until the burner relights it
   const diamonds = mix(float(1), burner, breathes);
 
-  const strength = mix(profile.shock_floor, float(1), mismatch)
+  const strength = mix(profile.shockFloor, float(1), mismatch)
     .mul(supersonic)
     .mul(diamonds);
 
@@ -521,7 +562,27 @@ export const plume_jet = (
   // to its stagnation temperature behind a disk
   const shock_heat = strength.mul(jet_stagnation.sub(1));
 
-  const shock_length = profile.shock_persistence.mul(core_length);
+  // The train lasts as long as the supersonic core does: past the core the
+  // axis' excess speed and heat fall together, and it ends where the speed
+  // left no longer outruns the sound there. Mirrors `sonic_distance`
+  const gamma_r = gamma.mul(gas_constant);
+  const heat = gamma_r.mul(temperature.sub(ambient));
+  const excess = velocity.sub(airspeed);
+  const speed = max(excess.mul(excess), 1);
+
+  const sonic_share = clamp(
+    heat
+      .add(sqrt(heat.mul(heat).add(speed.mul(gamma_r).mul(ambient).mul(4))))
+      .div(speed.mul(2)),
+    0.05,
+    1,
+  );
+
+  const sonic = core_length.mul(pow(max(pow(sonic_share, -4).sub(1), 0), 0.25));
+
+  const shock_length = profile.shockPersistence
+    .mul(sonic)
+    .div(PLUME_SHOCK_DECAYS);
 
   // A normal shock's density ratio at the jet's Mach number
   const normal = gamma
@@ -535,7 +596,7 @@ export const plume_jet = (
   const first_disk = smoothstep(0.9, 1.3, pressure_ratio).mul(0.3).add(0.5);
 
   // How far it is worth drawing
-  const visible_excess = max(profile.visible_temperature_k.sub(ambient), 1);
+  const visible_excess = max(profile.visibleTemperatureK.sub(ambient), 1);
 
   // The fuel left over burns only where there is air enough to burn it in
   const quench = air.density
@@ -546,19 +607,16 @@ export const plume_jet = (
 
   // And soot only burns out where there is oxygen to burn it: high up, what
   // the mixing layer would have burnt away at sea level survives as smoke
-  const soot_survival = mix(
-    float(1),
-    clamp(engine.soot_survival, 0, 1),
-    quench,
-  );
+  const soot_survival = mix(float(1), clamp(engine.sootSurvival, 0, 1), quench);
 
-  // A jet's soot falls with the pressure it burns at, a rocket's stays
+  // A jet's soot falls with the pressure it burns at, a rocket's stays. And a
+  // jet's is its burner flame's: none until the exhaust is hot enough to be one
   const soot_formed = mix(
     float(1),
     min(
       pow(max(air.pressure.mul(air.ram), 1e-6), PLUME_SOOT_PRESSURE_EXPONENT),
       3,
-    ),
+    ).mul(smoothstep(...PLUME_SOOT_FLAME_K, exit_temperature)),
     breathes,
   );
 
@@ -585,7 +643,7 @@ export const plume_jet = (
   const shortest = max(radius.mul(8), first_disk.add(1.5).mul(shock_spacing));
 
   const longest = max(
-    profile.max_length_d.mul(engine.nozzle_radius).mul(2),
+    profile.maxLengthD.mul(engine.nozzleRadius).mul(2),
     shortest,
   );
 
@@ -602,8 +660,19 @@ export const plume_jet = (
   const glow = breathes
     .mul(lighting.oneMinus())
     .mul(mix(float(PLUME_IDLE_GLOW), float(1), throttle))
-    .mul(max(profile.dry_glow, 0))
+    .mul(max(profile.dryGlow, 0))
     .div(max(profile.exposure, 1e-6));
+
+  // And once the burner lights, the pipe is full of its flame, burning at the
+  // gas's stagnation temperature
+  const pipe_flame = breathes
+    .mul(lighting)
+    .mul(max(engine.soot, 0))
+    .mul(soot_formed);
+  const pipe_temperature = exit_temperature.mul(exit_stagnation);
+
+  // What the pipe glows at: its hardware dry, its flame lit
+  const glow_temperature = mix(exit_temperature, pipe_temperature, lighting);
 
   // How far the camera opens up for a burner dimmer than at full power
   const adaptation = clamp(
@@ -614,7 +683,7 @@ export const plume_jet = (
         .mul(
           float(1)
             .div(max(exit_temperature, 1))
-            .sub(float(1).div(max(engine.exit_temperature, 1))),
+            .sub(float(1).div(max(engine.exitTemperature, 1))),
         ),
     ),
     1,
@@ -642,11 +711,14 @@ export const plume_jet = (
     reheat,
     thinning,
     exit_temperature,
+    lip_temperature,
     compression,
     soot_survival,
     soot_formed,
     adaptation,
     glow,
+    pipe_flame,
+    glow_temperature,
     shock_heat,
     shock_length,
     shock_spacing,
@@ -668,8 +740,8 @@ export const plume_half_width = (x: F, jet: PlumeJetNodes): F => {
   const station = max(x, 0);
 
   return jet.radius
-    .add(jet.spread_near.mul(min(station, jet.core_length)))
-    .add(jet.spread_far.mul(max(station.sub(jet.core_length), 0)));
+    .add(jet.spreadNear.mul(min(station, jet.coreLength)))
+    .add(jet.spreadFar.mul(max(station.sub(jet.coreLength), 0)));
 };
 
 /**
@@ -680,7 +752,7 @@ export const plume_half_width = (x: F, jet: PlumeJetNodes): F => {
  * @returns 0 to 1
  */
 export const plume_centreline = (x: F, jet: PlumeJetNodes): F => {
-  const ratio = max(x, 0).div(max(jet.core_length, PLUME_EPSILON));
+  const ratio = max(x, 0).div(max(jet.coreLength, PLUME_EPSILON));
   const squared = ratio.mul(ratio);
 
   return pow(squared.mul(squared).add(1), -0.25);
@@ -698,7 +770,7 @@ export const plume_centreline = (x: F, jet: PlumeJetNodes): F => {
  * @returns The station, in metres
  */
 export const plume_station = (x: F, jet: PlumeJetNodes): F => {
-  const core = max(jet.core_length, PLUME_EPSILON);
+  const core = max(jet.coreLength, PLUME_EPSILON);
   const station = max(x, 0);
 
   return select(
@@ -794,29 +866,33 @@ export const plume_closest = (origin: V3, direction: V3, span: V2): F => {
 export type PlumeFrame = {
   point: V3;
 
-  // Metres downstream, and how far through the potential core, 0 to 1
+  /** Metres downstream, and how far through the potential core, 0 to 1 */
   x: F;
   core: F;
 
-  half_width: F;
+  halfWidth: F;
 
-  // The centreline excess, 0 to 1, and the local centreline velocity
+  /** The centreline excess, 0 to 1, and the local centreline velocity */
   centre: F;
   speed: F;
 
-  // The station the flow has carried this point from, in metres
+  /** The station the flow has carried this point from, in metres */
   station: F;
 
-  // How thick the mixing layer is here
+  /** How thick the mixing layer is here */
   layer: F;
 
-  // The point off the meandering axis, and how far off it is: against the
-  // nozzle's outline, as the radius of the round exit it stands in for
+  /**
+   * The point off the meandering axis, and how far off it is: against the
+   * nozzle's outline, as the radius of the round exit it stands in for
+   */
   lateral: V2;
   radial: F;
 
-  // How much further than `radial` the field may reach from the axis, the
-  // outline's widest over its mean, one once the jet is round
+  /**
+   * How much further than `radial` the field may reach from the axis, the
+   * outline's widest over its mean, one once the jet is round
+   */
   spread: F;
 };
 
@@ -836,7 +912,7 @@ const streaked = (size: F, frame: PlumeFrame, context: PlumeContext): F => {
 
   // A metre here is velocity / local speed metres of station
   return size
-    .add(convective.mul(profile.shutter_s))
+    .add(convective.mul(profile.shutterS))
     .mul(jet.velocity)
     .div(max(frame.speed, PLUME_EPSILON));
 };
@@ -852,7 +928,7 @@ export const plume_frame = (point: V3, context: PlumeContext): PlumeFrame => {
 
   const x = point.x;
 
-  const core = clamp(x.div(max(jet.core_length, PLUME_EPSILON)), 0, 1).toVar();
+  const core = clamp(x.div(max(jet.coreLength, PLUME_EPSILON)), 0, 1).toVar();
 
   const half_width = plume_half_width(x, jet).toVar();
   const centre = plume_centreline(x, jet).toVar();
@@ -869,7 +945,7 @@ export const plume_frame = (point: V3, context: PlumeContext): PlumeFrame => {
     point,
     x,
     core,
-    half_width,
+    halfWidth: half_width,
     centre,
     speed,
     station,
@@ -878,10 +954,10 @@ export const plume_frame = (point: V3, context: PlumeContext): PlumeFrame => {
 
   // The far plume meanders as its large structures roll up, carried at their
   // convective speed. Rigid at the lip, free past a couple of core lengths
-  const freedom = smoothstep(0, jet.core_length.mul(2), x);
+  const freedom = smoothstep(0, jet.coreLength.mul(2), x);
 
   const period = streaked(
-    half_width.mul(profile.meander_scale),
+    half_width.mul(profile.meanderScale),
     frame_so_far,
     context,
   );
@@ -952,13 +1028,13 @@ export const plume_outline = (
           float(1).div(n),
         ),
       )
-      .div(outline.area_scale);
+      .div(outline.areaScale);
   }
 
   // The jet mixes round: as itself at the lip, a circle past its length
   const relaxed = smoothstep(
     0,
-    max(outline.length.mul(jet.core_length), PLUME_EPSILON),
+    max(outline.length.mul(jet.coreLength), PLUME_EPSILON),
     x,
   );
 
@@ -988,7 +1064,7 @@ export const plume_bound = (frame: PlumeFrame, context: PlumeContext): F => {
 
   const capped = max(frame.point.x.negate(), frame.point.x.sub(jet.reach));
 
-  const extent = frame.half_width
+  const extent = frame.halfWidth
     .mul(PLUME_FIELD_EXTENT)
     .add(frame.layer.mul(max(jet.turbulence, 0)).mul(PLUME_EDDY_REACH));
 
@@ -1018,7 +1094,7 @@ export const plume_bound_coarse = (point: V3, context: PlumeContext): F => {
 
   const half_width = plume_half_width(x, jet);
 
-  const core = clamp(x.div(max(jet.core_length, PLUME_EPSILON)), 0, 1);
+  const core = clamp(x.div(max(jet.coreLength, PLUME_EPSILON)), 0, 1);
 
   const layer = max(
     half_width.sub(jet.radius.mul(core.oneMinus())),
@@ -1033,7 +1109,7 @@ export const plume_bound_coarse = (point: V3, context: PlumeContext): F => {
   const spread = jet.outline ? max(jet.outline.reach, 1) : float(1);
 
   // Both curves at their furthest at once, a diagonal
-  const freedom = smoothstep(0, jet.core_length.mul(2), x);
+  const freedom = smoothstep(0, jet.coreLength.mul(2), x);
 
   const meander = jet.meander
     .mul(half_width)
@@ -1049,10 +1125,10 @@ export const plume_bound_coarse = (point: V3, context: PlumeContext): F => {
 export type PlumeSampleContext = PlumeFrame & {
   context: PlumeContext;
 
-  // How much of the gas here is exhaust, 0 to 1: the mixture fraction
+  /** How much of the gas here is exhaust, 0 to 1: the mixture fraction */
   mixture: F;
 
-  // How far out the sample sits, in half-widths, after the eddies
+  /** How far out the sample sits, in half-widths, after the eddies */
   across: F;
 };
 
@@ -1078,16 +1154,16 @@ export type PlumeFieldHooks = {
  * What one sample of the plume is.
  */
 export type PlumeFieldSample = {
-  // Kelvin
+  /** Kelvin */
   temperature: F;
 
-  // How much of the gas is exhaust, 0 to 1
+  /** How much of the gas is exhaust, 0 to 1 */
   mixture: F;
 
-  // Extinction per metre, per primary
+  /** Extinction per metre, per primary */
   extinction: V3;
 
-  // What it emits per metre, per primary, before exposure
+  /** What it emits per metre, per primary, before exposure */
   emission: V3;
 };
 
@@ -1095,7 +1171,7 @@ export type PlumeFieldSample = {
  * Options compiled into the field.
  */
 export type PlumeFieldOptions = {
-  // Octaves of eddy noise, 1 to 3
+  /** Octaves of eddy noise, 1 to 3 */
   octaves: number;
 
   hooks?: PlumeFieldHooks;
@@ -1118,7 +1194,15 @@ export const plume_field = (
   options: PlumeFieldOptions,
 ): PlumeFieldSample => {
   const { jet, profile, time } = context;
-  const { x, core, half_width, centre, layer, lateral, radial } = frame;
+  const {
+    x,
+    core,
+    halfWidth: half_width,
+    centre,
+    layer,
+    lateral,
+    radial,
+  } = frame;
 
   // The eddies push the profile about by up to a fraction of the mixing
   // layer's thickness, which is a mixing length model: the fluctuation they
@@ -1161,7 +1245,7 @@ export const plume_field = (
   If(turbulent.and(reaches_layer).and(blur.lessThan(1)), () => {
     const along = frame.station
       .sub(time.mul(jet.velocity).mul(0.6))
-      .div(streaked(eddy.mul(profile.eddy_stretch), frame, context));
+      .div(streaked(eddy.mul(profile.eddyStretch), frame, context));
 
     const flow = vec3(along, lateral.div(eddy)).add(jet.seed);
 
@@ -1189,20 +1273,20 @@ export const plume_field = (
 
   const mixture = centre.mul(profile_shape).mul(window).toVar();
 
-  const ambient = profile.air.temperature_k;
+  const ambient = profile.air.temperatureK;
 
-  const spacing = max(jet.shock_spacing, PLUME_EPSILON);
+  const spacing = max(jet.shockSpacing, PLUME_EPSILON);
 
   // Upstream of the first disk the exhaust is still expanding from the exit
   // plane: hotter and denser than the jet it becomes. Next to nothing at sea
   // level, and most of what a rocket high up shows
   const expanding = float(1)
-    .sub(smoothstep(0, max(jet.first_disk.mul(spacing), PLUME_EPSILON), x))
+    .sub(smoothstep(0, max(jet.firstDisk.mul(spacing), PLUME_EPSILON), x))
     .toVar();
 
   const core_temperature = mix(
     jet.temperature,
-    max(jet.exit_temperature, jet.temperature),
+    max(jet.lipTemperature, jet.temperature),
     expanding,
   );
 
@@ -1220,7 +1304,7 @@ export const plume_field = (
   // closing on the axis squeeze it into the next disk. Blackbody emission
   // being as steep as it is, that is a few hundred times brighter behind the
   // disk than in the expansion, which is the whole reason diamonds show
-  const cells = x.div(spacing).sub(jet.first_disk);
+  const cells = x.div(spacing).sub(jet.firstDisk);
 
   const behind = fract(cells);
 
@@ -1228,7 +1312,7 @@ export const plume_field = (
   const inviscid = jet.radius
     .mul(
       clamp(
-        float(1).sub(x.div(max(jet.shock_length, PLUME_EPSILON)).mul(0.65)),
+        float(1).sub(x.div(max(jet.shockLength, PLUME_EPSILON)).mul(0.65)),
         0.12,
         1,
       ),
@@ -1243,7 +1327,7 @@ export const plume_field = (
   // tapering as the fan eats into it. The relaxation sets how much of the
   // cell it fills
   const hot_length = clamp(
-    float(2.5).div(max(profile.shock_relaxation, 0.5)),
+    float(2.5).div(max(profile.shockRelaxation, 0.5)),
     0.05,
     0.9,
   );
@@ -1296,8 +1380,8 @@ export const plume_field = (
   // Full strength at the first disk, weakening from there as the core is mixed out
   const downstream = max(cells, 0).mul(spacing);
 
-  const swing = jet.shock_heat
-    .mul(exp(downstream.div(max(jet.shock_length, PLUME_EPSILON)).negate()))
+  const swing = jet.shockHeat
+    .mul(exp(downstream.div(max(jet.shockLength, PLUME_EPSILON)).negate()))
     .mul(resolved);
 
   // Hot by the whole swing behind a disk, cold by most of it in the fan
@@ -1313,7 +1397,7 @@ export const plume_field = (
   // are yellow-white while the gas between them is dull red
   const disked = hot
     .mul(started)
-    .mul(swing.div(max(jet.shock_heat, PLUME_EPSILON)))
+    .mul(swing.div(max(jet.shockHeat, PLUME_EPSILON)))
     .toVar();
 
   const relit = jet.reheat.mul(disked).mul(mixture);
@@ -1347,12 +1431,16 @@ export const plume_field = (
     1,
   ).toVar();
 
-  // What is in the gas. Soot burns out as the exhaust dilutes into hot air, so
-  // only a share of it survives into the far plume
+  // What is in the gas. Soot shows only where it is hot enough to glow: in
+  // the flame and behind each disk. Where the exhaust has mixed or expanded
+  // below that, all but the share that survives into the far plume is drawn
+  // burnt out, rather than as cold soot that could only darken the sky
+  const flame = smoothstep(...PLUME_SOOT_FLAME_K, shocked);
+
   const soot = jet.soot
     .mul(dense)
     .mul(mixture)
-    .mul(mix(jet.soot_survival, float(1), mixture));
+    .mul(mix(jet.sootSurvival, float(1), flame));
 
   const particles = jet.particles.mul(dense).mul(mixture);
 
@@ -1367,35 +1455,35 @@ export const plume_field = (
   // Band emission from the radicals, climbing steeply with temperature
   const activated = exp(
     min(
-      profile.activation_k.mul(
+      profile.activationK.mul(
         float(1 / REFERENCE_TEMPERATURE_K).sub(float(1).div(temperature)),
       ),
       6,
     ),
   );
 
-  const band = jet.band_color
-    .mul(jet.band_strength)
+  const band = jet.bandColor
+    .mul(jet.bandStrength)
     .mul(dense)
     .mul(mixture)
     .mul(activated);
 
   // And the sky, scattered by whatever is white
-  const lighting = vec3(profile.sky_light).toVar();
+  const lighting = vec3(profile.skyLight).toVar();
 
   // And the sun, from one way, through whatever of the plume is between
   const sun = context.sun;
 
   if (sun) {
     If(
-      profile.sun_light.greaterThan(0).and(jet.particles.greaterThan(0)),
+      profile.sunLight.greaterThan(0).and(jet.particles.greaterThan(0)),
       () => {
         // The extinction the plume has on its axis here, as the profile across
         // it is measured from: what the gas holds when it is all exhaust
         const axis_soot = jet.soot
           .mul(dense)
           .mul(frame.centre)
-          .mul(mix(jet.soot_survival, float(1), frame.centre));
+          .mul(mix(jet.sootSurvival, float(1), frame.centre));
 
         const axis = vec3(...SOOT_SPECTRUM)
           .mul(axis_soot)
@@ -1415,7 +1503,7 @@ export const plume_field = (
           SUN_MULTIPLE_SHARE,
         );
 
-        lighting.addAssign(direct.add(leaked).mul(profile.sun_light));
+        lighting.addAssign(direct.add(leaked).mul(profile.sunLight));
       },
     );
   }

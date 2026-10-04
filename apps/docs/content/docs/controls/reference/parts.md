@@ -27,48 +27,48 @@ functions.
 
 ## `PartOptions`
 
-| option    | type                               | what it does                                  |
-| --------- | ---------------------------------- | --------------------------------------------- |
-| `parts`   | `string[]`                         | These parts, whatever their kind.             |
-| `group`   | `string`                           | A rig group, whatever its kind.               |
-| `side`    | `"left" \| "right" \| "centre"`    | Only this side.                               |
-| `filter`  | `(part) => boolean`                | Keep only the parts this passes.              |
-| `from`    | `(flight, part) => number \| null` | The command, in the terms of the table above. |
-| `rate`    | `number`                           | In the part's unit a second.                  |
-| `on_move` | `(value, part) => void`            | Called in the frame a part moves.             |
+| option   | type                               | what it does                                  |
+| -------- | ---------------------------------- | --------------------------------------------- |
+| `parts`  | `string[]`                         | These parts, whatever their kind.             |
+| `group`  | `string`                           | A rig group, whatever its kind.               |
+| `side`   | `"left" \| "right" \| "centre"`    | Only this side.                               |
+| `filter` | `(part) => boolean`                | Keep only the parts this passes.              |
+| `from`   | `(flight, part) => number \| null` | The command, in the terms of the table above. |
+| `rate`   | `number`                           | In the part's unit a second.                  |
+| `onMove` | `(value, part) => void`            | Called in the frame a part moves.             |
 
-`TailOptions` adds `pitch_share`, 0.6 by default.
-`LeadingEdgeFlapOptions` adds `start_deg` (2) and `per_deg` (1.4).
+`TailOptions` adds `pitchShare`, 0.6 by default.
+`LeadingEdgeFlapOptions` adds `startDeg` (2) and `perDeg` (1.4).
 `CockpitOptions` adds `throttle`, a function of the flight.
 
 ## `GearOptions`
 
-| option    | type                            | what it does                                                                                                    |
-| --------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `side`    | `"left" \| "right" \| "centre"` | Only this side's gear.                                                                                          |
-| `from`    | `(flight) => number`            | How far down, 0 up to 1 down. The flight's `gear` by default.                                                   |
-| `rate`    | `number`                        | In the parts' unit a second.                                                                                    |
-| `on_move` | `(value, part) => void`         | Called in the frame a part moves.                                                                               |
-| `clip`    | `string \| RegExp \| false`     | The retraction clip. By default one named for the gear and `retract`, `stow` or `up`. `false` drives the parts. |
+| option   | type                            | what it does                                                                                                    |
+| -------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `side`   | `"left" \| "right" \| "centre"` | Only this side's gear.                                                                                          |
+| `from`   | `(flight) => number`            | How far down, 0 up to 1 down. The flight's `gear` by default.                                                   |
+| `rate`   | `number`                        | In the parts' unit a second.                                                                                    |
+| `onMove` | `(value, part) => void`         | Called in the frame a part moves.                                                                               |
+| `clip`   | `string \| RegExp \| false`     | The retraction clip. By default one named for the gear and `retract`, `stow` or `up`. `false` drives the parts. |
 
 ## `ControlSurface`
 
-| field                              | what it is                                                      |
-| ---------------------------------- | --------------------------------------------------------------- |
-| `name`                             | The node's name.                                                |
-| `kind`                             | Its `SurfaceKind`.                                              |
-| `node`                             | The node that moves.                                            |
-| `motion`                           | `rotation` or `translation`, about or along the node's local X. |
-| `unit`                             | `deg`, `rad`, `m` or `normalized`.                              |
-| `scale`                            | Radians or metres per unit.                                     |
-| `min`, `max`                       | Its limits, in its unit.                                        |
-| `rest`                             | The value it was posed at when found.                           |
-| `side`                             | `left`, `right` or `centre`.                                    |
-| `group`                            | The rig's group, or the kind's name.                            |
-| `positive`                         | What a positive value does.                                     |
-| `found_by`                         | `rig`, `name` or `virtual`.                                     |
-| `extras`                           | Everything else its extras said.                                |
-| `base_position`, `base_quaternion` | The pose at zero, which values are measured from.               |
+| field                            | what it is                                                      |
+| -------------------------------- | --------------------------------------------------------------- |
+| `name`                           | The node's name.                                                |
+| `kind`                           | Its `SurfaceKind`.                                              |
+| `node`                           | The node that moves.                                            |
+| `motion`                         | `rotation` or `translation`, about or along the node's local X. |
+| `unit`                           | `deg`, `rad`, `m` or `normalized`.                              |
+| `scale`                          | Radians or metres per unit.                                     |
+| `min`, `max`                     | Its limits, in its unit.                                        |
+| `rest`                           | The value it was posed at when found.                           |
+| `side`                           | `left`, `right` or `centre`.                                    |
+| `group`                          | The rig's group, or the kind's name.                            |
+| `positive`                       | What a positive value does.                                     |
+| `foundBy`                        | `rig`, `name` or `virtual`.                                     |
+| `extras`                         | Everything else its extras said.                                |
+| `basePosition`, `baseQuaternion` | The pose at zero, which values are measured from.               |
 
 `SurfaceKind` is one of `aileron`, `elevator`, `elevon`, `stabilator`,
 `canard`, `rudder`, `flap`, `le_flap`, `airbrake`, `spoiler`, `drag_rudder`,

@@ -38,3 +38,5 @@ export {
   type FlightTrackOptions,
   type FlightValues,
 } from "./flight";
+export { check_renderer, dev_warn, THREE_REVISION } from "./dev";
+export { deg, to_deg } from "./units";

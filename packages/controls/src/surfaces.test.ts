@@ -121,7 +121,7 @@ describe("find_surfaces on a rigged model", () => {
     expect(count("nozzle_petal")).toBe(56);
     expect(count("throttle_lever")).toBe(1);
 
-    expect(surfaces.every((surface) => surface.found_by === "rig")).toBe(true);
+    expect(surfaces.every((surface) => surface.foundBy === "rig")).toBe(true);
   });
 
   it("reads each part's side, limits and extras", () => {
@@ -141,7 +141,7 @@ describe("find_surfaces on a rigged model", () => {
     const door = named("CTRL_Door_MainGear_L");
 
     expect(door.rest).toBe(102);
-    expect(door.node.quaternion.angleTo(door.base_quaternion)).toBeCloseTo(
+    expect(door.node.quaternion.angleTo(door.baseQuaternion)).toBeCloseTo(
       102 * DEG,
       4,
     );
@@ -188,7 +188,7 @@ describe("find_surfaces on a model with only names", () => {
     const [elevon] = find_surfaces(root);
 
     expect(elevon.kind).toBe("elevon");
-    expect(elevon.found_by).toBe("name");
+    expect(elevon.foundBy).toBe("name");
     expect(elevon.side).toBe("left");
 
     // The rig's own hinge, up to its sense

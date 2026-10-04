@@ -22,7 +22,7 @@ The fighter stands on its wheels, gear down, at idle. One
 - **The gear** scrubs the model's own retraction clip, its doors and legs in
   the order they were animated, and moves the gear lever.
 - **The canopy** isn't in a flight, so it is moved by hand:
-  `rig.set_clip("ANIM_Canopy_Open", share)`.
+  `rig.setClip("ANIM_Canopy_Open", share)`.
 
 Each part moves at its actuator's rate, so the surfaces lag the stick a
 little and the gear takes a couple of seconds.

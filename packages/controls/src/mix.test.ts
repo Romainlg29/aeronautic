@@ -35,10 +35,10 @@ const part = (
   side,
   group: kind,
   positive: "",
-  found_by: "rig",
+  foundBy: "rig",
   extras: {},
-  base_position: new Vector3(),
-  base_quaternion: new Quaternion(),
+  basePosition: new Vector3(),
+  baseQuaternion: new Quaternion(),
   ...extra,
 });
 
@@ -91,11 +91,11 @@ describe("mix_surface", () => {
   it("schedules the leading-edge flaps on the angle of attack", () => {
     const flap = part("le_flap", "left", { min: -3, max: 25 });
 
-    expect(mix(flap, { angle_of_attack_rad: 0 })).toBe(0);
-    expect(
-      mix(flap, { angle_of_attack_rad: (12 * Math.PI) / 180 }),
-    ).toBeCloseTo(14);
-    expect(mix(flap, { angle_of_attack_rad: 1 })).toBe(25);
+    expect(mix(flap, { angleOfAttackRad: 0 })).toBe(0);
+    expect(mix(flap, { angleOfAttackRad: (12 * Math.PI) / 180 })).toBeCloseTo(
+      14,
+    );
+    expect(mix(flap, { angleOfAttackRad: 1 })).toBe(25);
   });
 
   it("opens the drag rudders together to brake, and one side to yaw", () => {

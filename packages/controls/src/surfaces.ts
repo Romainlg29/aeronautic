@@ -93,14 +93,14 @@ export type ControlSurface = {
   readonly positive: string;
 
   /** How it was found: from the rig, by its name, or added by code */
-  readonly found_by: "rig" | "name" | "virtual";
+  readonly foundBy: "rig" | "name" | "virtual";
 
   /** Anything else the rig's extras gave it, as `ab_detent` */
   readonly extras: Readonly<Record<string, unknown>>;
 
   /** The pose at zero, which values are measured from */
-  readonly base_position: Vector3;
-  readonly base_quaternion: Quaternion;
+  readonly basePosition: Vector3;
+  readonly baseQuaternion: Quaternion;
 };
 
 /**
@@ -580,10 +580,10 @@ export const find_surfaces = (
         side: side_of(node.name, node, into),
         group,
         positive: typeof extras.positive === "string" ? extras.positive : "",
-        found_by: "rig",
+        foundBy: "rig",
         extras: rest_of,
-        base_position: node.position.clone(),
-        base_quaternion: node.quaternion.clone(),
+        basePosition: node.position.clone(),
+        baseQuaternion: node.quaternion.clone(),
       });
 
       taken.add(node);
@@ -656,10 +656,10 @@ export const find_surfaces = (
         side: side_of(node.name, pivot, into),
         group: kind,
         positive: NAMED_POSITIVE[kind] ?? "trailing_edge_down",
-        found_by: "name",
+        foundBy: "name",
         extras: {},
-        base_position: pivot.position.clone(),
-        base_quaternion: pivot.quaternion.clone(),
+        basePosition: pivot.position.clone(),
+        baseQuaternion: pivot.quaternion.clone(),
       });
     }
   }
@@ -685,11 +685,11 @@ export const pose_surface = (surface: ControlSurface, value: number) => {
 
   if (surface.motion === "rotation") {
     scratch_turn.setFromAxisAngle(X, value * surface.scale);
-    node.quaternion.multiplyQuaternions(surface.base_quaternion, scratch_turn);
+    node.quaternion.multiplyQuaternions(surface.baseQuaternion, scratch_turn);
   } else {
-    scratch_axis.copy(X).applyQuaternion(surface.base_quaternion);
+    scratch_axis.copy(X).applyQuaternion(surface.baseQuaternion);
     node.position
-      .copy(surface.base_position)
+      .copy(surface.basePosition)
       .addScaledVector(scratch_axis, value * surface.scale);
   }
 };

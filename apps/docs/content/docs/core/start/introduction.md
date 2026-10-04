@@ -35,7 +35,7 @@ With one, you wrap the aircraft in a `<FlightProvider>`, write the flight once,
 and every effect inside reads it:
 
 ```tsx
-<FlightProvider initial={{ airspeed_m_s: 200, altitude_m: 3000 }}>
+<FlightProvider initial={{ airspeedMPerS: 200, altitudeM: 3000 }}>
   <primitive object={gltf.scene} />
   <ControlSurfaces object={gltf.scene} animations={gltf.animations} />
   <Afterburner position={[0, 0, 6]} />

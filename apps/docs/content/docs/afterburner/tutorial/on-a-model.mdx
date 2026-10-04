@@ -17,7 +17,8 @@ and follows its parent like any child:
 ```tsx
 <group ref={aircraft}>
   <AircraftModel />
-  <Afterburner position={[-7, 0, 0]} direction={[-1, 0, 0]} />
+  {/* 7 m aft of an aircraft that flies along -Z: the plume's own way */}
+  <Afterburner position={[0, 0, 7]} />
 </group>
 ```
 
@@ -38,7 +39,7 @@ const { scene, nodes } = useGLTF("/fighter.glb");
     target={nodes.FX_Exhaust_L}
     position={[0, 0, 0.08]} // at the petals' trailing edge, in the node's frame
     direction={[0, 0, -1]} // exhaust down the node's -Z, out of the back
-    params={{ nozzle_radius_m: 0.29, nozzle_aspect: 1.67 }} // the exit as modelled
+    params={{ nozzleRadiusM: 0.29, nozzleAspect: 1.67 }} // the exit as modelled
   />
 </>;
 ```
@@ -51,14 +52,14 @@ vectoring gimbals, so the plumes follow the nozzles as they swivel.
 
 Without one, open the model in a viewer and read the exit plane's position off
 the engine node, in that node's own axes. Measure the exit's radius too, and
-pass it as `nozzle_radius_m`, so the flame leaves the nozzle that is drawn.
+pass it as `nozzleRadiusM`, so the flame leaves the nozzle that is drawn.
 
 This model's exits are ovals, 0.76 m wide and 0.45 m high inside the petals.
-`nozzle_aspect` gives the plume that shape, width over height, and
-`nozzle_radius_m` is the round exit of the same area, `√(0.38 × 0.227)`. Match
+`nozzleAspect` gives the plume that shape, width over height, and
+`nozzleRadiusM` is the round exit of the same area, `√(0.38 × 0.227)`. Match
 them to the exit as drawn: the dry engine's glow fills that outline, so a
 smaller one leaves a dark rim inside the nozzle. The width runs along the
-plume frame's z, which this anchor's `direction` leaves level. See
+plume frame's x, which this anchor's `direction` leaves level. See
 [Shaped nozzles](../../guides/nozzle-shapes/) for flat, square and any other
 outline.
 
@@ -73,7 +74,7 @@ const [engine, set_engine] = useState<Object3D | null>(null);
 
 <>
   <mesh ref={set_engine}>…</mesh>
-  <Afterburner target={engine} position={[1, 0, 0]} direction={[1, 0, 0]} />
+  <Afterburner target={engine} position={[0, 0, 1]} />
 </>;
 ```
 
@@ -90,15 +91,14 @@ still one draw:
     <Afterburner
       key={index}
       target={engine}
-      position={[1, 0, 0]}
-      direction={[1, 0, 0]}
-      params={{ nozzle_radius_m: 0.35 }}
+      position={[0, 0, 1]}
+      params={{ nozzleRadiusM: 0.35 }}
     />
   ));
 }
 ```
 
-A different `nozzle_radius_m` scales every length of the plume with it. A
+A different `nozzleRadiusM` scales every length of the plume with it. A
 smaller engine gives a smaller plume of the same shape.
 
 Next: [drive it from code](../driving-it/).

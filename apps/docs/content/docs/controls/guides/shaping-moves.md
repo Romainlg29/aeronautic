@@ -25,7 +25,7 @@ part where it was going:
 // Ailerons that wash out with speed, as a fly-by-wire limits them
 <Ailerons
   from={(f, part) =>
-    f.roll * (part.side === "left" ? 1 : -1) * Math.min(1, 150 / f.airspeed_m_s)
+    f.roll * (part.side === "left" ? 1 : -1) * Math.min(1, 150 / f.airspeedMPerS)
   }
 />
 
@@ -44,13 +44,13 @@ re-renders nothing and adds no drive. Write it inline.
 
 ## Elevons and stabilators
 
-`pitch_share` is how much of their throw is pitch, the rest being roll, 0.6 by
+`pitchShare` is how much of their throw is pitch, the rest being roll, 0.6 by
 default. 1 makes them elevators, 0 ailerons.
 
 ## Leading-edge flaps
 
-They droop with the angle of attack, from `start_deg` (2° by default) at
-`per_deg` degrees a degree (1.4 by default), and fully with the flaps down.
+They droop with the angle of attack, from `startDeg` (2° by default) at
+`perDeg` degrees a degree (1.4 by default), and fully with the flaps down.
 
 ## The cockpit's throttle
 
@@ -71,12 +71,12 @@ kind. Infinity follows at once.
 The rig's rates are on `<Airframe rates={{ flap: 4 }}>` or
 `<ControlSurfaces rates={…}>`. See [Actuators](../../how-it-works/actuators/).
 
-## `on_move`
+## `onMove`
 
 Called in the frame a part moves, with its value in its unit:
 
 ```tsx
-<Gear on_move={(value, part) => clunk(part.name, value)} />
+<Gear onMove={(value, part) => clunk(part.name, value)} />
 ```
 
 ## Any part

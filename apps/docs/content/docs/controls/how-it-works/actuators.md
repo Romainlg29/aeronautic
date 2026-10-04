@@ -23,7 +23,7 @@ be; the value is where it is.
 value += sign(target - value) × min(rate × delta, |target - value|)
 ```
 
-The pose is written only for a part that moved. `on_move` and `on_moved` are
+The pose is written only for a part that moved. `onMove` and `onMoved` are
 called then, so a gauge reading them updates only when there is something to
 show.
 
@@ -52,6 +52,6 @@ once driven, so a model's other clips leave it alone.
 
 ## By hand
 
-`set`, `set_group` and `set_clip` give a part or a clip a target of their
+`set`, `setGroup` and `setClip` give a part or a clip a target of their
 own, over any drive. It still moves at its rate, as an actuator would, until
 it is given `null` and the drive has it back.

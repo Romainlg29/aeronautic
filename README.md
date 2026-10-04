@@ -16,10 +16,13 @@ the day: the look comes out of them.
 | [`@aeronautic/controls`](packages/controls#readme)       | [![npm](https://img.shields.io/npm/v/@aeronautic/controls)](https://www.npmjs.com/package/@aeronautic/controls)       | Control surfaces, gear, nozzles and thrust vectoring on a model   |
 | [`@aeronautic/core`](packages/core#readme)               | [![npm](https://img.shields.io/npm/v/@aeronautic/core)](https://www.npmjs.com/package/@aeronautic/core)               | The shared flight, the atmosphere and the depth capture           |
 
-Each installs on its own, with the same peers: `react` 19, `three` 0.186 and
-`@react-three/fiber` 9. Each release supports one three minor, because TSL
-changes between them. Both need three's `WebGPURenderer`, which falls back to
-WebGL 2 by itself. They don't run on the classic `WebGLRenderer`.
+Each installs on its own, with the same peers: `@aeronautic/core`, `three`
+0.186, plus `react` 19 and `@react-three/fiber` 9 (or 10) for the components
+in each package's `/react` entry. The package roots are plain three.js, with no
+React. Each release supports one three minor, because TSL changes between
+them. The effects need three's `WebGPURenderer`, which falls back to WebGL 2 by
+itself; in R3F, `gl={webgpu_gl()}` from `@aeronautic/core/react` makes one.
+They don't run on the classic `WebGLRenderer`.
 
 ## Afterburner
 
@@ -30,26 +33,20 @@ shock diamonds (Mach diamonds), heat haze, soot and eddies. Every plume in a
 batch is one instanced draw.
 
 ```bash
-pnpm add @aeronautic/afterburner
+pnpm add @aeronautic/afterburner @aeronautic/core three@~0.186 @react-three/fiber
 ```
 
 `<Afterburner>` is a group where a nozzle sits. The plume streams out along the
-group's local **+X**, and every distance is in metres:
+group's local **+Z**, aft of a model that flies along -Z, and every distance is in metres:
 
 ```tsx
 import { Canvas } from "@react-three/fiber";
-import { Afterburner } from "@aeronautic/afterburner";
-import { WebGPURenderer } from "three/webgpu";
+import { Afterburner } from "@aeronautic/afterburner/react";
+import { webgpu_gl } from "@aeronautic/core/react";
 
 export const App = () => (
-  <Canvas
-    gl={async (props) => {
-      const renderer = new WebGPURenderer({ ...props, antialias: false });
-      await renderer.init();
-      return renderer;
-    }}
-  >
-    <Afterburner preset="afterburner" params={{ nozzle_radius_m: 0.5 }} />
+  <Canvas gl={webgpu_gl()}>
+    <Afterburner preset="afterburner" params={{ nozzleRadiusM: 0.5 }} />
   </Canvas>
 );
 ```
@@ -74,7 +71,7 @@ works out the pressure round the aircraft from its planform, its airspeed and
 its angle of attack, and expands the day's moist air through it.
 
 ```bash
-pnpm add @aeronautic/wing-vapor
+pnpm add @aeronautic/wing-vapor @aeronautic/core three@~0.186 @react-three/fiber
 ```
 
 Put `<WingVapor>` at the aircraft's reference point. It can measure the
@@ -82,7 +79,7 @@ planform off the model itself:
 
 ```tsx
 import { useGLTF } from "@react-three/drei";
-import { WingVapor } from "@aeronautic/wing-vapor";
+import { WingVapor } from "@aeronautic/wing-vapor/react";
 
 export const Jet = () => {
   const { scene } = useGLTF("/jet.glb");
@@ -92,8 +89,8 @@ export const Jet = () => {
       <primitive object={scene} />
       <WingVapor
         capture={scene}
-        flight={{ airspeed_m_s: 170, angle_of_attack_rad: 0.35 }}
-        air={{ altitude_m: 300, relative_humidity: 0.9 }}
+        flight={{ airspeedMPerS: 170, angleOfAttackRad: 0.35 }}
+        air={{ altitudeM: 300, relativeHumidity: 0.9 }}
       />
     </group>
   );
@@ -178,8 +175,8 @@ add a preset and how to measure performance. Report security issues privately,
 as [SECURITY.md](SECURITY.md) describes.
 
 The docs deploy on every push to `main`. Releases to npm are
-the maintainer's, each package from a tag naming it, `afterburner-v*` or
-`wing-vapor-v*` (see "Releasing" in CONTRIBUTING.md).
+the maintainer's, each package from a tag naming it, `core-v*`, `afterburner-v*`,
+`wing-vapor-v*` or `controls-v*` (see "Releasing" in CONTRIBUTING.md).
 
 ## License
 

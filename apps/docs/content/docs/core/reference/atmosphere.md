@@ -23,11 +23,11 @@ functions, so an aircraft's plume and its vapor fly through the same day.
 The International Standard Atmosphere's temperature and pressure, to 86 km and
 isothermal above.
 
-| field           | unit | meaning                       |
-| --------------- | ---- | ----------------------------- |
-| `temperature_k` | K    | the standard temperature      |
-| `pressure_pa`   | Pa   | the pressure                  |
-| `pressure`      |      | the pressure over sea level's |
+| field          | unit | meaning                       |
+| -------------- | ---- | ----------------------------- |
+| `temperatureK` | K    | the standard temperature      |
+| `pressurePa`   | Pa   | the pressure                  |
+| `pressure`     |      | the pressure over sea level's |
 
 ## `moist_air(altitude_m, relative_humidity, temperature_offset_k = 0)`
 
@@ -36,16 +36,16 @@ altitude, and the day's offset warms the air at that pressure, so a hot day is
 a thinner one. The humidity is relative, so the same 90 % holds far more water
 on a hot day.
 
-| field               | unit  | meaning                                          |
-| ------------------- | ----- | ------------------------------------------------ |
-| `temperature_k`     | K     | the day's offset included                        |
-| `pressure_pa`       | Pa    |                                                  |
-| `density_kg_m3`     | kg/m³ | of the moist air                                 |
-| `sound_m_s`         | m/s   | the speed of sound in it                         |
-| `vapour_pa`         | Pa    | the vapour's partial pressure                    |
-| `mixing_ratio`      | kg/kg | vapour per kilogram of dry air                   |
-| `dew_point_k`       | K     | where it would condense, cooled at this pressure |
-| `relative_humidity` |       | as given                                         |
+| field              | unit  | meaning                                          |
+| ------------------ | ----- | ------------------------------------------------ |
+| `temperatureK`     | K     | the day's offset included                        |
+| `pressurePa`       | Pa    |                                                  |
+| `densityKgPerM3`   | kg/m³ | of the moist air                                 |
+| `soundMPerS`       | m/s   | the speed of sound in it                         |
+| `vapourPa`         | Pa    | the vapour's partial pressure                    |
+| `mixingRatio`      | kg/kg | vapour per kilogram of dry air                   |
+| `dewPointK`        | K     | where it would condense, cooled at this pressure |
+| `relativeHumidity` |       | as given                                         |
 
 ## Single functions
 
@@ -56,6 +56,22 @@ on a hot day.
 | `saturation_pressure(temperature_k)`   | Pa, over liquid water even below freezing (the Magnus fit)                        |
 | `dew_point(vapour_pa)`                 | K, the Magnus fit inverted                                                        |
 | `mixing_ratio(vapour_pa, pressure_pa)` | kg of vapour per kg of dry air                                                    |
+
+## Angles
+
+The fields take radians. These convert, so a planform reads as it is drawn:
+
+```ts
+import { deg, to_deg } from "@aeronautic/core";
+
+const airframe = { leadingEdgeSweepRad: deg(55) };
+to_deg(airframe.leadingEdgeSweepRad); // 55
+```
+
+| function          | returns           |
+| ----------------- | ----------------- |
+| `deg(degrees)`    | the angle, in rad |
+| `to_deg(radians)` | the angle, in deg |
 
 ## Constants
 

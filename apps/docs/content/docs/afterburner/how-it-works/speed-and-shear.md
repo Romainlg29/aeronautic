@@ -22,7 +22,7 @@ That bought 11 m/s → **300**, measured as nineteen times the per-frame motion
 with the camera held still, and no strobing (`gap1` well under `gap5`).
 
 The ratio that has to stay under a fifth settles at
-`1 / (60 * eddy_stretch * shutter_s)` however fast the flow goes — 0.13 at the
+`1 / (60 * eddyStretch * shutterS)` however fast the flow goes — 0.13 at the
 defaults. **The speed is not what limits this.** What does are two things that
 have no shutter of their own:
 
@@ -68,7 +68,7 @@ blurred along the flow — so the lateral detail survives whatever the speed is.
 
 That is the whole reason the plume can be this fast and still look like
 something. The dials that do it are `turbulence_scale_m` at 0.16 (fine across)
-against `eddy_stretch` at 9 (long along), which is a sixty to one aspect ratio
+against `eddyStretch` at 9 (long along), which is a sixty to one aspect ratio
 before the shutter has its say.
 
 It also means the tail should **close**, not billow. `plume_spread` came back

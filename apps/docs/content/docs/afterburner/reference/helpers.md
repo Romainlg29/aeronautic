@@ -3,16 +3,20 @@ title: Passes and helpers
 description: "afterburner_pass, presets, the atmosphere, propellants and the jet on the CPU."
 ---
 
+`afterburner_pass` and the presets come from the package root,
+`@aeronautic/afterburner`. The air, the propellants and the jet come from
+`@aeronautic/afterburner/physics`.
+
 ## `afterburner_pass(scene, camera, options?)`
 
 Draws the plumes in a pass of their own, at a share of the frame, and
 composites them depth-aware. See [Half resolution](../../guides/half-resolution/).
 
-| option             | default | what it is                                  |
-| ------------------ | ------- | ------------------------------------------- |
-| `resolution_scale` | `0.5`   | The plumes' resolution against the frame's. |
+| option            | default | what it is                                  |
+| ----------------- | ------- | ------------------------------------------- |
+| `resolutionScale` | `0.5`   | The plumes' resolution against the frame's. |
 
-It returns an `AfterburnerPass`: `{ output, scene, backdrop, scene_pass, plume_pass }`.
+It returns an `AfterburnerPass`: `{ output, scene, backdrop, scenePass, plumePass }`.
 
 ## Presets
 
@@ -30,13 +34,12 @@ It returns an `AfterburnerPass`: `{ output, scene, backdrop, scene_pass, plume_p
 
 ## The air
 
-`standard_atmosphere` is [`@aeronautic/core`](../../../core/reference/atmosphere/)'s,
-re-exported, so the engines and the wing vapor fly through the same day.
+The engines fly through [`@aeronautic/core`](../../../core/reference/atmosphere/)'s
+`standard_atmosphere`, as the wing vapor does, so both see the same day. Import
+it from `@aeronautic/core`.
 
-| export                            | what it is                                                                                                  |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `standard_atmosphere(altitude_m)` | ISA temperature (K) and pressure (share of sea level), to 86 km.                                            |
-| `atmosphere(profile)`             | `AirState`: `{ temperature_k, pressure, density, sound_m_s, ram }`, the day and the ram of flight included. |
+| export | what it is |
+| `atmosphere(profile)` | `AirState`: `{ temperatureK, pressure, density, soundMPerS, ram }`, the day and the ram of flight included. |
 
 ## Propellants
 
@@ -46,7 +49,7 @@ re-exported, so the engines and the wing vapor fly through the same day.
 | `propellant_effects(propellant)`            | The soot, soot survival and afterburning the mix makes.       |
 | `propellant_params(propellant, reference?)` | The params it sets, scaled from a reference engine if given.  |
 
-`Propellant` is `{ fuel: "kerosene" | "methane" | "hydrogen", mixture_ratio }`.
+`Propellant` is `{ fuel: "kerosene" | "methane" | "hydrogen", mixtureRatio }`.
 
 ## The jet on the CPU
 
@@ -63,7 +66,7 @@ The same physics the shader runs, for gameplay and UI:
 | `plume_adaptation(metered_k, full_k, adaptation)`          | The gain the camera opens up by for a plume dimmer than at full power.                 |
 | `jet_half_width(x_m, state)`, `jet_centreline(x_m, state)` | The width and centreline excess at a station.                                          |
 | `plume_extent(params)`                                     | How far out the field reaches, in half-widths.                                         |
-| `nozzle_outline_fit(aspect, squareness)`                   | `{ area_scale, reach }`: a shaped exit against the round one of its area.              |
+| `nozzle_outline_fit(aspect, squareness)`                   | `{ areaScale, reach }`: a shaped exit against the round one of its area.               |
 | `clamp_nozzle_squareness`, `NOZZLE_SQUARENESS_MIN`/`_MAX`  | The squareness range the shader draws, 0.5 to 24.                                      |
 | `plume_lod`, `plume_screen_span`, `PLUME_LOD_*`            | The tier choice, as the vertex shader makes it.                                        |
 | `build_plume_hull(sides)`                                  | The proxy hull geometry.                                                               |
@@ -87,7 +90,7 @@ The same physics the shader runs, for gameplay and UI:
 
 A custom geometry writes the shape attributes too: `afterburner_outline` is
 aspect, squareness, roll and outline length, and `afterburner_outline_fit` is
-`nozzle_outline_fit`'s `area_scale` and `reach`. See
+`nozzle_outline_fit`'s `areaScale` and `reach`. See
 [Shaped nozzles](../../guides/nozzle-shapes/).
 
 The rest of the shader is in `@aeronautic/afterburner/tsl`: see

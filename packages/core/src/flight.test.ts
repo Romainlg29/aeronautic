@@ -32,14 +32,14 @@ const fly = (
 describe("Flight", () => {
   it("works out the air and the speeds from what is written", () => {
     const flight = new Flight({
-      airspeed_m_s: 340.3,
-      altitude_m: 0,
-      relative_humidity: 0,
+      airspeedMPerS: 340.3,
+      altitudeM: 0,
+      relativeHumidity: 0,
     });
 
     expect(flight.values.mach).toBeCloseTo(1, 2);
-    expect(flight.values.density_ratio).toBeCloseTo(1, 2);
-    expect(flight.values.dynamic_pressure_pa).toBeCloseTo(
+    expect(flight.values.densityRatio).toBeCloseTo(1, 2);
+    expect(flight.values.dynamicPressurePa).toBeCloseTo(
       0.5 * 1.225 * 340.3 * 340.3,
       -2,
     );
@@ -47,26 +47,26 @@ describe("Flight", () => {
 
   it("reads the same air as the atmosphere", () => {
     const flight = new Flight({
-      altitude_m: 9000,
-      temperature_offset_k: 4,
-      relative_humidity: 0.3,
+      altitudeM: 9000,
+      temperatureOffsetK: 4,
+      relativeHumidity: 0.3,
     });
 
     const air = moist_air(9000, 0.3, 4);
 
-    expect(flight.values.temperature_k).toBe(air.temperature_k);
-    expect(flight.values.density_kg_m3).toBe(air.density_kg_m3);
-    expect(flight.values.sound_m_s).toBe(air.sound_m_s);
+    expect(flight.values.temperatureK).toBe(air.temperatureK);
+    expect(flight.values.densityKgPerM3).toBe(air.densityKgPerM3);
+    expect(flight.values.soundMPerS).toBe(air.soundMPerS);
   });
 
   it("keeps one values object for its life", () => {
     const flight = new Flight();
     const values = flight.values;
 
-    flight.set({ airspeed_m_s: 200, altitude_m: 5000 });
+    flight.set({ airspeedMPerS: 200, altitudeM: 5000 });
 
     expect(flight.values).toBe(values);
-    expect(values.airspeed_m_s).toBe(200);
+    expect(values.airspeedMPerS).toBe(200);
   });
 
   it("counts and tells of writes, and only of real ones", () => {
@@ -89,12 +89,12 @@ describe("Flight", () => {
   });
 
   it("thins with the altitude", () => {
-    const flight = new Flight({ airspeed_m_s: 250 });
-    const low = flight.values.dynamic_pressure_pa;
+    const flight = new Flight({ airspeedMPerS: 250 });
+    const low = flight.values.dynamicPressurePa;
 
-    flight.set({ altitude_m: 10_000 });
+    flight.set({ altitudeM: 10_000 });
 
-    expect(flight.values.dynamic_pressure_pa).toBeLessThan(low / 2);
+    expect(flight.values.dynamicPressurePa).toBeLessThan(low / 2);
     expect(flight.values.mach).toBeGreaterThan(250 / 340.3);
   });
 });
@@ -114,10 +114,10 @@ describe("Flight.track", () => {
 
     fly(flight, object, (o, dt) => o.translateZ(-200 * dt));
 
-    expect(flight.values.airspeed_m_s).toBeCloseTo(200, 0);
-    expect(flight.values.angle_of_attack_rad).toBeCloseTo(0, 3);
-    expect(flight.values.sideslip_rad).toBeCloseTo(0, 3);
-    expect(flight.values.load_factor).toBeCloseTo(1, 2);
+    expect(flight.values.airspeedMPerS).toBeCloseTo(200, 0);
+    expect(flight.values.angleOfAttackRad).toBeCloseTo(0, 3);
+    expect(flight.values.sideslipRad).toBeCloseTo(0, 3);
+    expect(flight.values.loadFactor).toBeCloseTo(1, 2);
   });
 
   it("reads the angle of attack with the nose above the path", () => {
@@ -128,7 +128,7 @@ describe("Flight.track", () => {
 
     fly(flight, object, (o, dt) => (o.position.z -= 200 * dt));
 
-    expect(flight.values.angle_of_attack_rad / DEG).toBeCloseTo(6, 1);
+    expect(flight.values.angleOfAttackRad / DEG).toBeCloseTo(6, 1);
   });
 
   it("reads sideslip with the air from the right as positive", () => {
@@ -140,8 +140,8 @@ describe("Flight.track", () => {
       o.position.x += 20 * dt;
     });
 
-    expect(flight.values.sideslip_rad).toBeGreaterThan(0);
-    expect(flight.values.sideslip_rad).toBeCloseTo(Math.asin(20 / 201), 2);
+    expect(flight.values.sideslipRad).toBeGreaterThan(0);
+    expect(flight.values.sideslipRad).toBeCloseTo(Math.asin(20 / 201), 2);
   });
 
   it("takes the wind out of the airspeed", () => {
@@ -156,7 +156,7 @@ describe("Flight.track", () => {
       flight.track(object, 1 / 60, { wind: [0, 0, -50] });
     }
 
-    expect(flight.values.airspeed_m_s).toBeCloseTo(150, 0);
+    expect(flight.values.airspeedMPerS).toBeCloseTo(150, 0);
   });
 
   it("reads the load factor of a level turn", () => {
@@ -184,8 +184,8 @@ describe("Flight.track", () => {
       240,
     );
 
-    expect(flight.values.load_factor).toBeCloseTo(Math.hypot(1, g), 1);
-    expect(flight.values.yaw_rate_rad_s).not.toBe(0);
+    expect(flight.values.loadFactor).toBeCloseTo(Math.hypot(1, g), 1);
+    expect(flight.values.yawRateRadPerS).not.toBe(0);
   });
 
   it("reads the rates in the aircraft's own frame, right, up and right", () => {
@@ -204,33 +204,33 @@ describe("Flight.track", () => {
     // Right wing down: about the nose's axis, forward
     const roll = rate((o, a) => o.rotateOnAxis(new Vector3(0, 0, -1), a));
 
-    expect(roll.roll_rate_rad_s).toBeCloseTo(0.5, 2);
-    expect(roll.pitch_rate_rad_s).toBeCloseTo(0, 3);
+    expect(roll.rollRateRadPerS).toBeCloseTo(0.5, 2);
+    expect(roll.pitchRateRadPerS).toBeCloseTo(0, 3);
 
     // Nose up: about the right wing
     const pitch = rate((o, a) => o.rotateX(a));
 
-    expect(pitch.pitch_rate_rad_s).toBeCloseTo(0.5, 2);
+    expect(pitch.pitchRateRadPerS).toBeCloseTo(0.5, 2);
 
     // Nose right: about down
     const yaw = rate((o, a) => o.rotateY(-a));
 
-    expect(yaw.yaw_rate_rad_s).toBeCloseTo(0.5, 2);
+    expect(yaw.yawRateRadPerS).toBeCloseTo(0.5, 2);
   });
 
   it("reads the altitude above sea level when given", () => {
-    const flight = new Flight({ altitude_m: 123 });
+    const flight = new Flight({ altitudeM: 123 });
     const object = new Object3D();
 
     object.position.y = 3000;
 
     fly(flight, object, (o, dt) => o.translateZ(-100 * dt), 4);
 
-    expect(flight.values.altitude_m).toBe(123);
+    expect(flight.values.altitudeM).toBe(123);
 
-    flight.track(object, 1 / 60, { sea_level_y: -500 });
+    flight.track(object, 1 / 60, { seaLevelY: -500 });
 
-    expect(flight.values.altitude_m).toBe(3500);
+    expect(flight.values.altitudeM).toBe(3500);
   });
 
   it("tracks a model that flies along +X", () => {
@@ -245,7 +245,7 @@ describe("Flight.track", () => {
       flight.track(object, 1 / 60, { forward: [1, 0, 0] });
     }
 
-    expect(flight.values.airspeed_m_s).toBeCloseTo(150, 0);
-    expect(flight.values.angle_of_attack_rad).toBeCloseTo(0, 3);
+    expect(flight.values.airspeedMPerS).toBeCloseTo(150, 0);
+    expect(flight.values.angleOfAttackRad).toBeCloseTo(0, 3);
   });
 });

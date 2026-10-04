@@ -110,77 +110,77 @@ const PIXEL_STEP = 0.0015;
  */
 const FIELD_KEYS: (keyof (VaporField & VaporConstants))[] = [
   "mach",
-  "speed_m_s",
-  "cos_alpha",
-  "sin_alpha",
-  "flow_z",
-  "roll_bias",
-  "slip_bias",
-  "vortex_k",
-  "saturation_deficit",
-  "semispan_m",
-  "root_span_m",
-  "tip_leading_m",
-  "tip_chord_m",
-  "tip_height_m",
-  "section_lift_m",
-  "reach_chord_m",
+  "speedMPerS",
+  "cosAlpha",
+  "sinAlpha",
+  "flowZ",
+  "rollBias",
+  "slipBias",
+  "vortexK",
+  "saturationDeficit",
+  "semispanM",
+  "rootSpanM",
+  "tipLeadingM",
+  "tipChordM",
+  "tipHeightM",
+  "sectionLiftM",
+  "reachChordM",
   "separation",
-  "cos2_sweep",
-  "normal_mach",
-  "tip_circulation",
-  "tip_core2_m2",
-  "tip_start2_m2",
-  "tip_rollup_m",
-  "tip_growth_m",
-  "tip_descent",
-  "tip_reach_m",
-  "tip_bound_m",
-  "trail_spacing_m",
-  "second_semispan_m",
-  "second_tip_leading_m",
-  "second_tip_chord_m",
-  "second_tip_height_m",
-  "second_circulation",
-  "second_core2_m2",
-  "second_start2_m2",
-  "second_rollup_m",
-  "second_growth_m",
-  "second_descent",
-  "second_reach_m",
-  "second_bound_m",
-  "second_spacing_m",
-  "edge_apex_m",
-  "edge_gradient",
-  "edge_length_m",
-  "edge_core",
-  "edge_height",
-  "edge_burst_m",
-  "edge_bound_m",
-  "wing_bound_m",
-  "evaporation_m",
-  "nose_m",
-  "body_length_m",
-  "body_radius_m",
-  "body_height_m",
-  "cone_strength",
-  "cone_shock",
-  "cone_shock_width",
-  "cone_fade",
-  "cone_bound_m",
-  "wing_scale",
-  "wing_sonic",
-  "wing_beta",
-  "wing_kt",
-  "wing_cap",
-  "wing_reach",
-  "wing_travel",
-  "wing_supersonic",
-  "cone_scale",
-  "cone_beta",
-  "cone_kt",
-  "cone_cap",
-  "cone_reach_m",
+  "cos2Sweep",
+  "normalMach",
+  "tipCirculation",
+  "tipCore2M2",
+  "tipStart2M2",
+  "tipRollupM",
+  "tipGrowthM",
+  "tipDescent",
+  "tipReachM",
+  "tipBoundM",
+  "trailSpacingM",
+  "secondSemispanM",
+  "secondTipLeadingM",
+  "secondTipChordM",
+  "secondTipHeightM",
+  "secondCirculation",
+  "secondCore2M2",
+  "secondStart2M2",
+  "secondRollupM",
+  "secondGrowthM",
+  "secondDescent",
+  "secondReachM",
+  "secondBoundM",
+  "secondSpacingM",
+  "edgeApexM",
+  "edgeGradient",
+  "edgeLengthM",
+  "edgeCore",
+  "edgeHeight",
+  "edgeBurstM",
+  "edgeBoundM",
+  "wingBoundM",
+  "evaporationM",
+  "noseM",
+  "bodyLengthM",
+  "bodyRadiusM",
+  "bodyHeightM",
+  "coneStrength",
+  "coneShock",
+  "coneShockWidth",
+  "coneFade",
+  "coneBoundM",
+  "wingScale",
+  "wingSonic",
+  "wingBeta",
+  "wingKt",
+  "wingCap",
+  "wingReach",
+  "wingTravel",
+  "wingSupersonic",
+  "coneScale",
+  "coneBeta",
+  "coneKt",
+  "coneCap",
+  "coneReachM",
 ];
 
 type FloatUniform = UniformNode<"float", number>;
@@ -192,44 +192,50 @@ type Vec3Uniform = UniformNode<"vec3", Vector3>;
 export type VaporUniforms = {
   field: { [K in keyof (VaporField & VaporConstants)]: FloatUniform };
 
-  // The box, in the canonical frame
-  box_min: Vec3Uniform;
-  box_max: Vec3Uniform;
+  /** The box, in the canonical frame */
+  boxMin: Vec3Uniform;
+  boxMax: Vec3Uniform;
 
-  // The camera, in the canonical frame
+  /** The camera, in the canonical frame */
   camera: Vec3Uniform;
 
-  // Which way the sunlight comes from, in the canonical frame, and the
-  // light's colour times its brightness
-  sun_direction: Vec3Uniform;
+  /**
+   * Which way the sunlight comes from, in the canonical frame, and the
+   * light's colour times its brightness
+   */
+  sunDirection: Vec3Uniform;
   sun: Vec3Uniform;
   sky: Vec3Uniform;
 
   exposure: FloatUniform;
 
-  // Extinction per metre per gram of water per cubic metre
+  /** Extinction per metre per gram of water per cubic metre */
   extinction: FloatUniform;
 
   anisotropy: FloatUniform;
-  eddy_m: FloatUniform;
-  shutter_s: FloatUniform;
+  eddyM: FloatUniform;
+  shutterS: FloatUniform;
 
-  // Seconds
+  /** Seconds */
   time: FloatUniform;
 
-  // Where in the moisture's noise this aircraft flies, so two do not fog in
-  // lockstep
+  /**
+   * Where in the moisture's noise this aircraft flies, so two do not fog in
+   * lockstep
+   */
   seed: FloatUniform;
 
-  // How much coarser than its parts ask the march may step, one or more: the
-  // more of the screen the vapour covers, the more
-  step_scale: FloatUniform;
+  /**
+   * How much coarser than its parts ask the march may step, one or more: the
+   * more of the screen the vapour covers, the more
+   */
+  stepScale: FloatUniform;
 
-  // Whether the moisture's patches are drawn: 1 near, 0 far
+  /** Whether the moisture's patches are drawn: 1 near, 0 far */
   detail: FloatUniform;
 
-  // The most iterations the march may take
-  max_steps: UniformNode<"int", number>;
+  /** The most iterations the march may take */
+  maxSteps: UniformNode<"int", number>;
 };
 
 /**
@@ -250,22 +256,22 @@ export const create_vapor_uniforms = (): VaporUniforms => {
 
   return {
     field,
-    box_min: vector("box_min"),
-    box_max: vector("box_max"),
+    boxMin: vector("boxMin"),
+    boxMax: vector("boxMax"),
     camera: vector("camera"),
-    sun_direction: vector("sun_direction"),
+    sunDirection: vector("sunDirection"),
     sun: vector("sun"),
     sky: vector("sky"),
     exposure: uniform(1) as FloatUniform,
     extinction: uniform(1.5) as FloatUniform,
     anisotropy: uniform(0.75) as FloatUniform,
-    eddy_m: uniform(0.6) as FloatUniform,
-    shutter_s: uniform(1 / 60) as FloatUniform,
+    eddyM: uniform(0.6) as FloatUniform,
+    shutterS: uniform(1 / 60) as FloatUniform,
     time: uniform(0) as FloatUniform,
     seed: uniform(0) as FloatUniform,
-    step_scale: uniform(1) as FloatUniform,
+    stepScale: uniform(1) as FloatUniform,
     detail: uniform(1) as FloatUniform,
-    max_steps: uniform(160, "int") as UniformNode<"int", number>,
+    maxSteps: uniform(160, "int") as UniformNode<"int", number>,
   };
 };
 
@@ -376,16 +382,16 @@ export const write_shape_texture = (
 
   for (let station = 0; station < SHAPE_STATIONS; station++) {
     put(0, station, [
-      shape.leading_m[station],
-      shape.chord_m[station],
-      shape.mid_m[station],
+      shape.leadingM[station],
+      shape.chordM[station],
+      shape.midM[station],
       shape.thickness[station],
     ]);
     put(1, station, [shape.loading[station]]);
     put(2, station, [
-      path.span_m[station],
-      path.surface_m[station],
-      path.reach_m[station],
+      path.spanM[station],
+      path.surfaceM[station],
+      path.reachM[station],
     ]);
   }
 
@@ -453,10 +459,10 @@ export type VaporMaterialOptions = {
   uniforms: VaporUniforms;
   table: DataTexture;
 
-  // The wing's tables, from `create_shape_texture`
+  /** The wing's tables, from `create_shape_texture` */
   shape: DataTexture;
 
-  // The tip vortices' trails, from `create_trail_texture`
+  /** The tip vortices' trails, from `create_trail_texture` */
   trails: DataTexture;
 
   effects: VaporEffects;
@@ -503,8 +509,8 @@ export const create_vapor_material = (
   const { uniforms: u, table, shape, trails, effects } = options;
   const f = u.field as unknown as VaporFieldNodes;
 
-  const box_min = u.box_min as unknown as V3;
-  const box_max = u.box_max as unknown as V3;
+  const box_min = u.boxMin as unknown as V3;
+  const box_max = u.boxMax as unknown as V3;
   const camera = u.camera as unknown as V3;
 
   // Vertex stage: the unit box opened to the field's bounds. The mesh's own
@@ -553,7 +559,7 @@ export const create_vapor_material = (
     );
 
     // The light, the same for every sample: sun and sky, per unit of scattering
-    const cosine = dot(direction, u.sun_direction as unknown as V3);
+    const cosine = dot(direction, u.sunDirection as unknown as V3);
     // The sun's light, split as clouds' is: the droplets' forward peak, which
     // a cloud in the way blocks, and what has scattered many times, which
     // diffuses round it and is dimmed far less
@@ -564,14 +570,14 @@ export const create_vapor_material = (
       .toVar();
     const sun_multiple = sun.mul(ISOTROPIC_SHARE / (4 * Math.PI)).toVar();
     const sky = (u.sky as unknown as V3).toVar();
-    const sun_ray = (u.sun_direction as unknown as V3).toVar();
+    const sun_ray = (u.sunDirection as unknown as V3).toVar();
 
     // The air moves aft past the aircraft at the airspeed, along the free
     // stream, and the patches move with it. The shutter streaks them
-    const flow = vec3(f.cos_alpha, f.sin_alpha, f.flow_z);
-    const drift = f.speed_m_s.mul(u.time as unknown as F);
-    const streak = (u.eddy_m as unknown as F).add(
-      f.speed_m_s.mul(u.shutter_s as unknown as F),
+    const flow = vec3(f.cosAlpha, f.sinAlpha, f.flowZ);
+    const drift = f.speedMPerS.mul(u.time as unknown as F);
+    const streak = (u.eddyM as unknown as F).add(
+      f.speedMPerS.mul(u.shutterS as unknown as F),
     );
 
     // The condensation table at one deficit: grams per cubic metre in the
@@ -602,7 +608,7 @@ export const create_vapor_material = (
     const inside = float(0).toVar();
 
     Loop(
-      { start: int(0), end: u.max_steps, type: "int", condition: "<" },
+      { start: int(0), end: u.maxSteps, type: "int", condition: "<" },
       () => {
         If(t.greaterThan(leave), () => {
           Break();
@@ -632,7 +638,7 @@ export const create_vapor_material = (
         // The part's own step, coarsened by what the view can spare, and never
         // finer than a pixel
         const here = min(
-          max(sample.step.mul(u.step_scale as unknown as F), footprint),
+          max(sample.step.mul(u.stepScale as unknown as F), footprint),
           leave.sub(t).add(1e-3),
         ).toVar();
 
@@ -645,7 +651,7 @@ export const create_vapor_material = (
         const deficit = sample.deficit.toVar();
 
         // Only below the dew point's deficit is there anything to look up
-        If(deficit.greaterThan(f.saturation_deficit), () => {
+        If(deficit.greaterThan(f.saturationDeficit), () => {
           const water = water_at(deficit);
 
           // The moisture's patches, in the air's own frame
@@ -663,7 +669,7 @@ export const create_vapor_material = (
             patch.assign(
               clamp(
                 patchiness(
-                  vec3(downstream.div(streak), across.yz.div(u.eddy_m)),
+                  vec3(downstream.div(streak), across.yz.div(u.eddyM)),
                 ),
                 -1,
                 1,
@@ -683,7 +689,7 @@ export const create_vapor_material = (
           // How much cloud the sunlight crossed to get here
           const shade = float(0).toVar();
 
-          if (effects.self_shadow) {
+          if (effects.selfShadow) {
             If((u.detail as unknown as F).greaterThan(0.5), () => {
               for (const [distance, length] of SHADOW_SAMPLES) {
                 // Only a sample that may land in something is looked up: in
@@ -696,7 +702,7 @@ export const create_vapor_material = (
                     shape,
                     trails,
                     point.add(sun_ray.mul(distance)),
-                    { ...effects, tip_vortices: false },
+                    { ...effects, tipVortices: false },
                   );
 
                   // Outside every part nothing condenses: the distance says

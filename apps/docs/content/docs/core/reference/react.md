@@ -1,6 +1,6 @@
 ---
 title: React
-description: "FlightProvider, useFlight, useFlightFrame, useFlightStore, ThrustContext and useThrust."
+description: "FlightProvider, useFlight, useFlightFrame, useFlightStore, ThrustContext, useThrust and webgpu_gl."
 ---
 
 ```ts
@@ -11,6 +11,7 @@ import {
   useFlightFrame,
   useFlightStore,
   useThrust,
+  webgpu_gl,
 } from "@aeronautic/core/react";
 ```
 
@@ -18,16 +19,16 @@ import {
 
 One aircraft's flight, for everything inside it.
 
-| prop          | type                                      | meaning                                                                  |
-| ------------- | ----------------------------------------- | ------------------------------------------------------------------------ |
-| `flight`      | `Flight`                                  | a flight made elsewhere, to share. Left out, the provider makes one      |
-| `initial`     | `Partial<FlightInput>`                    | what the provider's own flight starts with. Read once                    |
-| `track`       | `Object3D \| RefObject<Object3D \| null>` | an object to track every frame. Needs the provider inside the `<Canvas>` |
-| `forward`     | `[x, y, z]`                               | which way the tracked object flies. `[0, 0, -1]` by default              |
-| `up`          | `[x, y, z]`                               | which way is its up. `[0, 1, 0]` by default                              |
-| `sea_level_y` | `number`                                  | world height of sea level, for the tracked altitude                      |
-| `wind`        | `[x, y, z]`                               | the wind in world space, m/s                                             |
-| `world_up`    | `[x, y, z]`                               | which way is up in the world. `[0, 1, 0]` by default                     |
+| prop        | type                                      | meaning                                                                  |
+| ----------- | ----------------------------------------- | ------------------------------------------------------------------------ |
+| `flight`    | `Flight`                                  | a flight made elsewhere, to share. Left out, the provider makes one      |
+| `initial`   | `Partial<FlightInput>`                    | what the provider's own flight starts with. Read once                    |
+| `track`     | `Object3D \| RefObject<Object3D \| null>` | an object to track every frame. Needs the provider inside the `<Canvas>` |
+| `forward`   | `[x, y, z]`                               | which way the tracked object flies. `[0, 0, -1]` by default              |
+| `up`        | `[x, y, z]`                               | which way is its up. `[0, 1, 0]` by default                              |
+| `seaLevelY` | `number`                                  | world height of sea level, for the tracked altitude                      |
+| `wind`      | `[x, y, z]`                               | the wind in world space, m/s                                             |
+| `worldUp`   | `[x, y, z]`                               | which way is up in the world. `[0, 1, 0]` by default                     |
 
 The tracker runs in a `useFrame` at priority −1, before the default 0. The
 options are read in the frame, so writing them inline is fine.
@@ -52,6 +53,19 @@ changes.
 | `equal` | `Object.is` | whether two selections are the same, so no render                           |
 
 Outside a provider it reads a default flight of its own.
+
+## `webgpu_gl(options?)`
+
+The `gl` for a `<Canvas>`: a three.js `WebGPURenderer`, initialised, with
+antialiasing off (the effects are drawn after the scene and don't need it).
+`options` go to the renderer's constructor, over those:
+
+```tsx
+import { webgpu_gl } from "@aeronautic/core/react";
+
+<Canvas gl={webgpu_gl()}>…</Canvas>;
+<Canvas gl={webgpu_gl({ trackTimestamp: true })}>…</Canvas>;
+```
 
 ## `ThrustContext` and `useThrust()`
 

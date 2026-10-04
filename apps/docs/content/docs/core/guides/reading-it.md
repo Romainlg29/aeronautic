@@ -50,7 +50,7 @@ can skip your own work when nothing changed, as the effects do.
 ```tsx
 const Hud = () => {
   const mach = useFlight((v) => v.mach.toFixed(2), { hz: 10 });
-  const altitude = useFlight((v) => Math.round(v.altitude_m / 10) * 10);
+  const altitude = useFlight((v) => Math.round(v.altitudeM / 10) * 10);
 
   return (
     <div>
@@ -75,18 +75,18 @@ renders before its scene has loaded.
 
 Beyond what is written, a flight works out:
 
-| field                 | meaning                                                         |
-| --------------------- | --------------------------------------------------------------- |
-| `mach`                | the flight Mach number                                          |
-| `dynamic_pressure_pa` | ½ρV², in pascals                                                |
-| `temperature_k`       | the air's temperature, the day's offset included                |
-| `pressure_pa`         | the air's pressure                                              |
-| `pressure_ratio`      | the pressure as a share of sea level's                          |
-| `density_kg_m3`       | the moist air's density                                         |
-| `density_ratio`       | the density as a share of sea level's on a standard day (1.225) |
-| `sound_m_s`           | the speed of sound                                              |
-| `dew_point_k`         | where the air's vapour would condense                           |
-| `ram`                 | the stagnation over static pressure an inlet recovers           |
+| field               | meaning                                                         |
+| ------------------- | --------------------------------------------------------------- |
+| `mach`              | the flight Mach number                                          |
+| `dynamicPressurePa` | ½ρV², in pascals                                                |
+| `temperatureK`      | the air's temperature, the day's offset included                |
+| `pressurePa`        | the air's pressure                                              |
+| `pressureRatio`     | the pressure as a share of sea level's                          |
+| `densityKgPerM3`    | the moist air's density                                         |
+| `densityRatio`      | the density as a share of sea level's on a standard day (1.225) |
+| `soundMPerS`        | the speed of sound                                              |
+| `dewPointK`         | where the air's vapour would condense                           |
+| `ram`               | the stagnation over static pressure an inlet recovers           |
 
 `flight.air` is the whole moist air, with the vapour pressure and the mixing
 ratio too. See [The atmosphere](../../reference/atmosphere/).

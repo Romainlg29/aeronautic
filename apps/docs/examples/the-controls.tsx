@@ -119,7 +119,7 @@ export const TheControls: FC = () => {
                   const share = event.target.valueAsNumber;
 
                   set_canopy(share);
-                  rig.current?.set_clip("ANIM_Canopy_Open", share);
+                  rig.current?.setClip("ANIM_Canopy_Open", share);
                 }}
               />
             </label>

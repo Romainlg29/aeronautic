@@ -1,10 +1,9 @@
 import {
-  Afterburner,
-  AfterburnerBatch,
   type AfterburnerHooks,
   type AfterburnerParamsInput,
-  nozzle_outline_fit,
 } from "@aeronautic/afterburner";
+import { Afterburner, AfterburnerBatch } from "@aeronautic/afterburner/react";
+import { nozzle_outline_fit } from "@aeronautic/afterburner/physics";
 import { type FC, useMemo, useState } from "react";
 import { DoubleSide, Path, Shape } from "three";
 import { atan, cos, float } from "three/tsl";
@@ -46,7 +45,7 @@ const lobed = (angle: number) => 1 + LOBE_DEPTH * Math.cos(LOBES * angle);
  * @returns The radius in every direction, in nozzle radii
  */
 const superellipse = (aspect: number, squareness: number) => {
-  const { area_scale } = nozzle_outline_fit(aspect, squareness);
+  const { areaScale: area_scale } = nozzle_outline_fit(aspect, squareness);
   const width = area_scale * Math.sqrt(aspect);
   const height = area_scale / Math.sqrt(aspect);
 
@@ -77,7 +76,7 @@ const trace = <T extends Path>(path: T, radius: (angle: number) => number) => {
 };
 
 /**
- * An engine can with any exit, its exit at the origin, facing +X.
+ * An engine can with any exit, its exit at the origin, facing +Z.
  * @param props Its outline in nozzle radii, and how far it is rolled
  * @returns The mesh
  */
@@ -93,11 +92,11 @@ const Can: FC<{ outline: (angle: number) => number; roll: number }> = ({
     return wall;
   }, [outline]);
 
-  // The shape's x is the width, along the plume's z, and it extrudes along
-  // its own z: a quarter turn about Y sends that up the plume, upstream
+  // The shape's x is the width and it extrudes along its own z: a half turn
+  // about Y sends that up the plume, upstream, and the width along -X
   return (
-    <group rotation={[roll, 0, 0]}>
-      <mesh rotation={[0, -Math.PI / 2, 0]}>
+    <group rotation={[0, 0, roll]}>
+      <mesh rotation={[0, Math.PI, 0]}>
         <extrudeGeometry
           args={[shape, { depth: RADIUS_M * 4, bevelEnabled: false }]}
         />
@@ -122,12 +121,12 @@ const EXITS: Exit[] = [
   { name: "round", params: {}, outline: () => 1 },
   {
     name: "oval",
-    params: { nozzle_aspect: 1.6 },
+    params: { nozzleAspect: 1.6 },
     outline: superellipse(1.6, 2),
   },
   {
     name: "flat",
-    params: { nozzle_aspect: 3, nozzle_squareness: 6 },
+    params: { nozzleAspect: 3, nozzleSquareness: 6 },
     outline: superellipse(3, 6),
   },
 ];
@@ -143,9 +142,9 @@ export const NozzleShapes: FC = () => {
   const [length, set_length] = useState(1);
 
   const shared: AfterburnerParamsInput = {
-    nozzle_radius_m: RADIUS_M,
-    nozzle_roll: roll,
-    nozzle_outline_length: length,
+    nozzleRadiusM: RADIUS_M,
+    nozzleRoll: roll,
+    nozzleOutlineLength: length,
   };
 
   // Their lane across the stage, the lobed one last
@@ -153,8 +152,8 @@ export const NozzleShapes: FC = () => {
 
   return (
     <Stage
-      camera={[14, 6, 9]}
-      target={[3, 0, 0]}
+      camera={[-9, 6, 14]}
+      target={[0, 0, 3]}
       floor={-2}
       overlay={
         <div className="example-controls">
@@ -184,7 +183,7 @@ export const NozzleShapes: FC = () => {
       }
     >
       {EXITS.map(({ name, params, outline }, index) => (
-        <group key={name} position={[0, 0, lane(index)]}>
+        <group key={name} position={[-lane(index), 0, 0]}>
           <Can outline={outline} roll={roll} />
           <Afterburner preset="afterburner" params={{ ...shared, ...params }} />
         </group>
@@ -192,7 +191,7 @@ export const NozzleShapes: FC = () => {
 
       {/* A hook is the batch's, so the lobed exit gets a batch of its own */}
       <AfterburnerBatch hooks={LOBED}>
-        <group position={[0, 0, lane(3)]}>
+        <group position={[-lane(3), 0, 0]}>
           <Can outline={lobed} roll={roll} />
           <Afterburner preset="afterburner" params={shared} />
         </group>

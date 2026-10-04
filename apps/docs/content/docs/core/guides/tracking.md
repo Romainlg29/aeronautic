@@ -9,7 +9,7 @@ Give the provider the object that moves:
 ```tsx
 const jet = useRef<Group>(null);
 
-<FlightProvider track={jet} sea_level_y={0}>
+<FlightProvider track={jet} seaLevelY={0}>
   <group ref={jet}>
     <primitive object={gltf.scene} />
   </group>
@@ -24,7 +24,7 @@ transform and works out:
   own frame;
 - the **load factor**, from how its path curves and which way gravity pulls;
 - the **roll, pitch and yaw rates**, from how it turned;
-- the **altitude**, from its height above `sea_level_y`, if that is given.
+- the **altitude**, from its height above `seaLevelY`, if that is given.
 
 The rest, such as the throttle, the controls and the day, keeps whatever is
 written to it.
@@ -46,14 +46,14 @@ model built another way says so:
 
 ## Options
 
-| prop          | default      | meaning                                                                            |
-| ------------- | ------------ | ---------------------------------------------------------------------------------- |
-| `track`       | none         | an `Object3D`, or a ref to one                                                     |
-| `forward`     | `[0, 0, -1]` | which way the object flies, in its own frame                                       |
-| `up`          | `[0, 1, 0]`  | which way is its up, in its own frame                                              |
-| `sea_level_y` | none         | the world height of sea level, in metres. Left out, the altitude is not tracked    |
-| `wind`        | none         | the wind in world space, m/s: the airspeed is through the air, not over the ground |
-| `world_up`    | `[0, 1, 0]`  | which way is up in the world, for gravity                                          |
+| prop        | default      | meaning                                                                            |
+| ----------- | ------------ | ---------------------------------------------------------------------------------- |
+| `track`     | none         | an `Object3D`, or a ref to one                                                     |
+| `forward`   | `[0, 0, -1]` | which way the object flies, in its own frame                                       |
+| `up`        | `[0, 1, 0]`  | which way is its up, in its own frame                                              |
+| `seaLevelY` | none         | the world height of sea level, in metres. Left out, the altitude is not tracked    |
+| `wind`      | none         | the wind in world space, m/s: the airspeed is through the air, not over the ground |
+| `worldUp`   | `[0, 1, 0]`  | which way is up in the world, for gravity                                          |
 
 Options written inline are fine: they are read in the frame, and compared by
 value.
@@ -67,7 +67,7 @@ that, so the numbers follow it closely without a frame's jitter.
 
 The first frame only starts watching, as does a frame more than 0.25 s after
 the last one, so a tab coming back from the background does not see a jump of
-several hundred metres. `flight.reset_tracking()` starts it over by hand, after
+several hundred metres. `flight.resetTracking()` starts it over by hand, after
 a teleport for instance.
 
 ## Held still

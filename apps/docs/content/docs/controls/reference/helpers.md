@@ -30,14 +30,14 @@ For writing a `from` of your own, in the same terms the parts use.
 
 ## `ControlMixing`
 
-| field               | default | what it is                                                |
-| ------------------- | ------- | --------------------------------------------------------- |
-| `elevon_pitch`      | `0.6`   | How much of an elevon's or a stabilator's throw is pitch. |
-| `le_flap_per_alpha` | `1.4`   | Degrees down per degree of angle of attack.               |
-| `le_flap_start_deg` | `2`     | Where the leading-edge flaps start to droop.              |
-| `thrust_vectoring`  | `true`  | Vector from the stick and the pedals.                     |
-| `nozzle_idle`       | `0.45`  | How open the petals are at idle.                          |
-| `nozzle_military`   | `0`     | At military power.                                        |
-| `nozzle_reheat`     | `1`     | At full reheat.                                           |
+| field             | default | what it is                                                |
+| ----------------- | ------- | --------------------------------------------------------- |
+| `elevonPitch`     | `0.6`   | How much of an elevon's or a stabilator's throw is pitch. |
+| `leFlapPerAlpha`  | `1.4`   | Degrees down per degree of angle of attack.               |
+| `leFlapStartDeg`  | `2`     | Where the leading-edge flaps start to droop.              |
+| `thrustVectoring` | `true`  | Vector from the stick and the pedals.                     |
+| `nozzleIdle`      | `0.45`  | How open the petals are at idle.                          |
+| `nozzleMilitary`  | `0`     | At military power.                                        |
+| `nozzleReheat`    | `1`     | At full reheat.                                           |
 
 `NozzleSchedule` is its three `nozzle_` fields.

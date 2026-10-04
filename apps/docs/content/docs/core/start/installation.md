@@ -5,10 +5,10 @@ description: "Install the package, and what comes with it."
 
 ## From npm
 
-You rarely install it by itself. `@aeronautic/afterburner`,
-`@aeronautic/wing-vapor` and `@aeronautic/controls` each depend on it, so it
-comes with them. Add it to your own dependencies when you import from it
-yourself, for the `<FlightProvider>` or the atmosphere:
+`@aeronautic/afterburner`, `@aeronautic/wing-vapor` and
+`@aeronautic/controls` each take it as a peer dependency, so install it next to
+them. That way every package and your own code share one copy, with one
+`<FlightProvider>`:
 
 ```bash
 pnpm add @aeronautic/core
@@ -30,10 +30,9 @@ They are the same as every other `@aeronautic` package's, so they all install
 side by side.
 
 <Callout type="warn">
-  Keep one copy. Every package must find the same `@aeronautic/core`, or each
-  sees its own `<FlightProvider>` context and the effects stop following the
-  flight. A package manager dedupes it when the versions agree, which they do
-  when the packages come from the same release.
+  Keep one copy. The contexts are registered globally, so two copies still
+  share a `<FlightProvider>`, but each would carry its own atmosphere and
+  helpers. Being a peer, it is installed once, at the version you pick.
 </Callout>
 
 ## Two entry points

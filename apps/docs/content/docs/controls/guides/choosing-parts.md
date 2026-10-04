@@ -45,7 +45,7 @@ takes its drive with it, so `{armed && <Airbrakes />}` works.
 | `<Canards>`          | `canard`                                                      | `pitch`                                   |
 | `<Rudders>`          | `rudder`                                                      | `yaw`                                     |
 | `<Flaps>`            | `flap`                                                        | `flaps`                                   |
-| `<LeadingEdgeFlaps>` | `le_flap`                                                     | `angle_of_attack_rad`, and `flaps`        |
+| `<LeadingEdgeFlaps>` | `le_flap`                                                     | `angleOfAttackRad`, and `flaps`           |
 | `<Airbrakes>`        | `airbrake`                                                    | `airbrake`                                |
 | `<Spoilers>`         | `spoiler`                                                     | `airbrake`                                |
 | `<DragRudders>`      | `drag_rudder`                                                 | `airbrake`, and `yaw` on one side         |
@@ -80,7 +80,7 @@ drive everything with `<FighterControls>`, then take one part over:
   {/* The outer elevons roll only */}
   <Elevons
     parts={["CTRL_Elevon_Outer_L", "CTRL_Elevon_Outer_R"]}
-    pitch_share={0}
+    pitchShare={0}
   />
 </ControlSurfaces>
 ```

@@ -19,9 +19,9 @@ const flight = useFlightStore();
 
 useFrame(() => {
   flight.set({
-    airspeed_m_s: aircraft.airspeed,
-    angle_of_attack_rad: aircraft.alpha,
-    altitude_m: aircraft.position.y,
+    airspeedMPerS: aircraft.airspeed,
+    angleOfAttackRad: aircraft.alpha,
+    altitudeM: aircraft.position.y,
   });
 });
 
@@ -34,29 +34,29 @@ read to the nearest 10 m, so a climb rewrites the condensation table every
 `source={null}` flies only the props.
 
 The flight's sideslip is from the right, as a flight model gives it; the
-vapor's own `sideslip_rad` is from +Z, the left, so it is turned round on the
+vapor's own `sideslipRad` is from +Z, the left, so it is turned round on the
 way in.
 
 ## Through the ref
 
-`<WingVapor>`'s ref is the `WingVaporCore` underneath. Its `update_*` methods
+`<WingVapor>`'s ref is the `WingVaporHandle`, the `WingVapor` class underneath. Its `update*` methods
 change the fields given and keep the rest, without a React render:
 
 ```tsx
-const vapor = useRef<WingVaporCore>(null);
+const vapor = useRef<WingVaporHandle>(null);
 
 useFrame(() => {
-  vapor.current?.update_flight({
-    airspeed_m_s: aircraft.airspeed,
-    angle_of_attack_rad: aircraft.alpha,
+  vapor.current?.updateFlight({
+    airspeedMPerS: aircraft.airspeed,
+    angleOfAttackRad: aircraft.alpha,
   });
 });
 
 <WingVapor ref={vapor} airframe={airframe} air={air} />;
 ```
 
-`update_flight` only works the physics out again when a value changed, so it is
-cheap to call every frame. `update_air` rewrites the condensation table, a few
+`updateFlight` only works the physics out again when a value changed, so it is
+cheap to call every frame. `updateAir` rewrites the condensation table, a few
 hundred moist adiabats: fine every frame, but not free. Write it when the
 altitude or the humidity actually change.
 
@@ -68,10 +68,11 @@ A flight model usually knows the g, not the angle of attack.
 `angle_of_attack_for_load` inverts the lift curve for it:
 
 ```ts
-import { angle_of_attack_for_load, moist_air } from "@aeronautic/wing-vapor";
+import { moist_air } from "@aeronautic/core";
+import { angle_of_attack_for_load } from "@aeronautic/wing-vapor/physics";
 
 const air = moist_air(altitude_m, relative_humidity, temperature_offset_k);
-const airspeed_m_s = mach * air.sound_m_s;
+const airspeed_m_s = mach * air.soundMPerS;
 
 const alpha = angle_of_attack_for_load(
   vapor.airframe, // its mass included
@@ -80,7 +81,7 @@ const alpha = angle_of_attack_for_load(
   air,
 );
 
-vapor.update_flight({ airspeed_m_s, angle_of_attack_rad: alpha });
+vapor.updateFlight({ airspeedMPerS: airspeed_m_s, angleOfAttackRad: alpha });
 ```
 
 Past the most the wing can lift, it returns the angle of that maximum: the wing
@@ -96,9 +97,9 @@ loads one wing of a swept aircraft more than the other. Each tip's vortex, each
 leading-edge vortex and each half of the sheet takes its own side's share, so
 the downgoing wing in a rolling pull fogs first and trails longest.
 
-- **`roll_rate_rad_s`**: left out, the vapor measures it from how the group it
+- **`rollRateRadPerS`**: left out, the vapor measures it from how the group it
   follows turns, frame by frame. Give it when your flight model knows it.
-- **`sideslip_rad`**: positive blows from +Z in the canonical frame (x aft,
+- **`sideslipRad`**: positive blows from +Z in the canonical frame (x aft,
   y up, z along the span). None by default.
 
 ## The trails follow the flight
@@ -117,9 +118,9 @@ same as one flown through a game's world.
 ```ts
 const { air, flight, visible } = vapor.state;
 
-air.dew_point_k; // and the density, the pressure, the speed of sound…
+air.dewPointK; // and the density, the pressure, the speed of sound…
 flight.mach;
-flight.load_factor;
+flight.loadFactor;
 flight.lift_coefficient;
 flight.breakdown; // how much of the leading-edge vortex is whole, 1 to 0
 visible; // whether anything can fog at all

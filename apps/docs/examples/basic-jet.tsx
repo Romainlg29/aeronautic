@@ -1,4 +1,4 @@
-import { Afterburner } from "@aeronautic/afterburner";
+import { Afterburner } from "@aeronautic/afterburner/react";
 import { type FC, useState } from "react";
 import { Nozzle, Stage } from "./stage";
 

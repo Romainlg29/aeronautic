@@ -23,29 +23,33 @@ const LATTICE_PANELS = 24;
  * station k being `k / (SHAPE_STATIONS - 1)` of the semispan out.
  */
 export type WingShape = {
-  // Centreline to tip, metres
-  semispan_m: number;
+  /** Centreline to tip, metres */
+  semispanM: number;
 
-  // Where the wing leaves the body
-  root_span_m: number;
+  /** Where the wing leaves the body */
+  rootSpanM: number;
 
-  // Where the leading edge is, how far aft of the origin
-  leading_m: Float32Array;
+  /** Where the leading edge is, how far aft of the origin */
+  leadingM: Float32Array;
 
-  chord_m: Float32Array;
+  chordM: Float32Array;
 
-  // How high the mid-plane is above the origin
-  mid_m: Float32Array;
+  /** How high the mid-plane is above the origin */
+  midM: Float32Array;
 
-  // Thickness over chord
+  /** Thickness over chord */
   thickness: Float32Array;
 
-  // The spanwise loading c_l c over its mean across the semispan: an
-  // elliptic wing's is 4/π √(1 - η²)
+  /**
+   * The spanwise loading c_l c over its mean across the semispan: an
+   * elliptic wing's is 4/π √(1 - η²)
+   */
   loading: Float32Array;
 
-  // A canard ahead of the wing or a tailplane behind it, if the capture
-  // found one: its own tips shed their own vortices
+  /**
+   * A canard ahead of the wing or a tailplane behind it, if the capture
+   * found one: its own tips shed their own vortices
+   */
   secondary?: SecondarySurface | null;
 };
 
@@ -54,28 +58,28 @@ export type WingShape = {
  * how big it is.
  */
 export type SecondarySurface = {
-  // Ahead of the wing, and lifting hard; or behind it, trimming lightly
+  /** Ahead of the wing, and lifting hard; or behind it, trimming lightly */
   kind: "canard" | "tail";
 
-  // Centreline to its tip
-  semispan_m: number;
+  /** Centreline to its tip */
+  semispanM: number;
 
-  // Its tip's leading edge, chord and height
-  tip_leading_m: number;
-  tip_chord_m: number;
-  tip_height_m: number;
+  /** Its tip's leading edge, chord and height */
+  tipLeadingM: number;
+  tipChordM: number;
+  tipHeightM: number;
 
-  // Both sides, through the body
-  area_m2: number;
+  /** Both sides, through the body */
+  areaM2: number;
 };
 
 /**
  * One station of a wing, interpolated.
  */
 export type WingStation = {
-  leading_m: number;
-  chord_m: number;
-  mid_m: number;
+  leadingM: number;
+  chordM: number;
+  midM: number;
   thickness: number;
   loading: number;
 };
@@ -88,11 +92,11 @@ export type WingStation = {
  */
 export const shape_station = (shape: WingShape, span: number): WingStation => {
   const along =
-    (Math.min(Math.abs(span) / shape.semispan_m, 1) * (SHAPE_STATIONS - 1)) | 0;
+    (Math.min(Math.abs(span) / shape.semispanM, 1) * (SHAPE_STATIONS - 1)) | 0;
   const next = Math.min(along + 1, SHAPE_STATIONS - 1);
   const t = Math.min(
     Math.max(
-      (Math.abs(span) / shape.semispan_m) * (SHAPE_STATIONS - 1) - along,
+      (Math.abs(span) / shape.semispanM) * (SHAPE_STATIONS - 1) - along,
       0,
     ),
     1,
@@ -102,9 +106,9 @@ export const shape_station = (shape: WingShape, span: number): WingStation => {
     values[along] + (values[next] - values[along]) * t;
 
   return {
-    leading_m: lerp(shape.leading_m),
-    chord_m: lerp(shape.chord_m),
-    mid_m: lerp(shape.mid_m),
+    leadingM: lerp(shape.leadingM),
+    chordM: lerp(shape.chordM),
+    midM: lerp(shape.midM),
     thickness: lerp(shape.thickness),
     loading: lerp(shape.loading),
   };
@@ -117,7 +121,7 @@ export const shape_station = (shape: WingShape, span: number): WingStation => {
  * @returns Metres from the centreline
  */
 export const station_span = (shape: WingShape, station: number): number =>
-  (shape.semispan_m * station) / (SHAPE_STATIONS - 1);
+  (shape.semispanM * station) / (SHAPE_STATIONS - 1);
 
 /**
  * A trapezoidal wing's table, from the airframe's planform.
@@ -125,16 +129,16 @@ export const station_span = (shape: WingShape, station: number): number =>
  * @returns The wing
  */
 export const trapezoid_shape = (airframe: VaporAirframe): WingShape => {
-  const semispan_m = Math.max(airframe.span_m / 2, 1e-3);
-  const tan_sweep = Math.tan(airframe.leading_edge_sweep_rad);
-  const tan_dihedral = Math.tan(airframe.dihedral_rad);
+  const semispan_m = Math.max(airframe.spanM / 2, 1e-3);
+  const tan_sweep = Math.tan(airframe.leadingEdgeSweepRad);
+  const tan_dihedral = Math.tan(airframe.dihedralRad);
 
   const shape: WingShape = {
-    semispan_m,
-    root_span_m: Math.min(Math.max(airframe.root_span_m, 0), semispan_m),
-    leading_m: new Float32Array(SHAPE_STATIONS),
-    chord_m: new Float32Array(SHAPE_STATIONS),
-    mid_m: new Float32Array(SHAPE_STATIONS),
+    semispanM: semispan_m,
+    rootSpanM: Math.min(Math.max(airframe.rootSpanM, 0), semispan_m),
+    leadingM: new Float32Array(SHAPE_STATIONS),
+    chordM: new Float32Array(SHAPE_STATIONS),
+    midM: new Float32Array(SHAPE_STATIONS),
     thickness: new Float32Array(SHAPE_STATIONS).fill(airframe.thickness),
     loading: new Float32Array(SHAPE_STATIONS),
   };
@@ -142,11 +146,11 @@ export const trapezoid_shape = (airframe: VaporAirframe): WingShape => {
   for (let station = 0; station < SHAPE_STATIONS; station++) {
     const span = station_span(shape, station);
 
-    shape.leading_m[station] = airframe.apex_m + span * tan_sweep;
-    shape.chord_m[station] =
-      airframe.root_chord_m +
-      ((airframe.tip_chord_m - airframe.root_chord_m) * span) / semispan_m;
-    shape.mid_m[station] = airframe.wing_height_m + span * tan_dihedral;
+    shape.leadingM[station] = airframe.apexM + span * tan_sweep;
+    shape.chordM[station] =
+      airframe.rootChordM +
+      ((airframe.tipChordM - airframe.rootChordM) * span) / semispan_m;
+    shape.midM[station] = airframe.wingHeightM + span * tan_dihedral;
   }
 
   shape.loading.set(lattice_loading(shape));
@@ -164,31 +168,31 @@ export const trapezoid_shape = (airframe: VaporAirframe): WingShape => {
 export const shape_planform = (
   shape: WingShape,
 ): {
-  area_m2: number;
-  span_m: number;
-  sweep_rad: number;
-  root_chord_m: number;
-  tip_chord_m: number;
+  areaM2: number;
+  spanM: number;
+  sweepRad: number;
+  rootChordM: number;
+  tipChordM: number;
 } => {
   let area = 0;
 
   for (let station = 1; station < SHAPE_STATIONS; station++) {
-    const step = shape.semispan_m / (SHAPE_STATIONS - 1);
+    const step = shape.semispanM / (SHAPE_STATIONS - 1);
 
-    area += ((shape.chord_m[station - 1] + shape.chord_m[station]) / 2) * step;
+    area += ((shape.chordM[station - 1] + shape.chordM[station]) / 2) * step;
   }
 
-  const root = shape_station(shape, shape.root_span_m);
+  const root = shape_station(shape, shape.rootSpanM);
   const tip = SHAPE_STATIONS - 1;
-  const out = shape.semispan_m - shape.root_span_m;
+  const out = shape.semispanM - shape.rootSpanM;
 
   return {
-    area_m2: area * 2,
-    span_m: shape.semispan_m * 2,
-    sweep_rad:
-      out > 1e-3 ? Math.atan((shape.leading_m[tip] - root.leading_m) / out) : 0,
-    root_chord_m: shape.chord_m[0],
-    tip_chord_m: shape.chord_m[tip],
+    areaM2: area * 2,
+    spanM: shape.semispanM * 2,
+    sweepRad:
+      out > 1e-3 ? Math.atan((shape.leadingM[tip] - root.leadingM) / out) : 0,
+    rootChordM: shape.chordM[0],
+    tipChordM: shape.chordM[tip],
   };
 };
 
@@ -205,7 +209,7 @@ export const shape_planform = (
  */
 export const lattice_loading = (shape: WingShape): Float32Array => {
   const panels = LATTICE_PANELS * 2;
-  const semispan = shape.semispan_m;
+  const semispan = shape.semispanM;
 
   // Cosine spacing, so the tips, where the loading turns fastest, get more
   const edge = (index: number) =>
@@ -214,14 +218,14 @@ export const lattice_loading = (shape: WingShape): Float32Array => {
   const quarter = (span: number) => {
     const station = shape_station(shape, span);
 
-    return station.leading_m + 0.25 * station.chord_m;
+    return station.leadingM + 0.25 * station.chordM;
   };
 
   const control = Array.from({ length: panels }, (_, index) => {
     const span = (edge(index) + edge(index + 1)) / 2;
     const station = shape_station(shape, span);
 
-    return [station.leading_m + 0.75 * station.chord_m, span];
+    return [station.leadingM + 0.75 * station.chordM, span];
   });
 
   // Far enough downstream to be infinite

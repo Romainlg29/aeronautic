@@ -5,8 +5,10 @@ description: "Position, rotation, direction, targets, and moving a nozzle from c
 
 ## The one rule
 
-**A plume leaves its nozzle's origin along the nozzle's local +X.** Every way
-of placing one just decides where that origin is and which way +X points.
+**A plume leaves its nozzle's origin along the nozzle's local +Z.** That is
+aft of a model that flies along -Z with +Y up, the convention the other
+packages share. Every way of placing one just decides where that origin is and
+which way +Z points.
 
 ## In JSX
 
@@ -14,18 +16,18 @@ of placing one just decides where that origin is and which way +X points.
 centre. Turn it with `rotation`, or point it with `direction`:
 
 ```tsx
-// Exit 7 m behind the parent's origin, exhaust towards −X
+// On a model built facing +X: exit 7 m behind its origin, exhaust towards −X
 <Afterburner position={[-7, 0, 0]} direction={[-1, 0, 0]} />
 
-// The same, as a rotation: half a turn about Y takes +X to −X
-<Afterburner position={[-7, 0, 0]} rotation={[0, Math.PI, 0]} />
+// The same, as a rotation: a quarter turn about Y takes +Z to −X
+<Afterburner position={[-7, 0, 0]} rotation={[0, -Math.PI / 2, 0]} />
 ```
 
 `direction` is any vector in the parent's frame, normalised for you. When both
 are given, it wins over `rotation`.
 
 The group's `scale` scales the plume, look and all. Usually you want
-`params={{ nozzle_radius_m }}` instead: it rescales every length of the jet,
+`params={{ nozzleRadiusM }}` instead: it rescales every length of the jet,
 the way a bigger engine would.
 
 ## On a node you don't own
@@ -56,19 +58,19 @@ Through the [handle](../refs/), without a render:
 
 ```ts
 // Move and aim it, in the frame it sits in
-engine.current?.set_offset({
+engine.current?.setOffset({
   position: [0, 0.2, -4.2],
   direction: [0, -0.1, -1],
 });
 
 // Just aim it
-engine.current?.set_direction([0, -0.1, -1]);
+engine.current?.setDirection([0, -0.1, -1]);
 
 // Or write the group directly: it is a plain three.js Group
 engine.current?.object?.position.set(0, 0.2, -4.2);
 ```
 
-`set_offset` takes an `AfterburnerOffset`:
+`setOffset` takes an `AfterburnerOffset`:
 
 | field       | type                                                      |
 | ----------- | --------------------------------------------------------- |
@@ -89,7 +91,7 @@ const tail = batch.add({
   offset: { position: [0, 0, -4.2], direction: [0, 0, -1] },
 });
 
-tail.set_offset({ position: [0, 0.1, -4.2] });
+tail.setOffset({ position: [0, 0.1, -4.2] });
 tail.attach(other_engine); // follow something else
 tail.attach(null); // stop following, and hold where it is now
 ```

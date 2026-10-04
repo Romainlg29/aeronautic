@@ -20,11 +20,8 @@ scene pass, and hand the pass to the batch:
 
 ```tsx
 import { useFrame, useThree } from "@react-three/fiber";
-import {
-  Afterburner,
-  AfterburnerBatch,
-  afterburner_pass,
-} from "@aeronautic/afterburner";
+import { afterburner_pass } from "@aeronautic/afterburner";
+import { Afterburner, AfterburnerBatch } from "@aeronautic/afterburner/react";
 import { useEffect, useMemo } from "react";
 import { bloom } from "three/addons/tsl/display/BloomNode.js";
 import { RenderPipeline, type WebGPURenderer } from "three/webgpu";
@@ -34,7 +31,7 @@ const Scene = () => {
   const renderer = gl as unknown as WebGPURenderer;
 
   const split = useMemo(
-    () => afterburner_pass(scene, camera, { resolution_scale: 0.5 }),
+    () => afterburner_pass(scene, camera, { resolutionScale: 0.5 }),
     [scene, camera],
   );
 
@@ -63,19 +60,19 @@ one draws in the main scene as usual, at full resolution.
 
 ## Options
 
-| option             | default | what it is                                                                    |
-| ------------------ | ------- | ----------------------------------------------------------------------------- |
-| `resolution_scale` | `0.5`   | The plumes' resolution against the frame's. `0.5` is a quarter of the pixels. |
+| option            | default | what it is                                                                    |
+| ----------------- | ------- | ----------------------------------------------------------------------------- |
+| `resolutionScale` | `0.5`   | The plumes' resolution against the frame's. `0.5` is a quarter of the pixels. |
 
 ## What it returns
 
-| field        | what it is                                                                       |
-| ------------ | -------------------------------------------------------------------------------- |
-| `output`     | The scene with the plumes composited, at full resolution. Your pipeline's input. |
-| `scene`      | The plumes' own scene. A batch given the pass puts its mesh here.                |
-| `backdrop`   | The opaque scene's colour and depth, for the plume material to read.             |
-| `scene_pass` | The opaque scene at full resolution, without plumes.                             |
-| `plume_pass` | The plumes alone, premultiplied, at the reduced resolution.                      |
+| field       | what it is                                                                       |
+| ----------- | -------------------------------------------------------------------------------- |
+| `output`    | The scene with the plumes composited, at full resolution. Your pipeline's input. |
+| `scene`     | The plumes' own scene. A batch given the pass puts its mesh here.                |
+| `backdrop`  | The opaque scene's colour and depth, for the plume material to read.             |
+| `scenePass` | The opaque scene at full resolution, without plumes.                             |
+| `plumePass` | The plumes alone, premultiplied, at the reduced resolution.                      |
 
 Changing `pass` on a batch rebuilds it.
 
@@ -85,9 +82,9 @@ Give the core batch the backdrop, and add its mesh to the pass's scene rather
 than yours:
 
 ```ts
-const split = afterburner_pass(scene, camera, { resolution_scale: 0.5 });
+const split = afterburner_pass(scene, camera, { resolutionScale: 0.5 });
 
-const batch = new AfterburnerBatchCore({
+const batch = new AfterburnerBatch({
   preset: "afterburner",
   backdrop: split.backdrop,
 });

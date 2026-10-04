@@ -30,7 +30,7 @@ import type { ControlDrive, ControlRig } from "./rig";
  */
 export type FighterControlsOptions = {
   /** How much of an elevon's or a stabilator's throw is pitch. 0.6 by default */
-  pitch_share?: number;
+  pitchShare?: number;
 
   /** How each engine is driven, as its throttle or its vectoring */
   engine?: Omit<EngineOptions, "side" | "anchor">;
@@ -55,8 +55,8 @@ export const fighter_controls = (
   options: FighterControlsOptions = {},
 ): FighterControls => {
   const tail = {
-    get pitch_share() {
-      return options.pitch_share;
+    get pitchShare() {
+      return options.pitchShare;
     },
   };
 

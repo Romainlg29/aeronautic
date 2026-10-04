@@ -33,7 +33,7 @@ there. The sun's light is split as clouds' is:
 
 That gives a thick cone its grey underside. The shadow samples leave out the
 tip vortices: a tube a metre across shades almost nothing.
-`effects.self_shadow` turns it off.
+`effects.selfShadow` turns it off.
 
 ## What it leaves out
 
@@ -44,8 +44,8 @@ tip vortices: a tube a metre across shades almost nothing.
   water yet.
 - The numbers are textbook correlations, good to ten or twenty per cent. That
   is far better than the eye can tell in a cloud that appears or not on a
-  degree of dew point. `tip_core_radius`, `tip_core_share` and
-  `leading_edge_core_radius` are the empirical ones.
+  degree of dew point. `tipCoreRadius`, `tipCoreShare` and
+  `leadingEdgeCoreRadius` are the empirical ones.
 
 What a frame costs, and how to measure it, is in
 [Performance](../../guides/performance/).

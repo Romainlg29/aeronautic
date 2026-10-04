@@ -1,12 +1,12 @@
-import type { Flight } from "@aeronautic/core";
+import { dev_warn, type Flight } from "@aeronautic/core";
 import {
+  shared_context,
   type Thrust,
   ThrustContext,
   useFlightStore,
 } from "@aeronautic/core/react";
 import { createPortal, useFrame } from "@react-three/fiber";
 import {
-  createContext,
   type FC,
   type ReactNode,
   type Ref,
@@ -58,7 +58,7 @@ import type { ControlAnchor, ControlSurface } from "../surfaces";
 // whenever the flight changes, so changing a `from` re-renders nothing and
 // re-registers nothing. Only a change of which parts it takes does
 
-const AirframeContext = createContext<ControlRig | null>(null);
+const AirframeContext = shared_context<ControlRig | null>("airframe", null);
 
 /**
  * The rig of the nearest `<Airframe>`, once its model is there.
@@ -147,6 +147,14 @@ export const Airframe: FC<AirframeProps> = ({
 
     set_rig(created);
 
+    if (created.surfaces.length === 0 && created.clips.size === 0) {
+      dev_warn(
+        `airframe:empty:${object.uuid}`,
+        `<Airframe> found no control surfaces in "${object.name || "its model"}". ` +
+          "Name the moving nodes CTRL_Aileron_L, CTRL_Rudder and so on, or pass `names` to map yours.",
+      );
+    }
+
     return () => {
       set_rig(null);
       created.dispose();
@@ -170,7 +178,9 @@ export const Airframe: FC<AirframeProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rig, rates_key]);
 
-  useImperativeHandle(ref, () => rig as ControlRig, [rig]);
+  useImperativeHandle<ControlRig | null, ControlRig | null>(ref, () => rig, [
+    rig,
+  ]);
 
   useFrame((_, delta) => {
     rig?.update(delta);
@@ -235,6 +245,16 @@ const useDrive = <P extends object>(
     const added = install(rig, live);
 
     set_drive(added);
+
+    const asked = (live as { parts?: readonly string[] }).parts;
+
+    if (asked?.length && added.parts.length === 0) {
+      dev_warn(
+        `drive:${asked.join(",")}`,
+        `No part of the model is named ${asked.map((name) => `"${name}"`).join(" or ")}. ` +
+          `Its parts are: ${rig.surfaces.map((part) => part.name).join(", ") || "none"}.`,
+      );
+    }
 
     return () => {
       set_drive(null);
@@ -343,7 +363,7 @@ export const Drive: FC<DriveOptions> = (props) => {
  */
 export const Clip: FC<ClipDriveOptions> = (props) => {
   useDrive(
-    (rig, options: ClipDriveOptions) => rig.drive_clip(options),
+    (rig, options: ClipDriveOptions) => rig.driveClip(options),
     props,
     JSON.stringify([String(props.clip), props.side]),
   );
@@ -357,8 +377,20 @@ export const Clip: FC<ClipDriveOptions> = (props) => {
  * @param name The node's name, as `CTRL_Rudder_L`
  * @returns The part, once the rig is there
  */
-export const usePart = (name: string): ControlSurface | null =>
-  useAirframe()?.surface(name) ?? null;
+export const usePart = (name: string): ControlSurface | null => {
+  const rig = useAirframe();
+  const part = rig?.surface(name) ?? null;
+
+  if (rig && !part) {
+    dev_warn(
+      `part:${name}`,
+      `usePart("${name}"): no part of the model has that name. ` +
+        `Its parts are: ${rig.surfaces.map((surface) => surface.name).join(", ") || "none"}.`,
+    );
+  }
+
+  return part;
+};
 
 /**
  * One anchor of the nearest `<Airframe>`, by name: its kind, its extras and
@@ -366,8 +398,20 @@ export const usePart = (name: string): ControlSurface | null =>
  * @param name The node's name, as `FX_Gun_Muzzle_R`
  * @returns The anchor, once the rig is there
  */
-export const useAnchor = (name: string): ControlAnchor | null =>
-  useAirframe()?.anchor(name) ?? null;
+export const useAnchor = (name: string): ControlAnchor | null => {
+  const rig = useAirframe();
+  const anchor = rig?.anchor(name) ?? null;
+
+  if (rig && !anchor) {
+    dev_warn(
+      `anchor:${name}`,
+      `useAnchor("${name}"): no anchor of the model has that name. ` +
+        `Its anchors are: ${rig.anchors.map((found) => found.name).join(", ") || "none"}.`,
+    );
+  }
+
+  return anchor;
+};
 
 /**
  * Props for `<Attach>`.
@@ -390,6 +434,21 @@ export type AttachProps = {
  */
 export const Attach: FC<AttachProps> = ({ part, anchor, children }) => {
   const rig = useAirframe();
+
+  if (rig && part !== undefined && !rig.surface(part)) {
+    dev_warn(
+      `attach:part:${part}`,
+      `<Attach part="${part}">: no part of the model has that name.`,
+    );
+  }
+
+  if (rig && anchor !== undefined && !rig.anchor(anchor)) {
+    dev_warn(
+      `attach:anchor:${anchor}`,
+      `<Attach anchor="${anchor}">: no anchor of the model has that name.`,
+    );
+  }
+
   const node =
     (part !== undefined ? rig?.surface(part)?.node : undefined) ??
     (anchor !== undefined ? rig?.anchor(anchor)?.node : undefined);
@@ -397,7 +456,7 @@ export const Attach: FC<AttachProps> = ({ part, anchor, children }) => {
   return node ? createPortal(children, node) : null;
 };
 
-const EngineContext = createContext<Engine | null>(null);
+const EngineContext = shared_context<Engine | null>("engine", null);
 
 /**
  * The nearest `<Engine>`: its nozzle's parts and limits, where its exhaust
@@ -443,6 +502,14 @@ export const EngineControl: FC<EngineProps> = ({ ref, children, ...props }) => {
 
     set_engine(created);
 
+    if (!created.anchor) {
+      dev_warn(
+        `engine:exhaust:${anchor_key}:${String(props.side)}`,
+        "<Engine> found no exhaust to put its effects on. Mark the model's nozzle exit with an " +
+          "FX_Exhaust node, or pass `anchor` with the node or its name.",
+      );
+    }
+
     return () => {
       set_engine(null);
       created.dispose();
@@ -455,7 +522,9 @@ export const EngineControl: FC<EngineProps> = ({ ref, children, ...props }) => {
     engine?.refresh();
   });
 
-  useImperativeHandle(ref, () => engine as Engine, [engine]);
+  useImperativeHandle<Engine | null, Engine | null>(ref, () => engine, [
+    engine,
+  ]);
 
   const thrust = useMemo<Thrust | null>(
     () =>
@@ -487,7 +556,7 @@ export type FighterControlsProps = FighterControlsOptions & {
  * @returns The parts
  */
 export const FighterControls: FC<FighterControlsProps> = ({
-  pitch_share,
+  pitchShare: pitch_share,
   engine,
   exhaust,
 }) => {
@@ -498,8 +567,8 @@ export const FighterControls: FC<FighterControlsProps> = ({
     <>
       <Ailerons />
       <Elevators />
-      <Elevons pitch_share={pitch_share} />
-      <Stabilators pitch_share={pitch_share} />
+      <Elevons pitchShare={pitch_share} />
+      <Stabilators pitchShare={pitch_share} />
       <Canards />
       <Rudders />
       <Flaps />
@@ -531,7 +600,7 @@ export type ControlSurfacesProps = AirframeProps & FighterControlsProps;
  * @returns The rig's parts
  */
 export const ControlSurfaces: FC<ControlSurfacesProps> = ({
-  pitch_share,
+  pitchShare: pitch_share,
   engine,
   exhaust,
   children,
@@ -539,7 +608,7 @@ export const ControlSurfaces: FC<ControlSurfacesProps> = ({
 }) => (
   <Airframe {...airframe}>
     <FighterControls
-      pitch_share={pitch_share}
+      pitchShare={pitch_share}
       engine={engine}
       exhaust={exhaust}
     />

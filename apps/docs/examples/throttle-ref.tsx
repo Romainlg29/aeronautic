@@ -1,5 +1,8 @@
 import { useFrame } from "@react-three/fiber";
-import { Afterburner, type AfterburnerHandle } from "@aeronautic/afterburner";
+import {
+  Afterburner,
+  type AfterburnerHandle,
+} from "@aeronautic/afterburner/react";
 import { type FC, type RefObject, useRef } from "react";
 import { Nozzle, Stage } from "./stage";
 
@@ -18,7 +21,7 @@ const Spool: FC<{ engine: RefObject<AfterburnerHandle | null> }> = ({
 
     // A wobble of the nozzle's aim, as a vectoring nozzle would
     const pitch = 0.08 * Math.sin(clock.elapsedTime * 0.6);
-    engine.current.set_direction([1, pitch, 0]);
+    engine.current.setDirection([0, pitch, 1]);
   });
 
   return null;

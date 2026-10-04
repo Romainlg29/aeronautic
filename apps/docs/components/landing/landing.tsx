@@ -63,12 +63,13 @@ const Button: FC<{
 };
 
 // The flight the keyboard writes: low over the sea on a humid summer day,
-// gear up, just into reheat. The same air as the scene's fake works in
+// gear up, well into reheat. The same air and throttle the scene's fake
+// starts with
 const START = {
-  altitude_m: 300,
-  temperature_offset_k: 10,
-  relative_humidity: 0.88,
-  throttle: 1.02,
+  altitudeM: 300,
+  temperatureOffsetK: 10,
+  relativeHumidity: 0.88,
+  throttle: 1.04,
   gear: 0,
 };
 
@@ -78,7 +79,7 @@ const START = {
  */
 const Readout: FC = () => {
   const mach = useFlight((f) => f.mach.toFixed(2), { hz: 10 });
-  const load = useFlight((f) => f.load_factor.toFixed(1), { hz: 10 });
+  const load = useFlight((f) => f.loadFactor.toFixed(1), { hz: 10 });
   const throttle = useFlight((f) => Math.round(f.throttle * 100), { hz: 10 });
   const gear = useFlight((f) => f.gear > 0.5);
   const flaps = useFlight((f) => f.flaps);
@@ -107,7 +108,10 @@ const Page: FC = () => {
     <FlightProvider flight={flight}>
       <main
         className="fixed inset-0 overflow-hidden"
-        style={{ background: sky === "day" ? "#6f9fd8" : "#05070b" }}
+        style={{
+          background: sky === "day" ? "#6f9fd8" : "#05070b",
+          transition: "background-color 0.6s ease-in-out",
+        }}
       >
         <div className="absolute inset-0">
           <FlightScene sky={sky} flight={flight} keys={keys} levers={levers} />

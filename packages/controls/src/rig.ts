@@ -75,7 +75,7 @@ export const default_control_rates = (): ControlRates => ({
  * How a rig is made.
  */
 export type ControlRigOptions = FindSurfacesOptions & {
-  /** The model's clips, scrubbed by `drive_clip` or `set_clip` */
+  /** The model's clips, scrubbed by `driveClip` or `setClip` */
   animations?: readonly AnimationClip[];
 
   /** The flight its drives read. null moves only what is set by hand */
@@ -123,7 +123,7 @@ export type DriveOptions = DriveSelect & {
   rate?: number;
 
   /** Called in the frame a part moves, with where it now is */
-  on_move?: (value: number, part: ControlSurface) => void;
+  onMove?: (value: number, part: ControlSurface) => void;
 };
 
 /**
@@ -143,7 +143,7 @@ export type ClipDriveOptions = {
   rate?: number;
 
   /** Called in the frame a clip moves, with where it now is */
-  on_move?: (position: number, clip: ControlClip) => void;
+  onMove?: (position: number, clip: ControlClip) => void;
 };
 
 /**
@@ -399,7 +399,7 @@ export class ControlRig {
    * where it is, and drives that select it move it.
    * @param surface The part
    */
-  add_surface(surface: ControlSurface) {
+  addSurface(surface: ControlSurface) {
     if (this._by_name.has(surface.name)) {
       throw new Error(`A part named ${surface.name} is already on the rig`);
     }
@@ -412,7 +412,7 @@ export class ControlRig {
    * Take a part off the rig. Its node is left where it is.
    * @param name The node's name
    */
-  remove_surface(name: string) {
+  removeSurface(name: string) {
     const index = this._by_name.get(name);
 
     if (index === undefined) return;
@@ -458,7 +458,7 @@ export class ControlRig {
    * @param options Which clips, and how far through each should be
    * @returns The drive, to refresh or dispose of
    */
-  drive_clip(options: ClipDriveOptions): ControlDrive {
+  driveClip(options: ClipDriveOptions): ControlDrive {
     const entry: ClipEntry = { options, order: this._order++ };
 
     this._clip_drives.push(entry);
@@ -488,7 +488,7 @@ export class ControlRig {
    * @param listener Called after the parts and clips are posed
    * @returns A function that stops it
    */
-  on_moved(listener: () => void): () => void {
+  onMoved(listener: () => void): () => void {
     this._moved_listeners.push(listener);
 
     return () => {
@@ -540,7 +540,7 @@ export class ControlRig {
    * @param group A rig group, as `canopy`, or a kind, as `airbrake`
    * @param share 0 to 1, from its least to its most. null gives it back
    */
-  set_group(group: string, share: number | null) {
+  setGroup(group: string, share: number | null) {
     const surfaces = this._surfaces;
 
     for (let index = 0; index < surfaces.length; index++) {
@@ -563,7 +563,7 @@ export class ControlRig {
    * @param share 0 to 1 of the clip. null gives it back
    * @param rate Shares a second it moves at. Infinity jumps
    */
-  set_clip(name: string, share: number | null, rate?: number) {
+  setClip(name: string, share: number | null, rate?: number) {
     const channel = this.clips.get(name);
 
     if (!channel) return;
@@ -748,7 +748,7 @@ export class ControlRig {
       pose_surface(surfaces[index], value[index]);
       moved = true;
 
-      this._driver[index]?.options.on_move?.(value[index], surfaces[index]);
+      this._driver[index]?.options.onMove?.(value[index], surfaces[index]);
     }
 
     if (this._mixer) {
@@ -783,7 +783,7 @@ export class ControlRig {
         );
         scrubbed = true;
 
-        channel._drive?.options.on_move?.(channel.position, channel);
+        channel._drive?.options.onMove?.(channel.position, channel);
       }
 
       if (scrubbed) {

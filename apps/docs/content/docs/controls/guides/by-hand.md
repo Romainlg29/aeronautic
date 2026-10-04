@@ -17,22 +17,22 @@ const rig = useRef<ControlRig>(null);
 
 ## A clip
 
-`set_clip(name, share, rate?)` scrubs a clip to a share of it, 0 to 1. It plays
+`setClip(name, share, rate?)` scrubs a clip to a share of it, 0 to 1. It plays
 there at its own speed, or at `rate` shares a second, Infinity to jump:
 
 ```ts
-rig.current?.set_clip("ANIM_Canopy_Open", 1);
-rig.current?.set_clip("ANIM_Bay_Open", 1, 0.5); // over two seconds
+rig.current?.setClip("ANIM_Canopy_Open", 1);
+rig.current?.setClip("ANIM_Bay_Open", 1, 0.5); // over two seconds
 ```
 
 ## A group
 
-`set_group(group, share)` moves every part of a rig group, or of a kind, to a
+`setGroup(group, share)` moves every part of a rig group, or of a kind, to a
 share of its travel:
 
 ```ts
-rig.current?.set_group("ladder", 1);
-rig.current?.set_group("airbrake", 0.5);
+rig.current?.setGroup("ladder", 1);
+rig.current?.setGroup("airbrake", 0.5);
 ```
 
 ## A part
@@ -50,14 +50,14 @@ Each of them wins over any drive of the part until it is given `null`, which
 hands it back:
 
 ```ts
-rig.current?.set_group("airbrake", null);
+rig.current?.setGroup("airbrake", null);
 ```
 
 A part moved by hand still moves at its rate, as an actuator would.
 
 ## Where they are
 
-`rig.value(name)` is where a part is now, in its unit. `rig.on_moved(listener)`
+`rig.value(name)` is where a part is now, in its unit. `rig.onMoved(listener)`
 calls back once a frame at most, after anything moved, and returns what stops
 it.
 

@@ -14,7 +14,7 @@ description: "Why params, profile and quality are separate, and where the radian
 There is no length among the params and only one colour. A plume's length
 comes out of its nozzle and its gas, through the potential-core and
 mixing-layer correlations. Its colour comes out of its temperature, through
-Planck's law. The one exception is `band_color`, the light of the radicals
+Planck's law. The one exception is `bandColor`, the light of the radicals
 burning in the gas, which is a line spectrum and not a temperature.
 
 The split is not tidiness. Params ride on the instance because two engines on
@@ -43,7 +43,7 @@ that would be most rays.
 The emission is physical. The gas glows as a blackbody at the local
 temperature, normalised so that one at 2000 K has a luminance of one
 (`REFERENCE_TEMPERATURE_K`). Soot emits and absorbs as one over the wavelength,
-which reddens it, and the band emission climbs as `exp(-activation_k / T)`. A
+which reddens it, and the band emission climbs as `exp(-activationK / T)`. A
 real plume therefore runs from a thousandth of the reference to a thousand
 times it, and **`exposure` is the single number that decides which part of
 that the tone curve sees.** It is a camera's exposure, not a brightness dial.

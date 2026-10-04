@@ -8,7 +8,7 @@ and reads its flight where it draws. One provider round an aircraft is all it
 takes to fly them together.
 
 ```tsx
-<FlightProvider initial={{ airspeed_m_s: 240, altitude_m: 6000 }}>
+<FlightProvider initial={{ airspeedMPerS: 240, altitudeM: 6000 }}>
   <primitive object={gltf.scene} />
   <ControlSurfaces object={gltf.scene} animations={gltf.animations} />
   <Afterburner position={[0, 0, 6]} />
@@ -25,7 +25,7 @@ takes to fly them together.
 | `@aeronautic/controls`                | the stick, the pedals, the throttle, the flaps, the air brake, the gear and the angle of attack  |
 
 What a flight gives an effect wins over the effect's own props for the same
-thing: an afterburner's `profile.altitude_m` is the flight's altitude inside a
+thing: an afterburner's `profile.altitudeM` is the flight's altitude inside a
 provider. Everything else, such as the plume's look or the vapor's dials, is
 still the props'.
 
@@ -36,7 +36,7 @@ flight. Give it a `Flight` to read another one, or `null` to fly on the props
 alone:
 
 ```tsx
-<FlightProvider initial={{ altitude_m: 9000 }}>
+<FlightProvider initial={{ altitudeM: 9000 }}>
   {/* Flies at 9 km */}
   <Afterburner position={[0, 0, 6]} />
 
@@ -52,10 +52,10 @@ aircraft at two altitudes fly through two airs, and their afterburners are
 drawn by two batches, one per flight:
 
 ```tsx
-<FlightProvider initial={{ altitude_m: 500 }}>
+<FlightProvider initial={{ altitudeM: 500 }}>
   <Jet />
 </FlightProvider>
-<FlightProvider initial={{ altitude_m: 12_000 }}>
+<FlightProvider initial={{ altitudeM: 12_000 }}>
   <Jet />
 </FlightProvider>
 ```
@@ -67,7 +67,7 @@ A provider without `track` needs no renderer, so it can sit outside the
 a Canvas, though, so hand the same flight to a second provider inside it:
 
 ```tsx
-const [flight] = useState(() => new Flight({ airspeed_m_s: 200 }));
+const [flight] = useState(() => new Flight({ airspeedMPerS: 200 }));
 
 <FlightProvider flight={flight}>
   <Hud />

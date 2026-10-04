@@ -38,11 +38,11 @@ its children go inside the airframe.
 Every part, driven the way a fighter's are, and an `<Engine>` for each side
 with a nozzle or an exhaust anchor.
 
-| prop          | type                             | default | what it does                                              |
-| ------------- | -------------------------------- | ------- | --------------------------------------------------------- |
-| `pitch_share` | `number`                         | `0.6`   | How much of an elevon's or a stabilator's throw is pitch. |
-| `engine`      | `EngineOptions` but side, anchor | —       | Given to each engine.                                     |
-| `exhaust`     | `ReactNode`                      | —       | Put inside each engine, as an `<Afterburner />`.          |
+| prop         | type                             | default | what it does                                              |
+| ------------ | -------------------------------- | ------- | --------------------------------------------------------- |
+| `pitchShare` | `number`                         | `0.6`   | How much of an elevon's or a stabilator's throw is pitch. |
+| `engine`     | `EngineOptions` but side, anchor | —       | Given to each engine.                                     |
+| `exhaust`    | `ReactNode`                      | —       | Put inside each engine, as an `<Afterburner />`.          |
 
 ## The parts
 
@@ -53,12 +53,12 @@ its kind unless told which:
 | -------------------- | ---------------------------------------- | ------------------------------------------ |
 | `<Ailerons>`         | ailerons, with roll                      |                                            |
 | `<Elevators>`        | elevators, with pitch                    |                                            |
-| `<Elevons>`          | elevons, with pitch and roll             | `pitch_share`                              |
-| `<Stabilators>`      | all-moving tails, with pitch and roll    | `pitch_share`                              |
+| `<Elevons>`          | elevons, with pitch and roll             | `pitchShare`                               |
+| `<Stabilators>`      | all-moving tails, with pitch and roll    | `pitchShare`                               |
 | `<Canards>`          | canards, with pitch                      |                                            |
 | `<Rudders>`          | rudders, with yaw                        |                                            |
 | `<Flaps>`            | trailing-edge flaps                      |                                            |
-| `<LeadingEdgeFlaps>` | leading-edge flaps, with angle of attack | `start_deg`, `per_deg`                     |
+| `<LeadingEdgeFlaps>` | leading-edge flaps, with angle of attack | `startDeg`, `perDeg`                       |
 | `<Airbrakes>`        | air brakes                               |                                            |
 | `<Spoilers>`         | spoilers, with the air brake             |                                            |
 | `<DragRudders>`      | split drag rudders, braking and yawing   |                                            |

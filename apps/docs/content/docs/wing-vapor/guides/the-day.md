@@ -8,9 +8,9 @@ description: "Humidity, altitude and temperature, and how the vapor is lit and p
 ```tsx
 <WingVapor
   air={{
-    altitude_m: 300,
-    temperature_offset_k: 10, // a warm day
-    relative_humidity: 0.9,
+    altitudeM: 300,
+    temperatureOffsetK: 10, // a warm day
+    relativeHumidity: 0.9,
   }}
 />
 ```
@@ -39,22 +39,22 @@ size:
 ```tsx
 <WingVapor
   look={{
-    sun_direction: [5, 10, 5], // towards the sun, in world space
-    sun_intensity: 3,
-    sky_color: [0.55, 0.68, 0.9],
-    droplet_radius_m: 1e-6,
-    shutter_s: 1 / 60,
+    sunDirection: [5, 10, 5], // towards the sun, in world space
+    sunIntensity: 3,
+    skyColor: [0.55, 0.68, 0.9],
+    dropletRadiusM: 1e-6,
+    shutterS: 1 / 60,
   }}
 />
 ```
 
-- **`sun_direction`** should match your scene's sun, so the cloud is lit as
+- **`sunDirection`** should match your scene's sun, so the cloud is lit as
   the skin is.
-- **`droplet_radius_m`**: vapor that forms in a millisecond makes many tiny
+- **`dropletRadiusM`**: vapor that forms in a millisecond makes many tiny
   droplets, around a micron. Smaller is denser for the same water.
-- **`humidity_spread`** and **`eddy_m`**: how unevenly moist the air is, and
+- **`humiditySpread`** and **`eddyM`**: how unevenly moist the air is, and
   how large its patches are. They break a sheet into patches.
-- **`shutter_s`**: the air goes past at the airspeed, so the patches streak
+- **`shutterS`**: the air goes past at the airspeed, so the patches streak
   along the flow by what it travels while the shutter is open. At 300 m/s and
   a sixtieth, five metres. The streaks are what make the vapor read as fast.
 - **`anisotropy`**: a micron droplet throws most of the light forward, the
@@ -67,7 +67,7 @@ Every field is in the [reference](../../reference/dials/).
 `effects` switches each one on or off:
 
 ```tsx
-<WingVapor effects={{ cone: false, self_shadow: false }} />
+<WingVapor effects={{ cone: false, selfShadow: false }} />
 ```
 
 It is compiled into the shader, so changing it rebuilds the material.

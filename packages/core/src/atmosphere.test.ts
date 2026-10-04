@@ -12,24 +12,24 @@ describe("standard_atmosphere", () => {
   it("is the standard day at sea level", () => {
     const air = standard_atmosphere(0);
 
-    expect(air.temperature_k).toBeCloseTo(288.15);
-    expect(air.pressure_pa).toBeCloseTo(101_325);
+    expect(air.temperatureK).toBeCloseTo(288.15);
+    expect(air.pressurePa).toBeCloseTo(101_325);
   });
 
   it("is the tropopause's at 11 km", () => {
     const air = standard_atmosphere(11_000);
 
-    expect(air.temperature_k).toBeCloseTo(216.65, 1);
-    expect(air.pressure_pa / 1000).toBeCloseTo(22.632, 1);
+    expect(air.temperatureK).toBeCloseTo(216.65, 1);
+    expect(air.pressurePa / 1000).toBeCloseTo(22.632, 1);
   });
 
   it("matches the standard's tables at its layer boundaries", () => {
     expect(standard_atmosphere(0).pressure).toBeCloseTo(1);
     expect(standard_atmosphere(11_000).pressure).toBeCloseTo(0.2234, 3);
     expect(standard_atmosphere(20_000).pressure).toBeCloseTo(0.05403, 4);
-    expect(standard_atmosphere(32_000).temperature_k).toBeCloseTo(228.65);
+    expect(standard_atmosphere(32_000).temperatureK).toBeCloseTo(228.65);
     expect(standard_atmosphere(32_000).pressure).toBeCloseTo(0.008567, 5);
-    expect(standard_atmosphere(71_000).temperature_k).toBeCloseTo(214.65, 1);
+    expect(standard_atmosphere(71_000).temperatureK).toBeCloseTo(214.65, 1);
   });
 
   it("never runs out of air", () => {
@@ -77,18 +77,18 @@ describe("moist_air", () => {
   it("is at its dew point when saturated", () => {
     const air = moist_air(0, 1);
 
-    expect(air.dew_point_k).toBeCloseTo(air.temperature_k, 6);
+    expect(air.dewPointK).toBeCloseTo(air.temperatureK, 6);
   });
 
   it("holds more water on a hot day at the same humidity", () => {
-    expect(moist_air(0, 0.8, 15).mixing_ratio).toBeGreaterThan(
-      moist_air(0, 0.8, -10).mixing_ratio * 2,
+    expect(moist_air(0, 0.8, 15).mixingRatio).toBeGreaterThan(
+      moist_air(0, 0.8, -10).mixingRatio * 2,
     );
   });
 
   it("is lighter for being moist", () => {
-    expect(moist_air(0, 1, 10).density_kg_m3).toBeLessThan(
-      moist_air(0, 0, 10).density_kg_m3,
+    expect(moist_air(0, 1, 10).densityKgPerM3).toBeLessThan(
+      moist_air(0, 0, 10).densityKgPerM3,
     );
   });
 });

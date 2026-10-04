@@ -26,32 +26,36 @@ export type Fuel = "kerosene" | "methane" | "hydrogen";
 export type Propellant = {
   fuel: Fuel;
 
-  // Oxidiser over fuel, by mass: about 2.4 for kerosene engines, 3.6 for methane,
-  // 6 for hydrogen. Below the fuel's stoichiometric ratio the engine runs rich
-  mixture_ratio: number;
+  /**
+   * Oxidiser over fuel, by mass: about 2.4 for kerosene engines, 3.6 for methane,
+   * 6 for hydrogen. Below the fuel's stoichiometric ratio the engine runs rich
+   */
+  mixtureRatio: number;
 };
 
 type FuelData = {
-  // The mixture ratio at which every gram of fuel just burns
+  /** The mixture ratio at which every gram of fuel just burns */
   stoichiometric: number;
 
-  // Soot per metre at an equivalence ratio of two, for an absorption that
-  // climbs as the excess over the sooting threshold to the 1.5
+  /**
+   * Soot per metre at an equivalence ratio of two, for an absorption that
+   * climbs as the excess over the sooting threshold to the 1.5
+   */
   soot: number;
 
-  // What the leftover fuel adds burning in the air, per share of it unburnt
-  afterburning_k: number;
+  /** What the leftover fuel adds burning in the air, per share of it unburnt */
+  afterburningK: number;
 };
 
 const FUELS: Record<Fuel, FuelData> = {
   // RP-1 cracks readily: a kerosene engine run rich is a sooty one
-  kerosene: { stoichiometric: 3.4, soot: 7.5, afterburning_k: 3100 },
+  kerosene: { stoichiometric: 3.4, soot: 7.5, afterburningK: 3100 },
 
   // Methane has one carbon, and next to no tendency to soot
-  methane: { stoichiometric: 4, soot: 3.3, afterburning_k: 5000 },
+  methane: { stoichiometric: 4, soot: 3.3, afterburningK: 5000 },
 
   // And hydrogen none at all
-  hydrogen: { stoichiometric: 7.94, soot: 0, afterburning_k: 2850 },
+  hydrogen: { stoichiometric: 7.94, soot: 0, afterburningK: 2850 },
 };
 
 // Where soot begins to form, as an equivalence ratio: only past an even mix is
@@ -68,7 +72,7 @@ const HOTTEST = 1.05;
  */
 export const equivalence_ratio = (propellant: Propellant): number =>
   FUELS[propellant.fuel].stoichiometric /
-  Math.max(propellant.mixture_ratio, 1e-3);
+  Math.max(propellant.mixtureRatio, 1e-3);
 
 /**
  * The chamber's temperature at one mix, as a share of its hottest.
@@ -88,10 +92,7 @@ const chamber_share = (equivalence: number): number =>
  */
 export const propellant_effects = (
   propellant: Propellant,
-): Pick<
-  AfterburnerParams,
-  "soot_per_m" | "soot_survival" | "afterburning_k"
-> => {
+): Pick<AfterburnerParams, "sootPerM" | "sootSurvival" | "afterburningK"> => {
   const fuel = FUELS[propellant.fuel];
   const equivalence = equivalence_ratio(propellant);
 
@@ -101,15 +102,15 @@ export const propellant_effects = (
   const excess = Math.max(equivalence - SOOTING_THRESHOLD, 0);
 
   return {
-    soot_per_m: fuel.soot * excess ** 1.5,
+    sootPerM: fuel.soot * excess ** 1.5,
 
     // The richer, the less oxygen the mixing layer has left to burn it with
-    soot_survival: Math.min(
+    sootSurvival: Math.min(
       Math.max(0.15 + 1.36 * (equivalence - 1.11), 0),
       0.95,
     ),
 
-    afterburning_k: fuel.afterburning_k * unburnt,
+    afterburningK: fuel.afterburningK * unburnt,
   };
 };
 
@@ -148,17 +149,17 @@ export const propellant_params = (
     chamber_share(equivalence_ratio(reference.propellant));
 
   return {
-    soot_per_m: ratio(effects.soot_per_m, base.soot_per_m, params.soot_per_m),
-    soot_survival: Math.min(
-      ratio(effects.soot_survival, base.soot_survival, params.soot_survival),
+    sootPerM: ratio(effects.sootPerM, base.sootPerM, params.sootPerM),
+    sootSurvival: Math.min(
+      ratio(effects.sootSurvival, base.sootSurvival, params.sootSurvival),
       0.95,
     ),
-    afterburning_k: ratio(
-      effects.afterburning_k,
-      base.afterburning_k,
-      params.afterburning_k,
+    afterburningK: ratio(
+      effects.afterburningK,
+      base.afterburningK,
+      params.afterburningK,
     ),
-    exit_temperature_k: params.exit_temperature_k * heat,
-    dry_temperature_k: params.dry_temperature_k * heat,
+    exitTemperatureK: params.exitTemperatureK * heat,
+    dryTemperatureK: params.dryTemperatureK * heat,
   };
 };

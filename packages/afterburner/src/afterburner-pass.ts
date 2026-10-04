@@ -32,31 +32,37 @@ const DEPTH_TOLERANCE = 0.03;
  * How `afterburner_pass` draws the plumes.
  */
 export type AfterburnerPassOptions = {
-  // The plumes' resolution against the frame's. A raymarch costs per pixel,
-  // and a plume is soft enough that half of it, a quarter of the pixels, is
-  // seldom seen
-  resolution_scale?: number;
+  /**
+   * The plumes' resolution against the frame's. A raymarch costs per pixel,
+   * and a plume is soft enough that half of it, a quarter of the pixels, is
+   * seldom seen
+   */
+  resolutionScale?: number;
 };
 
 /**
  * The opaque scene and the plumes in passes of their own, composited.
  */
 export type AfterburnerPass = {
-  // Where the batch's mesh goes instead of the scene. `<AfterburnerBatch>`
-  // puts it there when given this pass
+  /**
+   * Where the batch's mesh goes instead of the scene. `<AfterburnerBatch>`
+   * puts it there when given this pass
+   */
   scene: Scene;
 
-  // What the plume material reads the opaque scene from
+  /** What the plume material reads the opaque scene from */
   backdrop: AfterburnerBackdrop;
 
-  // The scene at full resolution, without the plumes
-  scene_pass: PassNode;
+  /** The scene at full resolution, without the plumes */
+  scenePass: PassNode;
 
-  // The plumes alone, premultiplied, at the reduced resolution
-  plume_pass: PassNode;
+  /** The plumes alone, premultiplied, at the reduced resolution */
+  plumePass: PassNode;
 
-  // The two composited at full resolution, for a render pipeline's output or
-  // whatever comes after it, bloom say
+  /**
+   * The two composited at full resolution, for a render pipeline's output or
+   * whatever comes after it, bloom say
+   */
   output: V4;
 };
 
@@ -99,7 +105,7 @@ export const afterburner_pass = (
   camera: Camera,
   options: AfterburnerPassOptions = {},
 ): AfterburnerPass => {
-  const { resolution_scale = 0.5 } = options;
+  const { resolutionScale: resolution_scale = 0.5 } = options;
 
   const scene_pass = pass(scene, camera);
 
@@ -190,8 +196,8 @@ export const afterburner_pass = (
   return {
     scene: plume_scene,
     backdrop: { color, depth },
-    scene_pass,
-    plume_pass,
+    scenePass: scene_pass,
+    plumePass: plume_pass,
     output,
   };
 };

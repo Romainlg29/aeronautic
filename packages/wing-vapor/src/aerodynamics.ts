@@ -32,11 +32,11 @@ export const LEADING_EDGE_VORTEX_SPAN = 0.7;
  * The derived shape of a trapezoidal wing.
  */
 export type Planform = {
-  // Including the part through the body, as lift is conventionally referred
-  area_m2: number;
-  aspect_ratio: number;
+  /** Including the part through the body, as lift is conventionally referred */
+  areaM2: number;
+  aspectRatio: number;
   taper: number;
-  mean_chord_m: number;
+  meanChordM: number;
 };
 
 /**
@@ -46,13 +46,13 @@ export type Planform = {
  */
 export const planform = (airframe: VaporAirframe): Planform => {
   const area_m2 =
-    (airframe.span_m * (airframe.root_chord_m + airframe.tip_chord_m)) / 2;
+    (airframe.spanM * (airframe.rootChordM + airframe.tipChordM)) / 2;
 
   return {
-    area_m2,
-    aspect_ratio: (airframe.span_m * airframe.span_m) / Math.max(area_m2, 1e-6),
-    taper: airframe.tip_chord_m / Math.max(airframe.root_chord_m, 1e-6),
-    mean_chord_m: area_m2 / Math.max(airframe.span_m, 1e-6),
+    areaM2: area_m2,
+    aspectRatio: (airframe.spanM * airframe.spanM) / Math.max(area_m2, 1e-6),
+    taper: airframe.tipChordM / Math.max(airframe.rootChordM, 1e-6),
+    meanChordM: area_m2 / Math.max(airframe.spanM, 1e-6),
   };
 };
 
@@ -63,10 +63,10 @@ export const planform = (airframe: VaporAirframe): Planform => {
  * @returns The sweep, in radians
  */
 export const sweep_at = (airframe: VaporAirframe, fraction: number): number => {
-  const { aspect_ratio, taper } = planform(airframe);
+  const { aspectRatio: aspect_ratio, taper } = planform(airframe);
 
   return Math.atan(
-    Math.tan(airframe.leading_edge_sweep_rad) -
+    Math.tan(airframe.leadingEdgeSweepRad) -
       (4 * fraction * (1 - taper)) / (aspect_ratio * (1 + taper)),
   );
 };
@@ -78,7 +78,7 @@ export const sweep_at = (airframe: VaporAirframe, fraction: number): number => {
  * @returns dC_L/dα
  */
 export const lift_slope = (airframe: VaporAirframe, mach: number): number => {
-  const { aspect_ratio: a } = planform(airframe);
+  const { aspectRatio: a } = planform(airframe);
 
   const m = Math.min(Math.max(mach, 0), LIFT_SLOPE_MAX_MACH);
   const beta = Math.sqrt(1 - m * m);
@@ -109,7 +109,7 @@ export const polhamus = (
   airframe: VaporAirframe,
   mach: number,
 ): { potential: number; vortex: number } => {
-  const { aspect_ratio } = planform(airframe);
+  const { aspectRatio: aspect_ratio } = planform(airframe);
 
   const potential = lift_slope(airframe, mach);
 
@@ -118,8 +118,8 @@ export const polhamus = (
       potential - (potential * potential) / (Math.PI * aspect_ratio),
       0,
     ) /
-      Math.max(Math.cos(airframe.leading_edge_sweep_rad), 0.05)) *
-    Math.min(Math.max(airframe.leading_edge_sharpness, 0), 1);
+      Math.max(Math.cos(airframe.leadingEdgeSweepRad), 0.05)) *
+    Math.min(Math.max(airframe.leadingEdgeSharpness, 0), 1);
 
   return { potential, vortex };
 };
@@ -139,12 +139,12 @@ export const polhamus = (
  */
 export const breakdown_angles = (
   sweep_rad: number,
-): { trailing_edge: number; apex: number } => {
+): { trailingEdge: number; apex: number } => {
   const sweep_deg = (sweep_rad * 180) / Math.PI;
   const trailing_edge = Math.max(1.3 * (sweep_deg - 47), 3);
 
   return {
-    trailing_edge: (trailing_edge * Math.PI) / 180,
+    trailingEdge: (trailing_edge * Math.PI) / 180,
     apex: ((trailing_edge + 15) * Math.PI) / 180,
   };
 };
@@ -159,8 +159,8 @@ export const breakdown_fraction = (
   airframe: VaporAirframe,
   angle_of_attack_rad: number,
 ): number => {
-  const { trailing_edge, apex } = breakdown_angles(
-    airframe.leading_edge_sweep_rad,
+  const { trailingEdge: trailing_edge, apex } = breakdown_angles(
+    airframe.leadingEdgeSweepRad,
   );
 
   return Math.min(
@@ -205,25 +205,27 @@ export const lift_coefficient = (
  */
 export type FlightState = {
   mach: number;
-  dynamic_pressure_pa: number;
+  dynamicPressurePa: number;
 
-  lift_coefficient: number;
-  potential_lift_coefficient: number;
-  vortex_lift_coefficient: number;
+  liftCoefficient: number;
+  potentialLiftCoefficient: number;
+  vortexLiftCoefficient: number;
 
-  lift_n: number;
+  liftN: number;
 
-  // Lift over weight, for the mass the airframe gives
-  load_factor: number;
+  /** Lift over weight, for the mass the airframe gives */
+  loadFactor: number;
 
-  // The bound circulation, the strength of the pair of trailing vortices
-  // once the sheet behind the wing has rolled up, square metres per second
-  tip_circulation: number;
+  /**
+   * The bound circulation, the strength of the pair of trailing vortices
+   * once the sheet behind the wing has rolled up, square metres per second
+   */
+  tipCirculation: number;
 
-  // What each leading-edge vortex has gathered by the end of the edge
-  leading_edge_circulation: number;
+  /** What each leading-edge vortex has gathered by the end of the edge */
+  leadingEdgeCirculation: number;
 
-  // How much of the leading-edge vortex is whole, 1 to 0
+  /** How much of the leading-edge vortex is whole, 1 to 0 */
   breakdown: number;
 };
 
@@ -239,21 +241,21 @@ export const flight_state = (
   flight: VaporFlight,
   air: MoistAir,
 ): FlightState => {
-  const speed = Math.max(flight.airspeed_m_s, 0);
-  const mach = speed / air.sound_m_s;
-  const q = 0.5 * air.density_kg_m3 * speed * speed;
+  const speed = Math.max(flight.airspeedMPerS, 0);
+  const mach = speed / air.soundMPerS;
+  const q = 0.5 * air.densityKgPerM3 * speed * speed;
 
-  const { area_m2 } = planform(airframe);
+  const { areaM2: area_m2 } = planform(airframe);
 
-  const lift = lift_coefficient(airframe, flight.angle_of_attack_rad, mach);
+  const lift = lift_coefficient(airframe, flight.angleOfAttackRad, mach);
   const lift_n = q * area_m2 * lift.total;
 
-  const span = Math.max(airframe.span_m, 1e-3);
+  const span = Math.max(airframe.spanM, 1e-3);
 
   // Kutta–Joukowski over the rolled-up pair: L = ρ V Γ b'
   const tip_circulation =
     speed > 0
-      ? Math.abs(lift_n) / (air.density_kg_m3 * speed * VORTEX_SPACING * span)
+      ? Math.abs(lift_n) / (air.densityKgPerM3 * speed * VORTEX_SPACING * span)
       : 0;
 
   // In slender-wing theory the lift is the rate the crossflow's impulse grows
@@ -265,18 +267,15 @@ export const flight_state = (
 
   return {
     mach,
-    dynamic_pressure_pa: q,
-    lift_coefficient: lift.total,
-    potential_lift_coefficient: lift.potential,
-    vortex_lift_coefficient: lift.vortex,
-    lift_n,
-    load_factor: lift_n / (Math.max(airframe.mass_kg, 1) * G0),
-    tip_circulation,
-    leading_edge_circulation,
-    breakdown: breakdown_fraction(
-      airframe,
-      Math.abs(flight.angle_of_attack_rad),
-    ),
+    dynamicPressurePa: q,
+    liftCoefficient: lift.total,
+    potentialLiftCoefficient: lift.potential,
+    vortexLiftCoefficient: lift.vortex,
+    liftN: lift_n,
+    loadFactor: lift_n / (Math.max(airframe.massKg, 1) * G0),
+    tipCirculation: tip_circulation,
+    leadingEdgeCirculation: leading_edge_circulation,
+    breakdown: breakdown_fraction(airframe, Math.abs(flight.angleOfAttackRad)),
   };
 };
 
@@ -299,8 +298,11 @@ export const angle_of_attack_for_load = (
   air: MoistAir,
 ): number => {
   const lift_of = (alpha: number) =>
-    flight_state(airframe, { airspeed_m_s, angle_of_attack_rad: alpha }, air)
-      .load_factor;
+    flight_state(
+      airframe,
+      { airspeedMPerS: airspeed_m_s, angleOfAttackRad: alpha },
+      air,
+    ).loadFactor;
 
   const sign = Math.sign(load_factor) || 1;
   const wanted = Math.abs(load_factor);

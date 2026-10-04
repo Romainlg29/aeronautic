@@ -35,7 +35,7 @@ The fields of a `ControlSurface`:
 | `side`       | `left`, `right` or `centre`                                                         |
 | `group`      | the rig's group, as `elevons`, or the kind for a part found by name                 |
 | `positive`   | what a positive value does, as `trailing_edge_down` or `open`                       |
-| `found_by`   | `rig`, `name` or `virtual`                                                          |
+| `foundBy`    | `rig`, `name` or `virtual`                                                          |
 | `extras`     | everything else the model's extras gave it, as `ab_detent` or `limit_shape`         |
 
 `useAirframe()` gives the rig itself, and `rig.surfaces` every part.

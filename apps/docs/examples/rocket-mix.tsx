@@ -1,11 +1,11 @@
-import { Afterburner } from "@aeronautic/afterburner";
+import { Afterburner } from "@aeronautic/afterburner/react";
 import { type FC, useState } from "react";
 import { Stage } from "./stage";
 
-// On its side, as on a test stand: the plume streams along +X, which a wide
-// frame shows whole. A cylinder is along Y; a quarter turn about Z lays it
-// along X with its top towards -X
-const ALONG_X: [number, number, number] = [0, 0, Math.PI / 2];
+// On its side, as on a test stand: the plume streams along +Z, which a wide
+// frame shows whole. A cylinder is along Y; a quarter turn about X lays it
+// along Z with its top towards -Z
+const ALONG_Z: [number, number, number] = [-Math.PI / 2, 0, 0];
 
 /**
  * A kerolox engine whose mixture ratio you choose.
@@ -16,8 +16,8 @@ export const RocketMix: FC = () => {
 
   return (
     <Stage
-      camera={[14, 5, 34]}
-      target={[12, 0, 0]}
+      camera={[-34, 5, 14]}
+      target={[0, 0, 12]}
       overlay={
         <div className="example-controls">
           <label>
@@ -36,11 +36,11 @@ export const RocketMix: FC = () => {
         </div>
       }
     >
-      <mesh position={[-4, 0, 0]} rotation={ALONG_X}>
+      <mesh position={[0, 0, -4]} rotation={ALONG_Z}>
         <cylinderGeometry args={[1.2, 1.2, 6, 32]} />
         <meshStandardMaterial color="#d9dce2" roughness={0.6} />
       </mesh>
-      <mesh position={[-0.5, 0, 0]} rotation={ALONG_X}>
+      <mesh position={[0, 0, -0.5]} rotation={ALONG_Z}>
         <cylinderGeometry args={[0.25, 0.46, 1, 24, 1, true]} />
         <meshStandardMaterial
           color="#3a3330"
@@ -51,7 +51,9 @@ export const RocketMix: FC = () => {
       </mesh>
       <Afterburner
         preset="rocket_kerolox"
-        params={{ propellant: { fuel: "kerosene", mixture_ratio } }}
+        params={{
+          propellant: { fuel: "kerosene", mixtureRatio: mixture_ratio },
+        }}
       />
     </Stage>
   );

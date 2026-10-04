@@ -103,45 +103,51 @@ const SORT_TOLERANCE = 0.02;
  * Where a nozzle sits on what it follows, in that object's own frame.
  */
 export type AfterburnerOffset = {
-  // Where the nozzle's exit is
+  /** Where the nozzle's exit is */
   position?: Vector3Like | readonly [number, number, number];
 
-  // How it is turned: the plume streams along the turned +X
+  /** How it is turned: the plume streams along the turned +Z */
   rotation?:
     | Euler
     | Quaternion
     | readonly [number, number, number]
     | readonly [number, number, number, number];
 
-  // Or which way the plume streams, which is usually what is known. It wins
-  // over `rotation`
+  /**
+   * Or which way the plume streams, which is usually what is known. It wins
+   * over `rotation`
+   */
   direction?: Vector3Like | readonly [number, number, number];
 };
 
 type Vector3Like = { x: number; y: number; z: number };
 
 export type AfterburnerNozzleOptions = {
-  // The plume leaves this object's origin along its local +X, and follows it:
-  // any mesh, group or bone, wherever it is in the scene
+  /**
+   * The plume leaves this object's origin along its local +Z, and follows it:
+   * any mesh, group or bone, wherever it is in the scene
+   */
   object?: Object3D;
 
-  // Or a world matrix, for a nozzle with no object of its own
+  /** Or a world matrix, for a nozzle with no object of its own */
   matrix?: Matrix4;
 
-  // Where on the object (or on `matrix`) the nozzle sits. None: its origin
+  /** Where on the object (or on `matrix`) the nozzle sits. None: its origin */
   offset?: AfterburnerOffset;
 
   params?: AfterburnerParamsInput;
 
-  // Which look to start from, under `params`. Defaults to the batch's
+  /** Which look to start from, under `params`. Defaults to the batch's */
   preset?: AfterburnerPresetName | AfterburnerPreset;
 
-  // How hard the engine runs: 0 to 1 dry, on to 1.1 at full reheat
+  /** How hard the engine runs: 0 to 1 dry, on to 1.1 at full reheat */
   throttle?: number;
 
-  // Read the throttle from the batch's source with this, each time the
-  // source changes, rather than run at what is written to it
-  throttle_from?: ((values: Readonly<FlightValues>) => number) | null;
+  /**
+   * Read the throttle from the batch's source with this, each time the
+   * source changes, rather than run at what is written to it
+   */
+  throttleFrom?: ((values: Readonly<FlightValues>) => number) | null;
 };
 
 /**
@@ -157,7 +163,7 @@ export class AfterburnerNozzle {
   /** @internal */
   _params: AfterburnerParams;
 
-  /** @internal What it was last tuned with, for `update_params` to merge over */
+  /** @internal What it was last tuned with, for `updateParams` to merge over */
   _input: AfterburnerParamsInput | undefined;
 
   /** @internal The preset that was resolved under it */
@@ -181,6 +187,9 @@ export class AfterburnerNozzle {
   /** @internal How far its plume is from the camera, for the draw order */
   _depth = 0;
 
+  /** @internal The world matrix turned into the plume's own frame, +X down it */
+  readonly _drawn_frame = new Float64Array(16);
+
   /** The object the plume follows, if any */
   object: Object3D | null;
 
@@ -189,18 +198,18 @@ export class AfterburnerNozzle {
    * source changes, rather than run at what is written to `throttle`: the
    * flight's own throttle, or one engine's
    */
-  throttle_from: ((values: Readonly<FlightValues>) => number) | null;
+  throttleFrom: ((values: Readonly<FlightValues>) => number) | null;
 
   /** The world matrix, when there is no object */
   readonly matrix = new Matrix4();
 
   /**
    * Where the nozzle sits in the frame of what it follows. Write it directly
-   * or through `set_offset`; either is picked up the next frame
+   * or through `setOffset`; either is picked up the next frame
    */
   readonly position = new Vector3();
 
-  /** How it is turned in that frame; the plume streams along the turned +X */
+  /** How it is turned in that frame; the plume streams along the turned +Z */
   readonly quaternion = new Quaternion();
 
   /** @internal The world matrix with the offset applied */
@@ -214,7 +223,7 @@ export class AfterburnerNozzle {
     this._batch = batch;
     this._seed = seed;
     this.object = options.object ?? null;
-    this.throttle_from = options.throttle_from ?? null;
+    this.throttleFrom = options.throttleFrom ?? null;
     this._throttle = clamp_throttle(
       options.throttle ?? AFTERBURNER_MAX_THROTTLE,
     );
@@ -231,7 +240,7 @@ export class AfterburnerNozzle {
     }
 
     if (options.offset) {
-      this.set_offset(options.offset);
+      this.setOffset(options.offset);
     }
 
     // NaN, so the first frame always writes it
@@ -240,7 +249,7 @@ export class AfterburnerNozzle {
 
   /**
    * How hard the engine is asked to run, 0 to 1.1. Cheap to write every frame.
-   * The plume eases toward it over the batch's `response_s`
+   * The plume eases toward it over the batch's `responseS`
    */
   get throttle(): number {
     return this._throttle;
@@ -255,18 +264,18 @@ export class AfterburnerNozzle {
 
     this._throttle = throttle;
 
-    if (!this._batch || this._batch.response_s <= 0) {
+    if (!this._batch || this._batch.responseS <= 0) {
       this._drawn = throttle;
       this._batch?._write_throttle(this);
     }
   }
 
   /** The throttle the plume is drawn at, on its way to `throttle` */
-  get drawn_throttle(): number {
+  get drawnThrottle(): number {
     return this._drawn;
   }
 
-  /** The params this nozzle is drawn with. Read-only: use `set_params` */
+  /** The params this nozzle is drawn with. Read-only: use `setParams` */
   get params(): Readonly<AfterburnerParams> {
     return this._params;
   }
@@ -276,7 +285,7 @@ export class AfterburnerNozzle {
    * @param params What to change, over the preset and defaults
    * @param preset Which look to start from
    */
-  set_params(
+  setParams(
     params?: AfterburnerParamsInput,
     preset?: AfterburnerPresetName | AfterburnerPreset,
   ) {
@@ -295,8 +304,8 @@ export class AfterburnerNozzle {
    * few nozzles a frame is nothing.
    * @param params What to change, over what it was last tuned with
    */
-  update_params(params: AfterburnerParamsInput) {
-    this.set_params({ ...this._input, ...params }, this._preset);
+  updateParams(params: AfterburnerParamsInput) {
+    this.setParams({ ...this._input, ...params }, this._preset);
   }
 
   /**
@@ -310,7 +319,7 @@ export class AfterburnerNozzle {
   attach(object: Object3D | null, offset?: AfterburnerOffset): this {
     if (object === null && this.object !== null) {
       // Hold the world pose it had, with the offset folded in
-      this.matrix.copy(this.world_matrix(scratch_matrix));
+      this.matrix.copy(this.worldMatrix(scratch_matrix));
       this.position.set(0, 0, 0);
       this.quaternion.identity();
     }
@@ -318,7 +327,7 @@ export class AfterburnerNozzle {
     this.object = object;
 
     if (offset) {
-      this.set_offset(offset);
+      this.setOffset(offset);
     }
 
     return this;
@@ -329,7 +338,7 @@ export class AfterburnerNozzle {
    * @param offset Where it sits, and how it is turned
    * @returns The nozzle
    */
-  set_offset(offset: AfterburnerOffset): this {
+  setOffset(offset: AfterburnerOffset): this {
     write_offset(this, offset);
 
     return this;
@@ -340,7 +349,7 @@ export class AfterburnerNozzle {
    * @param direction Which way the exhaust streams; need not be unit length
    * @returns The nozzle
    */
-  set_direction(
+  setDirection(
     direction: Vector3Like | readonly [number, number, number],
   ): this {
     write_offset(this, { direction });
@@ -354,7 +363,7 @@ export class AfterburnerNozzle {
    * @param target Where to write it
    * @returns target
    */
-  world_matrix(target: Matrix4 = new Matrix4()): Matrix4 {
+  worldMatrix(target: Matrix4 = new Matrix4()): Matrix4 {
     return target.fromArray(world_elements(this));
   }
 
@@ -379,33 +388,37 @@ export type AfterburnerStats = {
  * How a batch is set up.
  */
 export type AfterburnerBatchOptions = {
-  // Which look nozzles start from, and the profile it brings
+  /** Which look nozzles start from, and the profile it brings */
   preset?: AfterburnerPresetName | AfterburnerPreset;
 
-  // The plume shape every nozzle shares, over the preset's. Applies live
+  /** The plume shape every nozzle shares, over the preset's. Applies live */
   profile?: Partial<AfterburnerProfile>;
 
-  // What a frame may spend. Only the octave count rebuilds the material
+  /** What a frame may spend. Only the octave count rebuilds the material */
   quality?: AfterburnerQualityInput;
 
-  // Whether to bend what is behind the plumes. Rebuilds the material
+  /** Whether to bend what is behind the plumes. Rebuilds the material */
   haze?: boolean;
 
-  // TSL to change what the plume is made of. Rebuilds the material
+  /** TSL to change what the plume is made of. Rebuilds the material */
   hooks?: AfterburnerHooks;
 
-  // How many nozzles to make room for up front. It grows past this
+  /** How many nozzles to make room for up front. It grows past this */
   capacity?: number;
 
-  // How long, in seconds, a plume takes to follow its throttle. Zero is at once
-  response_s?: number;
+  /** How long, in seconds, a plume takes to follow its throttle. Zero is at once */
+  responseS?: number;
 
-  // A shared flight: its altitude, airspeed and day win over the profile's,
-  // and nozzles with a `throttle_from` read their throttle from it
+  /**
+   * A shared flight: its altitude, airspeed and day win over the profile's,
+   * and nozzles with a `throttleFrom` read their throttle from it
+   */
   source?: Flight | null;
 
-  // The opaque scene drawn in a pass of its own, for plumes drawn in another,
-  // as `afterburner_pass` sets up. Fixed for the batch's life
+  /**
+   * The opaque scene drawn in a pass of its own, for plumes drawn in another,
+   * as `afterburner_pass` sets up. Fixed for the batch's life
+   */
   backdrop?: AfterburnerBackdrop;
 };
 
@@ -419,8 +432,10 @@ const scratch_euler = new Euler();
 const scratch_direction = new Vector3();
 const unit_scale = new Vector3(1, 1, 1);
 
-// The plume streams along a nozzle's local +X
-const PLUME_AXIS = new Vector3(1, 0, 0);
+// The plume streams along a nozzle's local +Z, aft of an aircraft that flies
+// along its -Z. The shader runs it down its own +X: `drawn_elements` turns one
+// into the other
+const PLUME_AXIS = new Vector3(0, 0, 1);
 
 /**
  * Any number of afterburner plumes, drawn as one instanced mesh.
@@ -437,30 +452,30 @@ export class AfterburnerBatch {
   readonly uniforms: AfterburnerUniforms;
 
   /** How fast the flame's clock runs, one being real time */
-  time_scale = 1;
+  timeScale = 1;
 
   /**
    * How long, in seconds, a plume takes to follow its throttle: the time
    * constant it eases in by, so a burner lights over a few tenths of a second
    * as a real one does, rather than in a frame. Zero follows at once
    */
-  response_s = DEFAULT_RESPONSE_S;
+  responseS = DEFAULT_RESPONSE_S;
 
   /**
    * A shared flight, read every frame: its altitude, airspeed and day win
-   * over the profile's, and nozzles with a `throttle_from` read theirs from it
+   * over the profile's, and nozzles with a `throttleFrom` read theirs from it
    * throttle. null leaves the batch to what is written to it
    */
   source: Flight | null;
 
   /** Plumes shorter than this share of the screen height are not drawn */
-  min_screen_fraction = 0.001;
+  minScreenFraction = 0.001;
 
   /** Past this, in metres, the eddies are dropped */
-  detail_distance_m = 900;
+  detailDistanceM = 900;
 
   /** Past this, a plume is one sample */
-  cheap_distance_m = 3000;
+  cheapDistanceM = 3000;
 
   /** Which look nozzles start from */
   readonly preset: AfterburnerPresetName | AfterburnerPreset | undefined;
@@ -507,7 +522,7 @@ export class AfterburnerBatch {
 
   constructor(options: AfterburnerBatchOptions = {}) {
     this.preset = options.preset;
-    this.response_s = options.response_s ?? DEFAULT_RESPONSE_S;
+    this.responseS = options.responseS ?? DEFAULT_RESPONSE_S;
     this.source = options.source ?? null;
     this._profile = resolve_afterburner_profile(
       options.profile,
@@ -519,7 +534,7 @@ export class AfterburnerBatch {
     this._backdrop = options.backdrop;
 
     this.uniforms = create_afterburner_uniforms(this._profile);
-    this.write_quality();
+    this.writeQuality();
 
     const geometry = new InstancedBufferGeometry();
     const hull = build_plume_hull(HULL_SIDES);
@@ -528,7 +543,7 @@ export class AfterburnerBatch {
     geometry.setIndex(hull.getIndex());
     geometry.instanceCount = 0;
 
-    const mesh = new Mesh(geometry, this.material_for(false));
+    const mesh = new Mesh(geometry, this.materialFor(false));
 
     mesh.name = "AfterburnerBatch";
     mesh.frustumCulled = false;
@@ -563,19 +578,19 @@ export class AfterburnerBatch {
    * Reshape every plume. Live: nothing rebuilds.
    * @param profile What to change, over the batch's preset and the defaults
    */
-  set_profile(profile?: Partial<AfterburnerProfile>) {
+  setProfile(profile?: Partial<AfterburnerProfile>) {
     this._profile = resolve_afterburner_profile(profile, this.preset);
 
     write_afterburner_profile(this.uniforms, this._profile);
   }
 
   /**
-   * Change some of the profile and keep the rest, such as `altitude_m` as the
+   * Change some of the profile and keep the rest, such as `altitudeM` as the
    * formation climbs. Uniforms only, so cheap to call every frame.
    * @param profile What to change, over the profile as it stands
    */
-  update_profile(profile: Partial<AfterburnerProfile>) {
-    this.set_profile({ ...this._profile, ...profile });
+  updateProfile(profile: Partial<AfterburnerProfile>) {
+    this.setProfile({ ...this._profile, ...profile });
   }
 
   /** What a frame may spend */
@@ -587,13 +602,12 @@ export class AfterburnerBatch {
    * Change what a frame may spend. Only a new octave count rebuilds.
    * @param quality A name, or step counts and octaves
    */
-  set_quality(quality?: AfterburnerQualityInput) {
+  setQuality(quality?: AfterburnerQualityInput) {
     const next = resolve_afterburner_quality(quality);
-    const rebuild =
-      next.turbulence_octaves !== this._quality.turbulence_octaves;
+    const rebuild = next.turbulenceOctaves !== this._quality.turbulenceOctaves;
 
     this._quality = next;
-    this.write_quality();
+    this.writeQuality();
 
     if (rebuild) {
       this.rebuild();
@@ -604,7 +618,7 @@ export class AfterburnerBatch {
    * Change whether the plumes bend what is behind them. Rebuilds.
    * @param haze On or off
    */
-  set_haze(haze: boolean) {
+  setHaze(haze: boolean) {
     if (haze !== this._haze) {
       this._haze = haze;
       this.rebuild();
@@ -615,7 +629,7 @@ export class AfterburnerBatch {
    * Change the TSL hooks. Rebuilds.
    * @param hooks The new hooks
    */
-  set_hooks(hooks: AfterburnerHooks | undefined) {
+  setHooks(hooks: AfterburnerHooks | undefined) {
     if (hooks !== this._hooks) {
       this._hooks = hooks;
       this.rebuild();
@@ -643,11 +657,11 @@ export class AfterburnerBatch {
 
     this.mesh.geometry.instanceCount = this._nozzles.length;
 
-    this.write_static(nozzle);
+    this.writeStatic(nozzle);
     this._write_throttle(nozzle);
 
     // Placed on the next frame, when its object's matrix is current
-    this.choose_material();
+    this.chooseMaterial();
 
     return nozzle;
   }
@@ -676,8 +690,8 @@ export class AfterburnerBatch {
       copy_slot(this._static, last, slot, STATIC_STRIDE);
       copy_slot(this._dynamic, last, slot, DYNAMIC_STRIDE);
 
-      this.mark_static(slot);
-      this.mark_dynamic(slot);
+      this.markStatic(slot);
+      this.markDynamic(slot);
     }
 
     this._nozzles.pop();
@@ -687,7 +701,7 @@ export class AfterburnerBatch {
       this._anchored = false;
     }
 
-    this.choose_material();
+    this.chooseMaterial();
   }
 
   /**
@@ -726,7 +740,7 @@ export class AfterburnerBatch {
         nozzle._drawn,
         this._profile,
         nozzle._scale,
-      ).reach_m;
+      ).reachM;
 
       const x = elements[12];
       const y = elements[13];
@@ -758,9 +772,9 @@ export class AfterburnerBatch {
             reach,
             distance_m,
             screen_scale,
-            this.min_screen_fraction,
-            this.detail_distance_m,
-            this.cheap_distance_m,
+            this.minScreenFraction,
+            this.detailDistanceM,
+            this.cheapDistanceM,
           )
         : -1;
 
@@ -798,8 +812,8 @@ export class AfterburnerBatch {
 
   /** @internal */
   _write_static(nozzle: AfterburnerNozzle) {
-    this.write_static(nozzle);
-    this.choose_material();
+    this.writeStatic(nozzle);
+    this.chooseMaterial();
   }
 
   /** @internal */
@@ -807,7 +821,7 @@ export class AfterburnerBatch {
     this._dynamic.array[nozzle._slot * DYNAMIC_STRIDE + PLACE + 3] =
       nozzle._drawn;
 
-    this.mark_dynamic(nozzle._slot);
+    this.markDynamic(nozzle._slot);
   }
 
   /**
@@ -820,11 +834,10 @@ export class AfterburnerBatch {
     const projection = camera.projectionMatrix.elements;
     const screen_scale = projection[15] === 0 ? 2 / projection[5] : 1;
 
-    this.uniforms.screen_scale.value = screen_scale;
-    this.uniforms.min_screen_span.value =
-      screen_scale * this.min_screen_fraction;
-    this.uniforms.detail_distance.value = this.detail_distance_m;
-    this.uniforms.cheap_distance.value = this.cheap_distance_m;
+    this.uniforms.screenScale.value = screen_scale;
+    this.uniforms.minScreenSpan.value = screen_scale * this.minScreenFraction;
+    this.uniforms.detailDistance.value = this.detailDistanceM;
+    this.uniforms.cheapDistance.value = this.cheapDistanceM;
 
     this._camera = camera;
 
@@ -837,13 +850,13 @@ export class AfterburnerBatch {
 
     this._frame = frame;
 
-    this.read_source();
+    this.readSource();
 
     const now = performance.now();
 
     if (this._last_ms >= 0) {
       const delta_s =
-        Math.min(MAX_DELTA_S, (now - this._last_ms) / 1000) * this.time_scale;
+        Math.min(MAX_DELTA_S, (now - this._last_ms) / 1000) * this.timeScale;
 
       this.uniforms.time.value += delta_s;
       this.respond(delta_s);
@@ -882,7 +895,7 @@ export class AfterburnerBatch {
         nozzle._drawn,
         this._profile,
         nozzle._scale,
-      ).reach_m;
+      ).reachM;
 
       nozzle._depth = axis_distance(nozzle._written, reach, scratch_position);
     }
@@ -926,17 +939,17 @@ export class AfterburnerBatch {
 
     this._nozzles = sorted;
 
-    this.mark_static(0);
-    this.mark_static(count - 1);
-    this.mark_dynamic(0);
-    this.mark_dynamic(count - 1);
+    this.markStatic(0);
+    this.markStatic(count - 1);
+    this.markDynamic(0);
+    this.markDynamic(count - 1);
   }
 
   /**
    * Take the air and the throttle from the shared flight, if there is one and
    * it changed since the last frame.
    */
-  private read_source() {
+  private readSource() {
     const source = this.source;
 
     if (
@@ -952,7 +965,7 @@ export class AfterburnerBatch {
     const values = source.values;
 
     for (const nozzle of this._nozzles) {
-      const from = nozzle.throttle_from;
+      const from = nozzle.throttleFrom;
 
       if (from) {
         nozzle.throttle = from(values);
@@ -962,15 +975,15 @@ export class AfterburnerBatch {
     const profile = this._profile;
 
     if (
-      profile.altitude_m !== values.altitude_m ||
-      profile.airspeed_m_s !== values.airspeed_m_s ||
-      profile.temperature_offset_k !== values.temperature_offset_k
+      profile.altitudeM !== values.altitudeM ||
+      profile.airspeedMPerS !== values.airspeedMPerS ||
+      profile.temperatureOffsetK !== values.temperatureOffsetK
     ) {
       // The batch's own copy, made when it was set: written in place, so a
       // flight that climbs every frame allocates nothing
-      profile.altitude_m = values.altitude_m;
-      profile.airspeed_m_s = values.airspeed_m_s;
-      profile.temperature_offset_k = values.temperature_offset_k;
+      profile.altitudeM = values.altitudeM;
+      profile.airspeedMPerS = values.airspeedMPerS;
+      profile.temperatureOffsetK = values.temperatureOffsetK;
 
       write_afterburner_profile(this.uniforms, profile);
     }
@@ -982,7 +995,7 @@ export class AfterburnerBatch {
    */
   private respond(delta_s: number) {
     const follow =
-      this.response_s > 0 ? 1 - Math.exp(-delta_s / this.response_s) : 1;
+      this.responseS > 0 ? 1 - Math.exp(-delta_s / this.responseS) : 1;
 
     for (const nozzle of this._nozzles) {
       const gap = nozzle._throttle - nozzle._drawn;
@@ -1010,7 +1023,7 @@ export class AfterburnerBatch {
 
     // Measured from an anchor near the nozzles, so a float resolves
     // millimetres even when the scene is planet sized
-    const first = world_elements(nozzles[0]);
+    const first = drawn_elements(nozzles[0]);
 
     if (
       !this._anchored ||
@@ -1035,7 +1048,7 @@ export class AfterburnerBatch {
     }
 
     for (const nozzle of nozzles) {
-      const elements = world_elements(nozzle);
+      const elements = drawn_elements(nozzle);
       const written = nozzle._written;
 
       let moved = false;
@@ -1072,14 +1085,14 @@ export class AfterburnerBatch {
       array[offset + ROTATION + 2] = scratch_rotation.z;
       array[offset + ROTATION + 3] = scratch_rotation.w;
 
-      this.mark_dynamic(nozzle._slot);
+      this.markDynamic(nozzle._slot);
 
       // A scaled nozzle is a bigger engine: every length in it scales
       const scale = (scratch_scale.x + scratch_scale.y + scratch_scale.z) / 3;
 
       if (scale !== nozzle._scale) {
         nozzle._scale = scale;
-        this.write_static(nozzle);
+        this.writeStatic(nozzle);
       }
     }
   }
@@ -1115,7 +1128,7 @@ export class AfterburnerBatch {
    * Write everything about a nozzle a moving throttle cannot change.
    * @param nozzle The nozzle
    */
-  private write_static(nozzle: AfterburnerNozzle) {
+  private writeStatic(nozzle: AfterburnerNozzle) {
     const params = nozzle._params;
     const scale = nozzle._scale;
     const array = this._static.array;
@@ -1123,56 +1136,56 @@ export class AfterburnerBatch {
 
     // A scaled nozzle is a bigger engine: its lengths scale, and nothing else
     // does. Soot per metre is a concentration, the same in any size of plume
-    array[offset + SHAPE] = params.nozzle_radius_m * scale;
-    array[offset + SHAPE + 1] = params.exit_mach;
-    array[offset + SHAPE + 2] = params.pressure_ratio;
+    array[offset + SHAPE] = params.nozzleRadiusM * scale;
+    array[offset + SHAPE + 1] = params.exitMach;
+    array[offset + SHAPE + 2] = params.pressureRatio;
     array[offset + SHAPE + 3] = nozzle._seed;
 
-    array[offset + THERMO] = params.exit_temperature_k;
-    array[offset + THERMO + 1] = params.dry_temperature_k;
+    array[offset + THERMO] = params.exitTemperatureK;
+    array[offset + THERMO + 1] = params.dryTemperatureK;
     array[offset + THERMO + 2] = params.gamma;
-    array[offset + THERMO + 3] = params.molar_mass_g_mol;
+    array[offset + THERMO + 3] = params.molarMassGPerMol;
 
-    array[offset + OPTICS] = params.soot_per_m;
-    array[offset + OPTICS + 1] = params.soot_survival;
-    array[offset + OPTICS + 2] = params.particles_per_m;
-    array[offset + OPTICS + 3] = params.particle_albedo;
+    array[offset + OPTICS] = params.sootPerM;
+    array[offset + OPTICS + 1] = params.sootSurvival;
+    array[offset + OPTICS + 2] = params.particlesPerM;
+    array[offset + OPTICS + 3] = params.particleAlbedo;
 
-    write_color(array, offset + BAND, params.band_color, params.band_strength);
+    write_color(array, offset + BAND, params.bandColor, params.bandStrength);
 
     array[offset + MOTION] = params.turbulence;
     array[offset + MOTION + 1] = params.meander;
-    array[offset + MOTION + 2] = params.refraction_m * scale;
-    array[offset + MOTION + 3] = params.afterburning_k;
+    array[offset + MOTION + 2] = params.refractionM * scale;
+    array[offset + MOTION + 3] = params.afterburningK;
 
     // The outline is a shape, the same at any size
-    const squareness = clamp_nozzle_squareness(params.nozzle_squareness);
-    const fit = nozzle_outline_fit(params.nozzle_aspect, squareness);
+    const squareness = clamp_nozzle_squareness(params.nozzleSquareness);
+    const fit = nozzle_outline_fit(params.nozzleAspect, squareness);
 
-    array[offset + OUTLINE] = Math.max(params.nozzle_aspect, 1e-3);
+    array[offset + OUTLINE] = Math.max(params.nozzleAspect, 1e-3);
     array[offset + OUTLINE + 1] = squareness;
-    array[offset + OUTLINE + 2] = params.nozzle_roll;
-    array[offset + OUTLINE + 3] = Math.max(params.nozzle_outline_length, 0);
+    array[offset + OUTLINE + 2] = params.nozzleRoll;
+    array[offset + OUTLINE + 3] = Math.max(params.nozzleOutlineLength, 0);
 
-    array[offset + OUTLINE_FIT] = fit.area_scale;
+    array[offset + OUTLINE_FIT] = fit.areaScale;
     array[offset + OUTLINE_FIT + 1] = fit.reach;
 
-    this.mark_static(nozzle._slot);
+    this.markStatic(nozzle._slot);
   }
 
-  private mark_static(slot: number) {
+  private markStatic(slot: number) {
     this._static_from = Math.min(this._static_from, slot);
     this._static_to = Math.max(this._static_to, slot + 1);
   }
 
-  private mark_dynamic(slot: number) {
+  private markDynamic(slot: number) {
     this._dynamic_from = Math.min(this._dynamic_from, slot);
     this._dynamic_to = Math.max(this._dynamic_to, slot + 1);
   }
 
-  private write_quality() {
-    this.uniforms.near_steps.value = this._quality.near_steps;
-    this.uniforms.mid_steps.value = this._quality.mid_steps;
+  private writeQuality() {
+    this.uniforms.nearSteps.value = this._quality.nearSteps;
+    this.uniforms.midSteps.value = this._quality.midSteps;
   }
 
   /**
@@ -1239,10 +1252,10 @@ export class AfterburnerBatch {
 
     // Everything goes up again, into the new buffers
     if (this._nozzles.length > 0) {
-      this.mark_static(0);
-      this.mark_static(this._nozzles.length - 1);
-      this.mark_dynamic(0);
-      this.mark_dynamic(this._nozzles.length - 1);
+      this.markStatic(0);
+      this.markStatic(this._nozzles.length - 1);
+      this.markDynamic(0);
+      this.markDynamic(this._nozzles.length - 1);
     }
   }
 
@@ -1250,15 +1263,15 @@ export class AfterburnerBatch {
    * Whether any nozzle bends what is behind it, which needs a copy of the frame.
    * @returns Whether the haze variant is wanted
    */
-  private wants_haze(): boolean {
+  private wantsHaze(): boolean {
     return (
       this._haze &&
-      this._nozzles.some((nozzle) => nozzle._params.refraction_m > 0)
+      this._nozzles.some((nozzle) => nozzle._params.refractionM > 0)
     );
   }
 
-  private choose_material() {
-    const material = this.material_for(this.wants_haze());
+  private chooseMaterial() {
+    const material = this.materialFor(this.wantsHaze());
 
     if (this.mesh.material !== material) {
       this.mesh.material = material;
@@ -1270,12 +1283,12 @@ export class AfterburnerBatch {
    * @param haze Whether it bends the background
    * @returns The material
    */
-  private material_for(haze: boolean): MeshBasicNodeMaterial {
+  private materialFor(haze: boolean): MeshBasicNodeMaterial {
     let material = this._materials.get(haze);
 
     if (material === undefined) {
       material = create_afterburner_material({
-        octaves: this._quality.turbulence_octaves,
+        octaves: this._quality.turbulenceOctaves,
         haze,
         hooks: this._hooks,
         uniforms: this.uniforms,
@@ -1299,7 +1312,7 @@ export class AfterburnerBatch {
     }
 
     this._materials.clear();
-    this.choose_material();
+    this.chooseMaterial();
 
     // Disposed only once the mesh has let go of it
     if (this.mesh.material !== current) {
@@ -1379,6 +1392,28 @@ const world_elements = (nozzle: AfterburnerNozzle): ArrayLike<number> => {
 };
 
 /**
+ * The world matrix in the shader's frame, the plume running down its +X.
+ *
+ * The nozzle's +Z becomes the shader's +X and its +Y stays up: a quarter turn
+ * about Y, which only moves columns about.
+ * @param nozzle The nozzle
+ * @returns Its drawn matrix's elements
+ */
+const drawn_elements = (nozzle: AfterburnerNozzle): ArrayLike<number> => {
+  const world = world_elements(nozzle);
+  const drawn = nozzle._drawn_frame;
+
+  for (let row = 0; row < 4; row++) {
+    drawn[row] = world[8 + row] ?? 0;
+    drawn[4 + row] = world[4 + row] ?? 0;
+    drawn[8 + row] = -(world[row] ?? 0);
+    drawn[12 + row] = world[12 + row] ?? 0;
+  }
+
+  return drawn;
+};
+
+/**
  * Whether a vector was given as an array.
  * @param value The vector
  * @returns Whether it is a tuple
@@ -1410,7 +1445,7 @@ const write_color = (
 
 /**
  * How far a point is from a plume's axis, the segment from its nozzle out to
- * its reach along the nozzle's +X.
+ * its reach along the drawn matrix's +X.
  * @param elements The nozzle's world matrix
  * @param reach How far the plume is drawn, in metres
  * @param point The point, in world space

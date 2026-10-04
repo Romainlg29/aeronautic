@@ -47,7 +47,7 @@ It returns `AirframeViews`: `front`, `top` and `side` `DepthView`s, looking
 along x, y and z, and the box's `min` and `max`.
 
 A `DepthView` has its `axis`, the two axes `across` it, its `width` and
-`height` in pixels, the `origin` of pixel (0, 0) and the `cell_m` a pixel
+`height` in pixels, the `origin` of pixel (0, 0) and the `cellM` a pixel
 spans, and `near` and `far`: the least and greatest coordinate along the axis
 at each pixel, NaN where nothing was hit.
 

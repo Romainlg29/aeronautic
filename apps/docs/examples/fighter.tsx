@@ -1,5 +1,5 @@
 import { useGLTF } from "@react-three/drei";
-import { Afterburner } from "@aeronautic/afterburner";
+import { Afterburner } from "@aeronautic/afterburner/react";
 import type { Flight } from "@aeronautic/core";
 import { useFlightStore } from "@aeronautic/core/react";
 import { type FC, useLayoutEffect, useState } from "react";
@@ -59,7 +59,7 @@ export const Exhaust: FC = () => (
     direction={[0, 0, -1]}
     // The exit as modelled, inside the petals: an oval 0.76 m wide and 0.45 m
     // high, sized as the round exit of its area
-    params={{ nozzle_radius_m: 0.29, nozzle_aspect: 1.67 }}
+    params={{ nozzleRadiusM: 0.29, nozzleAspect: 1.67 }}
   />
 );
 

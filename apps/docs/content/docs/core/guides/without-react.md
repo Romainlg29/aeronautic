@@ -8,14 +8,14 @@ as its `source`:
 
 ```ts
 import { Flight } from "@aeronautic/core";
-import { AfterburnerBatchCore } from "@aeronautic/afterburner";
-import { WingVaporCore } from "@aeronautic/wing-vapor";
+import { AfterburnerBatch } from "@aeronautic/afterburner";
+import { WingVapor } from "@aeronautic/wing-vapor";
 import { ControlRig, fighter_controls } from "@aeronautic/controls";
 
-const flight = new Flight({ airspeed_m_s: 220, altitude_m: 4000 });
+const flight = new Flight({ airspeedMPerS: 220, altitudeM: 4000 });
 
-const batch = new AfterburnerBatchCore({ source: flight });
-const vapor = new WingVaporCore({ airframe, source: flight });
+const batch = new AfterburnerBatch({ source: flight });
+const vapor = new WingVapor({ airframe, source: flight });
 const rig = new ControlRig(gltf.scene, {
   animations: gltf.animations,
   source: flight,
@@ -34,7 +34,7 @@ renderer.setAnimationLoop(() => {
 
   // From a flight model, or from how the model moved, or both
   flight.set({ throttle: input.throttle, pitch: input.stick_y });
-  flight.track(jet, delta_s, { sea_level_y: 0 });
+  flight.track(jet, delta_s, { seaLevelY: 0 });
 
   rig.update(delta_s);
   renderer.render(scene, camera);
@@ -65,8 +65,8 @@ The air needs no flight at all:
 ```ts
 import { moist_air, standard_atmosphere } from "@aeronautic/core";
 
-standard_atmosphere(11_000).temperature_k; // 216.65
-moist_air(3000, 0.8, 10).dew_point_k;
+standard_atmosphere(11_000).temperatureK; // 216.65
+moist_air(3000, 0.8, 10).dewPointK;
 ```
 
 See [The atmosphere](../../reference/atmosphere/).

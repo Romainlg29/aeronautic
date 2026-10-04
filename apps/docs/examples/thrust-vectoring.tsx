@@ -21,7 +21,7 @@ const Fighter: FC<{ readout: RefObject<HTMLSpanElement | null> }> = ({
 
   // Read in place by each engine, so a new one each render is fine
   const engine = {
-    on_vector: (pitch_deg: number, yaw_deg: number) => {
+    onVector: (pitch_deg: number, yaw_deg: number) => {
       if (!readout.current) return;
 
       readout.current.textContent =

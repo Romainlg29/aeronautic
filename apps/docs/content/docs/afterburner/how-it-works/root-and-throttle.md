@@ -52,7 +52,7 @@ and the plume slides across those pixels, so each point of the flame draws a
 different offset every frame and the step error changes with it — which reads as
 the root shimmering and coming loose from the nozzle, and only ever while the
 camera is moving. So the offset is seeded from where the ray enters the plume,
-in whole cells of the plume's own frame (`dither_scale` of them a metre), and a
+in whole cells of the plume's own frame (`ditherScale` of them a metre), and a
 point keeps it however the camera moves.
 
 That alone is not enough. Neighbouring pixels mostly enter in the same cell, so
@@ -89,26 +89,26 @@ The one thing a frame writes per nozzle, and one float of it.
 - **The travel**: 0 is idle, 1 is military power, the most the engine makes
   dry, and 1.1 is full reheat. `AFTERBURNER_MAX_THROTTLE` is that 1.1, and
   `clamp_throttle` holds a value inside it.
-- **`burner_lit`**: zero below `burner_threshold`, which is 1, the military
+- **`burner_lit`**: zero below `burnerThreshold`, which is 1, the military
   power detent. Past it the first zone lights within `PLUME_LIGHT_OFF` of
   throttle, to `PLUME_MIN_REHEAT` of full, and the rest stage in up to 1.1.
-  The batch also eases each plume toward its throttle over `response_s`, a
+  The batch also eases each plume toward its throttle over `responseS`, a
   quarter of a second by default, so a burner lights over a moment as a real
   one does rather than in a frame. A threshold of zero is an engine
   with no burner, always lit: a rocket.
 - **Dry thrust**: below the burner the engine leaves at `dry_temperature`,
-  which climbs from `idle_temperature` of the way above the air at idle to
-  `dry_temperature_k` at military power. Gas that cool is transparent, so it
+  which climbs from `idleTemperature` of the way above the air at idle to
+  `dryTemperatureK` at military power. Gas that cool is transparent, so it
   shows only as heat shimmer, and there are no shock diamonds: they need the
   burner's heat to glow. What a real dry engine shows is its last turbine
   stage and jet pipe, glowing a dull red seen up the nozzle from nearly
-  astern. `dry_glow` sets how bright, from `PLUME_IDLE_GLOW` of it at idle to
+  astern. `dryGlow` sets how bright, from `PLUME_IDLE_GLOW` of it at idle to
   all of it at military power, and the lip hides it from the side. Once the
   burner lights the glow is drowned out, and the camera opens up for the
   first, dim zone: `plume_adaptation` is the gain an auto-exposure would add,
   a share `adaptation` of the way to full-power brightness, fading out as
   the burner climbs to 1.1.
-- **The pressure ratio**: falls toward `idle_pressure` of full, because a
+- **The pressure ratio**: falls toward `idlePressure` of full, because a
   throttled engine is a lower chamber or turbine pressure. The shock train
   shortens and tightens with it, and an overexpanded rocket pinches harder.
 

@@ -18,7 +18,7 @@ A sharp, swept leading edge doesn't hold its flow at any useful angle of
 attack. The flow separates off it and rolls up into a vortex lying over the
 wing, whose low pressure adds lift. Polhamus's suction analogy turns the
 leading-edge suction an attached flow would have had into that vortex lift.
-`leading_edge_sharpness` says how much of it a given edge sheds: all of it for
+`leadingEdgeSharpness` says how much of it a given edge sheds: all of it for
 a chined fighter or a delta, about half for a round-nosed wing.
 
 ## Breakdown and the stall

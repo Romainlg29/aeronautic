@@ -11,35 +11,35 @@ const flight = useFlightStore();
 
 useFrame(() => {
   flight?.set({
-    airspeed_m_s: model.speed,
-    angle_of_attack_rad: model.alpha,
-    load_factor: model.g,
-    altitude_m: model.height,
+    airspeedMPerS: model.speed,
+    angleOfAttackRad: model.alpha,
+    loadFactor: model.g,
+    altitudeM: model.height,
   });
 });
 ```
 
 ## What can be written
 
-| field                  | unit     | meaning                                          |
-| ---------------------- | -------- | ------------------------------------------------ |
-| `airspeed_m_s`         | m/s      | true airspeed                                    |
-| `angle_of_attack_rad`  | rad      | positive with the nose above the flight path     |
-| `sideslip_rad`         | rad      | positive when the air blows from the right       |
-| `load_factor`          | g        | lift over weight: 1 in level flight              |
-| `roll_rate_rad_s`      | rad/s    | right wing down positive                         |
-| `pitch_rate_rad_s`     | rad/s    | nose up positive                                 |
-| `yaw_rate_rad_s`       | rad/s    | nose right positive                              |
-| `throttle`             | 0 to 1.1 | 0 idle, 1 military power, 1.1 full reheat        |
-| `roll`                 | −1 to 1  | the stick, right positive                        |
-| `pitch`                | −1 to 1  | the stick, aft (nose up) positive                |
-| `yaw`                  | −1 to 1  | the pedals, right positive                       |
-| `flaps`                | 0 to 1   | 1 fully down                                     |
-| `airbrake`             | 0 to 1   | 1 fully out                                      |
-| `gear`                 | 0 to 1   | 1 down                                           |
-| `altitude_m`           | m        | above sea level                                  |
-| `temperature_offset_k` | K        | how much warmer the day is than the standard one |
-| `relative_humidity`    | 0 to 1   | as a weather report gives it                     |
+| field                | unit     | meaning                                          |
+| -------------------- | -------- | ------------------------------------------------ |
+| `airspeedMPerS`      | m/s      | true airspeed                                    |
+| `angleOfAttackRad`   | rad      | positive with the nose above the flight path     |
+| `sideslipRad`        | rad      | positive when the air blows from the right       |
+| `loadFactor`         | g        | lift over weight: 1 in level flight              |
+| `rollRateRadPerS`    | rad/s    | right wing down positive                         |
+| `pitchRateRadPerS`   | rad/s    | nose up positive                                 |
+| `yawRateRadPerS`     | rad/s    | nose right positive                              |
+| `throttle`           | 0 to 1.1 | 0 idle, 1 military power, 1.1 full reheat        |
+| `roll`               | −1 to 1  | the stick, right positive                        |
+| `pitch`              | −1 to 1  | the stick, aft (nose up) positive                |
+| `yaw`                | −1 to 1  | the pedals, right positive                       |
+| `flaps`              | 0 to 1   | 1 fully down                                     |
+| `airbrake`           | 0 to 1   | 1 fully out                                      |
+| `gear`               | 0 to 1   | 1 down                                           |
+| `altitudeM`          | m        | above sea level                                  |
+| `temperatureOffsetK` | K        | how much warmer the day is than the standard one |
+| `relativeHumidity`   | 0 to 1   | as a weather report gives it                     |
 
 A new flight starts as `default_flight_input()`: at rest at sea level, at
 military power, gear up, on a standard day at 60 % humidity. Give

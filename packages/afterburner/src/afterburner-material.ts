@@ -1,3 +1,4 @@
+import { Vector3 } from "three";
 import {
   BackSide,
   CustomBlending,
@@ -187,16 +188,18 @@ export const AFTERBURNER_ATTRIBUTES = {
 export type AfterburnerPixel = {
   context: PlumeContext;
 
-  // The ray, in the nozzle's frame, and where it enters and leaves the plume
+  /** The ray, in the nozzle's frame, and where it enters and leaves the plume */
   origin: V3;
   direction: V3;
   span: Node<"vec2">;
 
-  // 0 near, 1 mid, 2 far
+  /** 0 near, 1 mid, 2 far */
   lod: F;
 
-  // What the march found: the radiance the plume adds, exposed, and how much of
-  // what is behind it still shows through, per primary
+  /**
+   * What the march found: the radiance the plume adds, exposed, and how much of
+   * what is behind it still shows through, per primary
+   */
   transmittance: V3;
 };
 
@@ -213,8 +216,8 @@ export type AfterburnerHooks = PlumeFieldHooks & {
 
   /**
    * Any nozzle outline, in place of the superellipse the params describe.
-   * Every plume in the batch takes it, each turned by its own `nozzle_roll`
-   * and relaxing to round over its own `nozzle_outline_length`.
+   * Every plume in the batch takes it, each turned by its own `nozzleRoll`
+   * and relaxing to round over its own `nozzleOutlineLength`.
    */
   outline?: AfterburnerOutline;
 };
@@ -240,24 +243,28 @@ export type AfterburnerOutline = {
  * What is compiled into one afterburner material.
  */
 export type AfterburnerMaterialOptions = {
-  // The air and the camera to start with, changeable later through uniforms
+  /** The air and the camera to start with, changeable later through uniforms */
   profile?: AfterburnerProfile;
 
-  // Octaves of eddy noise, 1 to 3
+  /** Octaves of eddy noise, 1 to 3 */
   octaves?: number;
 
-  // Whether to bend what is behind the plume at all
-  // Off is one fewer copy of the frame and a little less per pixel
+  /**
+   * Whether to bend what is behind the plume at all
+   * Off is one fewer copy of the frame and a little less per pixel
+   */
   haze?: boolean;
 
   hooks?: AfterburnerHooks;
 
-  // Uniforms to share with another material, so variants stay in step
+  /** Uniforms to share with another material, so variants stay in step */
   uniforms?: AfterburnerUniforms;
 
-  // The opaque scene, drawn in a pass of its own, for a plume drawn in
-  // another: at a lower resolution, say. Left out, the plume reads the frame
-  // it is drawn into
+  /**
+   * The opaque scene, drawn in a pass of its own, for a plume drawn in
+   * another: at a lower resolution, say. Left out, the plume reads the frame
+   * it is drawn into
+   */
   backdrop?: AfterburnerBackdrop;
 };
 
@@ -265,37 +272,42 @@ export type AfterburnerMaterialOptions = {
  * The opaque scene behind the plumes, as a separate pass leaves it.
  */
 export type AfterburnerBackdrop = {
-  // Its colour, for the haze to bend
+  /** Its colour, for the haze to bend */
   color: TextureNode;
 
-  // Its depth, for the flame to stop at
+  /** Its depth, for the flame to stop at */
   depth: TextureNode;
 };
+
+// Every profile dial is a float but the sun's direction
+type ScalarProfileKey = Exclude<keyof AfterburnerProfile, "sunDirection">;
 
 /**
  * The uniforms an afterburner material is driven by.
  */
 export type AfterburnerUniforms = {
-  profile: { [K in keyof AfterburnerProfile]: UniformNode<"float", number> };
+  profile: {
+    [K in ScalarProfileKey]: UniformNode<"float", number>;
+  } & { sunDirection: UniformNode<"vec3", Vector3> };
 
-  // The air the profile works out to, written with it
+  /** The air the profile works out to, written with it */
   air: { [K in keyof PlumeAirNodes]: UniformNode<"float", number> };
 
-  // Seconds, the plume's own clock
+  /** Seconds, the plume's own clock */
   time: UniformNode<"float", number>;
 
-  // Most march iterations near, and once the eddies are dropped
-  near_steps: UniformNode<"int", number>;
-  mid_steps: UniformNode<"int", number>;
+  /** Most march iterations near, and once the eddies are dropped */
+  nearSteps: UniformNode<"int", number>;
+  midSteps: UniformNode<"int", number>;
 
-  // Length over distance below which a plume is not drawn
-  min_screen_span: UniformNode<"float", number>;
+  /** Length over distance below which a plume is not drawn */
+  minScreenSpan: UniformNode<"float", number>;
 
-  // Metres one screen height covers at one metre out
-  screen_scale: UniformNode<"float", number>;
+  /** Metres one screen height covers at one metre out */
+  screenScale: UniformNode<"float", number>;
 
-  detail_distance: UniformNode<"float", number>;
-  cheap_distance: UniformNode<"float", number>;
+  detailDistance: UniformNode<"float", number>;
+  cheapDistance: UniformNode<"float", number>;
 };
 
 /**
@@ -306,7 +318,7 @@ export type AfterburnerMaterial = {
   uniforms: AfterburnerUniforms;
 
   /** Write a profile into the uniforms. Live, no rebuild. */
-  set_profile: (profile: AfterburnerProfile) => void;
+  setProfile: (profile: AfterburnerProfile) => void;
 };
 
 /**
@@ -319,9 +331,15 @@ export const create_afterburner_uniforms = (
 ): AfterburnerUniforms => {
   const quality = default_afterburner_quality();
 
-  const shape = {} as AfterburnerUniforms["profile"];
+  const shape = {
+    sunDirection: uniform(new Vector3()).setName(
+      "afterburner_sunDirection",
+    ) as UniformNode<"vec3", Vector3>,
+  } as AfterburnerUniforms["profile"];
 
   for (const key of Object.keys(profile) as (keyof AfterburnerProfile)[]) {
+    if (key === "sunDirection") continue;
+
     shape[key] = uniform(profile[key]).setName(
       `afterburner_${key}`,
     ) as UniformNode<"float", number>;
@@ -343,15 +361,12 @@ export const create_afterburner_uniforms = (
       "float",
       number
     >,
-    near_steps: uniform(quality.near_steps, "int") as UniformNode<
-      "int",
-      number
-    >,
-    mid_steps: uniform(quality.mid_steps, "int") as UniformNode<"int", number>,
-    min_screen_span: uniform(0) as UniformNode<"float", number>,
-    screen_scale: uniform(1) as UniformNode<"float", number>,
-    detail_distance: uniform(900) as UniformNode<"float", number>,
-    cheap_distance: uniform(3000) as UniformNode<"float", number>,
+    nearSteps: uniform(quality.nearSteps, "int") as UniformNode<"int", number>,
+    midSteps: uniform(quality.midSteps, "int") as UniformNode<"int", number>,
+    minScreenSpan: uniform(0) as UniformNode<"float", number>,
+    screenScale: uniform(1) as UniformNode<"float", number>,
+    detailDistance: uniform(900) as UniformNode<"float", number>,
+    cheapDistance: uniform(3000) as UniformNode<"float", number>,
   };
 
   write_afterburner_profile(uniforms, profile);
@@ -371,20 +386,24 @@ export const write_afterburner_profile = (
   for (const key of Object.keys(
     uniforms.profile,
   ) as (keyof AfterburnerProfile)[]) {
-    uniforms.profile[key].value = profile[key];
+    if (key === "sunDirection") {
+      uniforms.profile.sunDirection.value.fromArray(profile.sunDirection);
+    } else {
+      uniforms.profile[key].value = profile[key];
+    }
   }
 
   const air = atmosphere(profile);
 
-  uniforms.air.temperature_k.value = air.temperature_k;
+  uniforms.air.temperatureK.value = air.temperatureK;
   uniforms.air.pressure.value = air.pressure;
   uniforms.air.density.value = air.density;
-  uniforms.air.sound.value = air.sound_m_s;
+  uniforms.air.sound.value = air.soundMPerS;
   uniforms.air.ram.value = air.ram;
 };
 
 const AIR_KEYS: (keyof PlumeAirNodes)[] = [
-  "temperature_k",
+  "temperatureK",
   "pressure",
   "density",
   "sound",
@@ -432,7 +451,7 @@ export const create_afterburner_material = (
 ): AfterburnerMaterial => {
   const {
     profile: initial = default_afterburner_profile(),
-    octaves = default_afterburner_quality().turbulence_octaves,
+    octaves = default_afterburner_quality().turbulenceOctaves,
     haze = true,
     hooks,
     backdrop,
@@ -482,15 +501,15 @@ export const create_afterburner_material = (
   const distance_m = length(exit);
 
   const engine: PlumeEngineNodes = {
-    nozzle_radius: shape.x,
-    exit_mach: shape.y,
-    pressure_ratio: shape.z,
-    exit_temperature: thermo.x,
-    dry_temperature: thermo.y,
+    nozzleRadius: shape.x,
+    exitMach: shape.y,
+    pressureRatio: shape.z,
+    exitTemperature: thermo.x,
+    dryTemperature: thermo.y,
     gamma: thermo.z,
-    molar_mass: thermo.w,
+    molarMass: thermo.w,
     soot: optics.x,
-    soot_survival: optics.y,
+    sootSurvival: optics.y,
     particles: optics.z,
     afterburning: motion.w,
     turbulence: motion.x,
@@ -502,13 +521,9 @@ export const create_afterburner_material = (
   const jet = plume_jet(engine, p);
 
   const lod = select(
-    distance_m.greaterThan(uniforms.cheap_distance),
+    distance_m.greaterThan(uniforms.cheapDistance),
     float(2),
-    select(
-      distance_m.greaterThan(uniforms.detail_distance),
-      float(1),
-      float(0),
-    ),
+    select(distance_m.greaterThan(uniforms.detailDistance), float(1), float(0)),
   );
 
   // The view space ray origin, carried into the nozzle's frame: out of view
@@ -535,7 +550,7 @@ export const create_afterburner_material = (
     vec3(camera_from_nozzle.x.sub(along_axis), camera_from_nozzle.yz),
   );
 
-  const view_height = max(nearest, 1e-3).mul(uniforms.screen_scale);
+  const view_height = max(nearest, 1e-3).mul(uniforms.screenScale);
 
   const covered = jet.reach
     .mul(jet.outer_near.add(jet.outer_far))
@@ -567,7 +582,7 @@ export const create_afterburner_material = (
   // Collapsed outside the clip volume, an instance not being droppable
   const culled = shape.x
     .lessThanEqual(0)
-    .or(jet.reach.lessThan(distance_m.mul(uniforms.min_screen_span)));
+    .or(jet.reach.lessThan(distance_m.mul(uniforms.minScreenSpan)));
 
   const vertex = select(
     culled,
@@ -607,7 +622,7 @@ export const create_afterburner_material = (
   ) as unknown as V4;
   const v_exit = varying(
     vec4(
-      jet.exit_temperature,
+      jet.lip_temperature,
       jet.compression,
       jet.soot_survival,
       jet.adaptation,
@@ -636,11 +651,16 @@ export const create_afterburner_material = (
     vec3(outline_fit.x, reach, outline.w),
     "v_outline_fit",
   ) as unknown as V3;
-  const v_glow = varying(vec2(jet.glow, shape.x), "v_glow") as unknown as V2;
+  // What shows up the nozzle: the turbine and pipe dry, at the temperature
+  // they are built for however wide the nozzle is open, and the flame lit
+  const v_glow = varying(
+    vec4(jet.glow, shape.x, jet.glow_temperature, jet.pipe_flame),
+    "v_glow",
+  ) as unknown as V4;
 
   // Toward the sun, out of the world into the nozzle's frame. The mesh is
   // only ever translated, so its frame is the world's
-  const sun_world = vec3(p.sun_x, p.sun_y, p.sun_z);
+  const sun_world = p.sunDirection;
 
   const v_sun = varying(
     rotate(inverse, sun_world.div(max(length(sun_world), PLUME_EPSILON))),
@@ -651,7 +671,7 @@ export const create_afterburner_material = (
   const radiance = Fn(() => {
     const instance: PlumeJetNodes = {
       radius: v_jet.x,
-      core_length: v_jet.y,
+      coreLength: v_jet.y,
       reach: v_jet.z,
       velocity: v_jet.w,
 
@@ -659,23 +679,23 @@ export const create_afterburner_material = (
       afterburning: v_heat.y,
       reheat: v_outer.y,
       thinning: v_outer.w,
-      exit_temperature: v_exit.x,
+      lipTemperature: v_exit.x,
       compression: v_exit.y,
-      shock_heat: v_heat.z,
-      shock_length: v_heat.w,
+      shockHeat: v_heat.z,
+      shockLength: v_heat.w,
 
-      shock_spacing: v_cell.x,
-      first_disk: v_cell.y,
-      spread_near: v_cell.z,
-      spread_far: v_cell.w,
+      shockSpacing: v_cell.x,
+      firstDisk: v_cell.y,
+      spreadNear: v_cell.z,
+      spreadFar: v_cell.w,
 
       soot: v_optics.x,
-      soot_survival: v_exit.z,
+      sootSurvival: v_exit.z,
       particles: v_optics.z,
       albedo: v_optics.w,
 
-      band_color: v_band.rgb,
-      band_strength: v_band.a,
+      bandColor: v_band.rgb,
+      bandStrength: v_band.a,
 
       glow: v_glow.x,
 
@@ -684,13 +704,13 @@ export const create_afterburner_material = (
       refraction: v_misc.z,
       seed: v_misc.w,
 
-      outer_radius: v_outer.x,
+      outerRadius: v_outer.x,
 
       outline: {
         roll: v_outline.xy,
         aspect: v_outline.z,
         squareness: v_outline.w,
-        area_scale: v_outline_fit.x,
+        areaScale: v_outline_fit.x,
         reach: v_outline_fit.y,
         length: v_outline_fit.z,
         radius: hooks?.outline?.radius,
@@ -726,7 +746,7 @@ export const create_afterburner_material = (
     const span = plume_span(
       origin,
       direction,
-      instance.outer_radius,
+      instance.outerRadius,
       instance.reach,
       scene_t,
     ).toVar();
@@ -761,11 +781,11 @@ export const create_afterburner_material = (
         near_tier,
         int(
           max(
-            float(uniforms.near_steps).mul(v_outer.z),
-            float(uniforms.mid_steps),
+            float(uniforms.nearSteps).mul(v_outer.z),
+            float(uniforms.midSteps),
           ),
         ),
-        uniforms.mid_steps,
+        uniforms.midSteps,
       ),
     );
 
@@ -781,15 +801,15 @@ export const create_afterburner_material = (
     // the diamonds slide and fade as it moves. So the stretch of ray inside
     // the train is marched at a set number of samples per cell, tied to the
     // plume and not to the view
-    const spacing = max(instance.shock_spacing, PLUME_EPSILON);
+    const spacing = max(instance.shockSpacing, PLUME_EPSILON);
     const axial = abs(direction.x);
 
     const train_end = min(
       instance.reach,
-      instance.first_disk
+      instance.firstDisk
         .add(1)
         .mul(spacing)
-        .add(instance.shock_length.mul(SHOCK_TRAIN_LENGTHS)),
+        .add(instance.shockLength.mul(SHOCK_TRAIN_LENGTHS)),
     );
 
     // The cells live in the inviscid core, inside the nozzle's radius, and the
@@ -848,7 +868,7 @@ export const create_afterburner_material = (
             seg_length.div(cylinder).mul(SAMPLES_ACROSS_CORE * 0.5),
           ),
         ),
-        float(uniforms.near_steps).mul(FINE_STEP_CAP),
+        float(uniforms.nearSteps).mul(FINE_STEP_CAP),
       ),
     ).toVar();
 
@@ -867,7 +887,7 @@ export const create_afterburner_material = (
     // share would make the root shimmer with the camera, had the root not
     // been marched finely in the train, where the step error it moves is small
     const entry_cell = floor(
-      origin.add(direction.mul(span.x)).mul(p.dither_scale),
+      origin.add(direction.mul(span.x)).mul(p.ditherScale),
     );
 
     const pixel = screenCoordinate.xy;
@@ -941,7 +961,7 @@ export const create_afterburner_material = (
           const coarse = plume_bound_coarse(point, context);
 
           If(coarse.greaterThan(0), () => {
-            const leap = max(coarse.mul(p.step_safety), here);
+            const leap = max(coarse.mul(p.stepSafety), here);
 
             t.addAssign(select(before_train, min(leap, to_train), leap));
 
@@ -959,7 +979,7 @@ export const create_afterburner_material = (
         // Empty space: skip at least a stride, so the loop never covers less
         // than an even march would, and spends almost nothing on the gap
         If(gap.greaterThan(0).and(far_tier.not()), () => {
-          const leap = max(gap.mul(p.step_safety), here);
+          const leap = max(gap.mul(p.stepSafety), here);
 
           t.addAssign(select(before_train, min(leap, to_train), leap));
 
@@ -993,7 +1013,7 @@ export const create_afterburner_material = (
         column.addAssign(
           sample.mixture
             .mul(
-              float(1).sub(p.air.temperature_k.div(max(sample.temperature, 1))),
+              float(1).sub(p.air.temperatureK.div(max(sample.temperature, 1))),
             )
             .mul(here),
         );
@@ -1015,8 +1035,13 @@ export const create_afterburner_material = (
     // A dry engine's gas is too cool to see: a thousand kelvin is a shimmer
     // and nothing more. What glows is the hardware, the last turbine stage and
     // the pipe behind it a dull red, and only up the nozzle from astern
+    //
+    // Lit, the burner's flame fills the pipe from the spray bars to the lip,
+    // and hides the turbine behind it: from astern the whole exit is flame
     If(
-      v_glow.x.greaterThan(0).and(direction.x.lessThan(-PLUME_EPSILON)),
+      max(v_glow.x, v_glow.w)
+        .greaterThan(0)
+        .and(direction.x.lessThan(-PLUME_EPSILON)),
       () => {
         const exit_radius = max(v_glow.y, PLUME_EPSILON);
 
@@ -1069,10 +1094,20 @@ export const create_afterburner_material = (
 
         // The hardware runs at about the gas's own temperature, and its colour
         // is that blackbody's, held at a luminance of one
-        const hue = blackbody(v_exit.x);
+        const hue = blackbody(v_glow.z);
         const tint = hue.div(max(dot(hue, vec3(...LUMINANCE)), 1e-6));
 
-        light.addAssign(transmittance.mul(tint).mul(v_glow.x).mul(seen));
+        // The flame is its own blackbody, as black as the soot a ray crosses
+        // in it: up the pipe to the turbine, or across to the wall, whichever
+        // it meets first. Looking straight up the tail, the most
+        const path = max(to_turbine.sub(to_exit), 0).mul(deep);
+        const flame = hue
+          .mul(float(1).sub(exp(v_glow.w.mul(path).negate())))
+          .mul(through_lip);
+
+        light.addAssign(
+          transmittance.mul(tint.mul(v_glow.x).mul(seen).add(flame)),
+        );
       },
     );
 
@@ -1125,8 +1160,8 @@ export const create_afterburner_material = (
           .sub(time.mul(instance.velocity).mul(0.6))
           .div(
             eddy
-              .mul(p.eddy_stretch)
-              .add(instance.velocity.mul(0.6).mul(p.shutter_s)),
+              .mul(p.eddyStretch)
+              .add(instance.velocity.mul(0.6).mul(p.shutterS)),
           );
 
         const swim_y = point.y.div(eddy);
@@ -1159,7 +1194,7 @@ export const create_afterburner_material = (
         const offset = clamp(
           bend
             .mul(metres)
-            .div(max(length(origin).mul(uniforms.screen_scale), PLUME_EPSILON)),
+            .div(max(length(origin).mul(uniforms.screenScale), PLUME_EPSILON)),
           -HAZE_LIMIT,
           HAZE_LIMIT,
         );
@@ -1209,5 +1244,5 @@ export const create_afterburner_material = (
   material.vertexNode = vertex;
   material.colorNode = radiance();
 
-  return { material, uniforms, set_profile };
+  return { material, uniforms, setProfile: set_profile };
 };

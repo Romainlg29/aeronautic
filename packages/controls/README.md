@@ -25,10 +25,10 @@ frame allocates.
 ## Install
 
 ```bash
-pnpm add @aeronautic/controls
+pnpm add @aeronautic/controls @aeronautic/core three@~0.186
 ```
 
-It installs `@aeronautic/core` with it. The peer dependencies are `three`
+The peer dependencies are `@aeronautic/core`, `three`
 0.186.x, plus `react` 19 and `@react-three/fiber` 9 (or 10) for
 `@aeronautic/controls/react`.
 
@@ -37,6 +37,7 @@ It installs `@aeronautic/core` with it. The peer dependencies are `three`
 ```tsx
 import { FlightProvider, useFlightStore } from "@aeronautic/core/react";
 import { ControlSurfaces } from "@aeronautic/controls/react";
+import { useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 
 const Jet = () => {
@@ -87,12 +88,12 @@ import {
   LeadingEdgeFlaps,
   Rudders,
 } from "@aeronautic/controls/react";
-import { Afterburner } from "@aeronautic/afterburner";
+import { Afterburner } from "@aeronautic/afterburner/react";
 
 <Airframe object={gltf.scene} animations={gltf.animations}>
-  <Elevons pitch_share={0.7} />
+  <Elevons pitchShare={0.7} />
   <Rudders />
-  <LeadingEdgeFlaps start_deg={4} />
+  <LeadingEdgeFlaps startDeg={4} />
   <Airbrakes rate={20} />
   <Gear />
   <Cockpit />
@@ -116,7 +117,7 @@ Each part takes the same props:
 | -------------------------- | --------------------------------------------------------------- |
 | `from(values, part)`       | Where each part should be for a flight, in the part's own terms |
 | `rate`                     | How fast it moves, in its unit a second                         |
-| `on_move(value, part)`     | Called in the frame a part moves, with its value in its unit    |
+| `onMove(value, part)`      | Called in the frame a part moves, with its value in its unit    |
 | `side`                     | Only the parts on `left`, `right` or `centre`                   |
 | `parts`, `group`, `filter` | Other parts: by name, by rig group, or any you pick             |
 
@@ -154,7 +155,7 @@ touching the other:
 
 `<Drive>` drives any parts, with a `from` in the part's unit. `<Clip>` scrubs
 one of the model's clips from the flight, such as
-`<Clip clip="ANIM_Canopy_Open" from={(f) => (f.airspeed_m_s < 5 ? 1 : 0)} />`.
+`<Clip clip="ANIM_Canopy_Open" from={(f) => (f.airspeedMPerS < 5 ? 1 : 0)} />`.
 
 ## Engines and thrust vectoring
 
@@ -182,7 +183,7 @@ with them.
 <Engine
   side="left"
   throttle={(f) => f.throttle * 0.95}
-  on_vector={(pitch_deg, yaw_deg) => hud.set_nozzle(pitch_deg, yaw_deg)}
+  onVector={(pitch_deg, yaw_deg) => hud.set_nozzle(pitch_deg, yaw_deg)}
 >
   <Afterburner />
 </Engine>
@@ -192,7 +193,7 @@ The engine is available from a ref, or from `useEngine()` inside it:
 
 - `vectoring`: the limits per axis, their `shape`, and whether the `gimbal` is
   the model's or `virtual`.
-- `pitch_deg` and `yaw_deg`: where the exhaust points now, up and right of
+- `pitchDeg` and `yawDeg`: where the exhaust points now, up and right of
   straight aft.
 - `parts`: the `pitch`, `yaw` and `petals` parts.
 - `clip`: the nozzle clip.
@@ -253,8 +254,8 @@ Values set by hand win over every part component:
 ```tsx
 rig.set("CTRL_Rudder_L", -10); // degrees, over its drive
 rig.set("CTRL_Rudder_L", null); // back to its drive
-rig.set_group("canopy", 1); // a share of its travel
-rig.set_clip("ANIM_Bay_Open", 1); // scrub a clip
+rig.setGroup("canopy", 1); // a share of its travel
+rig.setClip("ANIM_Bay_Open", 1); // scrub a clip
 rig.value("CTRL_Elevon_Outer_L"); // where it is now
 ```
 
@@ -281,7 +282,7 @@ import {
 const rig = new ControlRig(scene, { animations, source: flight });
 
 fighter_controls(rig); // or one by one:
-elevons(rig, { pitch_share: 0.7 });
+elevons(rig, { pitchShare: 0.7 });
 rudders(rig, { side: "left", from: (f) => f.yaw * 0.5 });
 const engine = add_engine(rig, { side: "left" });
 

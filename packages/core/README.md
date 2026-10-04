@@ -33,16 +33,18 @@ of attack, and the control surfaces.
 
 ```tsx
 import { FlightProvider } from "@aeronautic/core/react";
-import { Afterburner } from "@aeronautic/afterburner";
-import { WingVapor } from "@aeronautic/wing-vapor";
+import { Afterburner } from "@aeronautic/afterburner/react";
+import { WingVapor } from "@aeronautic/wing-vapor/react";
 import { ControlSurfaces } from "@aeronautic/controls/react";
 
 const Jet = ({ gltf }) => (
-  <FlightProvider initial={{ airspeed_m_s: 200, altitude_m: 3000 }}>
+  <FlightProvider initial={{ airspeedMPerS: 200, altitudeM: 3000 }}>
     <primitive object={gltf.scene} />
     <ControlSurfaces object={gltf.scene} animations={gltf.animations} />
+    {/* The model flies along -Z, and the exhaust streams aft along +Z */}
     <Afterburner position={[0, 0, 6]} />
-    <WingVapor airframe={airframe} />
+    {/* Measured from the model, rather than a typed planform */}
+    <WingVapor capture={gltf.scene} />
   </FlightProvider>
 );
 ```
@@ -56,9 +58,9 @@ const flight = useFlightStore();
 
 useFrame(() => {
   flight?.set({
-    airspeed_m_s: model.speed,
-    angle_of_attack_rad: model.alpha,
-    load_factor: model.g,
+    airspeedMPerS: model.speed,
+    angleOfAttackRad: model.alpha,
+    loadFactor: model.g,
     throttle: input.throttle,
     pitch: input.stick_y,
     roll: input.stick_x,
@@ -71,7 +73,7 @@ load factor and the rates from how the object moves. The provider tracks it
 before any other frame callback, so everything reads this frame's flight.
 
 ```tsx
-<FlightProvider track={jet_ref} sea_level_y={0} wind={[5, 0, 0]}>
+<FlightProvider track={jet_ref} seaLevelY={0} wind={[5, 0, 0]}>
 ```
 
 A provider that tracks has to sit inside the `<Canvas>`. Without `track`, it
@@ -124,7 +126,7 @@ Without React, use `new Flight(input)` together with `set`, `track`, `values`,
 ```ts
 import { moist_air, standard_atmosphere } from "@aeronautic/core";
 
-standard_atmosphere(11_000); // { temperature_k: 216.65, pressure_pa: 22632, pressure: 0.223 }
+standard_atmosphere(11_000); // { temperatureK: 216.65, pressurePa: 22632, pressure: 0.223 }
 moist_air(3_000, 0.8, 10); // the density, the vapour and the dew point too, on a day 10 K warm
 ```
 

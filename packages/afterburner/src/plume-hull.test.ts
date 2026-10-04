@@ -67,12 +67,11 @@ describe("the per instance frustum", () => {
         const extent = plume_extent(params);
 
         for (let step = 0; step <= 40; step++) {
-          const x = (state.reach_m * step) / 40;
-          const along = x / state.reach_m;
+          const x = (state.reachM * step) / 40;
+          const along = x / state.reachM;
 
           const hull_m =
-            state.outer_near_m +
-            (state.outer_far_m - state.outer_near_m) * along;
+            state.outerNearM + (state.outerFarM - state.outerNearM) * along;
 
           expect(hull_m).toBeGreaterThanOrEqual(
             (jet_half_width(x, state) * extent) / 1.05 - 1e-9,

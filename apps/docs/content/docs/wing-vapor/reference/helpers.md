@@ -4,15 +4,17 @@ description: "The physics and the capture, exported for the main thread, and the
 ---
 
 The physics the vapor is drawn from is all on the CPU too, tested, and
-exported.
+exported from `@aeronautic/wing-vapor/physics`. The capture (`capture_airframe`,
+`measure_airframe`, `serialize_capture`…) is at the package root.
 
 ## The air
 
-The air is [`@aeronautic/core`](../../../core/reference/atmosphere/)'s,
-re-exported here: `moist_air`, `standard_atmosphere`, `saturation_pressure`,
-`dew_point`, `mixing_ratio` and the constants `AIR_GAMMA`, `AIR_GAS_CONSTANT`,
-`AIR_CP` and `LATENT_HEAT`. So is the depth capture: `capture_views`,
+The air is [`@aeronautic/core`](../../../core/reference/atmosphere/)'s: import
+`moist_air`, `standard_atmosphere`, `saturation_pressure`, `dew_point`,
+`mixing_ratio` and the constants `AIR_GAMMA`, `AIR_GAS_CONSTANT`, `AIR_CP` and
+`LATENT_HEAT` from `@aeronautic/core`. So is the depth capture: `capture_views`,
 `depth_views` and the rest are [the core's](../../../core/reference/capture/).
+The condensation below is this package's.
 
 | export                                                                     | what it does                                                                                                                                        |
 | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |

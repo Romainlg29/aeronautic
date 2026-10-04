@@ -1,6 +1,6 @@
 ---
 title: Without React
-description: "AfterburnerBatchCore and AfterburnerNozzle, the plain three.js classes underneath."
+description: "AfterburnerBatch and AfterburnerNozzle, the plain three.js classes underneath."
 ---
 
 The components are a thin layer over two plain three.js classes. Use them
@@ -9,18 +9,18 @@ directly in a vanilla three.js app, or in R3F when you want full control.
 ## A batch and its nozzles
 
 ```ts
-import { AfterburnerBatchCore } from "@aeronautic/afterburner";
+import { AfterburnerBatch } from "@aeronautic/afterburner";
 import { WebGPURenderer } from "three/webgpu";
 
 const renderer = new WebGPURenderer({ antialias: false });
 await renderer.init();
 
-const batch = new AfterburnerBatchCore({ preset: "rocket_kerolox" });
+const batch = new AfterburnerBatch({ preset: "rocket_kerolox" });
 scene.add(batch.mesh);
 
 const nozzle = batch.add({
   object: engine_bell, // any Object3D: it follows its world matrix
-  params: { nozzle_radius_m: 1.2 },
+  params: { nozzleRadiusM: 1.2 },
 });
 
 nozzle.throttle = 1.05; // the burner part-way in
@@ -41,8 +41,8 @@ const tail = batch.add({
   offset: { position: [0, 0, -4.2], direction: [0, 0, -1] },
 });
 
-tail.set_offset({ position: [0, 0.1, -4.2] });
-tail.set_direction([0, -0.1, -1]);
+tail.setOffset({ position: [0, 0.1, -4.2] });
+tail.setDirection([0, -0.1, -1]);
 
 // Follow something else; attach(null) stops following and holds still
 tail.attach(other_engine);
@@ -53,22 +53,22 @@ const free = batch.add({ matrix: new Matrix4().makeTranslation(0, 10, 0) });
 free.matrix.makeTranslation(0, 12, 0);
 ```
 
-`world_matrix(target?)` returns where the nozzle is drawn, offset included.
+`worldMatrix(target?)` returns where the nozzle is drawn, offset included.
 
 ## Changing the look and the air
 
 ```ts
-tail.update_params({ exit_mach: 1.6 }); // merge
-tail.set_params({ soot_per_m: 2 }, "rocket_kerolox"); // replace, over a preset
+tail.updateParams({ exitMach: 1.6 }); // merge
+tail.setParams({ sootPerM: 2 }, "rocket_kerolox"); // replace, over a preset
 
-batch.update_profile({ altitude_m: 9000 }); // merge
-batch.set_profile({ altitude_m: 0 }); // replace, over the batch's preset
-batch.set_quality("medium");
-batch.set_haze(false);
-batch.set_hooks(my_hooks);
+batch.updateProfile({ altitudeM: 9000 }); // merge
+batch.setProfile({ altitudeM: 0 }); // replace, over the batch's preset
+batch.setQuality("medium");
+batch.setHaze(false);
+batch.setHooks(my_hooks);
 
-batch.time_scale = 0.5;
-batch.detail_distance_m = 600;
+batch.timeScale = 0.5;
+batch.detailDistanceM = 600;
 ```
 
 ## Removing and cleaning up
@@ -96,16 +96,15 @@ The plume's jet is computed on the CPU too, for gameplay or UI:
 
 ```ts
 import {
-  atmosphere,
-  jet_state,
   resolve_afterburner_params,
   resolve_afterburner_profile,
 } from "@aeronautic/afterburner";
+import { atmosphere, jet_state } from "@aeronautic/afterburner/physics";
 
 const params = resolve_afterburner_params({}, "afterburner");
-const profile = resolve_afterburner_profile({ altitude_m: 9000 });
+const profile = resolve_afterburner_profile({ altitudeM: 9000 });
 
-atmosphere(profile); // { temperature_k, pressure, density, sound_m_s, ram }
+atmosphere(profile); // { temperatureK, pressure, density, soundMPerS, ram }
 const jet = jet_state(params, 1, profile);
-jet.core_length_m; // and velocity_m_s, shock_spacing_m, reach_m, soot_formed…
+jet.coreLengthM; // and velocityMPerS, shockSpacingM, sootFormed…
 ```

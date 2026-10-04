@@ -21,9 +21,9 @@ describe("planform", () => {
   it("is the docs' fighter: a low aspect ratio delta", () => {
     const shape = planform(airframe);
 
-    expect(shape.area_m2).toBeCloseTo(75.6, 1);
-    expect(shape.aspect_ratio).toBeGreaterThan(2);
-    expect(shape.aspect_ratio).toBeLessThan(3);
+    expect(shape.areaM2).toBeCloseTo(75.6, 1);
+    expect(shape.aspectRatio).toBeGreaterThan(2);
+    expect(shape.aspectRatio).toBeLessThan(3);
   });
 });
 
@@ -31,11 +31,11 @@ describe("lift_slope", () => {
   it("is slender-wing theory's πA/2 for a slender wing", () => {
     const slender = {
       ...airframe,
-      span_m: 2,
-      root_chord_m: 20,
-      tip_chord_m: 0,
+      spanM: 2,
+      rootChordM: 20,
+      tipChordM: 0,
     };
-    const a = planform(slender).aspect_ratio;
+    const a = planform(slender).aspectRatio;
 
     expect(lift_slope(slender, 0)).toBeCloseTo((Math.PI * a) / 2, 1);
   });
@@ -43,10 +43,10 @@ describe("lift_slope", () => {
   it("nears 2π for a long straight wing", () => {
     const glider = {
       ...airframe,
-      span_m: 40,
-      root_chord_m: 1,
-      tip_chord_m: 1,
-      leading_edge_sweep_rad: 0,
+      spanM: 40,
+      rootChordM: 1,
+      tipChordM: 1,
+      leadingEdgeSweepRad: 0,
     };
 
     expect(lift_slope(glider, 0)).toBeGreaterThan(5.2);
@@ -63,17 +63,17 @@ describe("polhamus", () => {
     expect(polhamus(airframe, 0).vortex).toBeGreaterThan(2.5);
     expect(polhamus(airframe, 0).vortex).toBeLessThan(4);
     expect(
-      polhamus({ ...airframe, leading_edge_sharpness: 0.5 }, 0).vortex,
+      polhamus({ ...airframe, leadingEdgeSharpness: 0.5 }, 0).vortex,
     ).toBeCloseTo(polhamus(airframe, 0).vortex / 2);
   });
 });
 
 describe("breakdown", () => {
   it("bursts later on a more swept edge", () => {
-    expect(breakdown_angles(70 * DEG).trailing_edge).toBeGreaterThan(
-      breakdown_angles(55 * DEG).trailing_edge,
+    expect(breakdown_angles(70 * DEG).trailingEdge).toBeGreaterThan(
+      breakdown_angles(55 * DEG).trailingEdge,
     );
-    expect(breakdown_angles(70 * DEG).trailing_edge / DEG).toBeCloseTo(30, -1);
+    expect(breakdown_angles(70 * DEG).trailingEdge / DEG).toBeCloseTo(30, -1);
   });
 
   it("marches up the wing with the angle of attack", () => {
@@ -96,11 +96,11 @@ describe("flight_state", () => {
     const alpha = angle_of_attack_for_load(airframe, 1, 200, air);
     const state = flight_state(
       airframe,
-      { airspeed_m_s: 200, angle_of_attack_rad: alpha },
+      { airspeedMPerS: 200, angleOfAttackRad: alpha },
       air,
     );
 
-    expect(state.load_factor).toBeCloseTo(1, 3);
+    expect(state.loadFactor).toBeCloseTo(1, 3);
     expect(alpha / DEG).toBeGreaterThan(1);
     expect(alpha / DEG).toBeLessThan(6);
   });
@@ -114,9 +114,9 @@ describe("flight_state", () => {
     const circulation = (alpha: number) =>
       flight_state(
         airframe,
-        { airspeed_m_s: 180, angle_of_attack_rad: alpha },
+        { airspeedMPerS: 180, angleOfAttackRad: alpha },
         air,
-      ).tip_circulation;
+      ).tipCirculation;
 
     expect(circulation(hard) / circulation(easy)).toBeCloseTo(7 / 3, 3);
   });
@@ -132,9 +132,9 @@ describe("flight_state", () => {
     const at = (degrees: number) =>
       flight_state(
         airframe,
-        { airspeed_m_s: 150, angle_of_attack_rad: degrees * DEG },
+        { airspeedMPerS: 150, angleOfAttackRad: degrees * DEG },
         air,
-      ).leading_edge_circulation;
+      ).leadingEdgeCirculation;
 
     expect(at(0)).toBe(0);
     expect(at(10)).toBeGreaterThan(at(5));

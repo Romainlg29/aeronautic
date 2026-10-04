@@ -34,8 +34,7 @@ const turned = (rig: ControlRig, name: string): number => {
   const node = rig.root.getObjectByName(name)!;
 
   return (
-    (node.quaternion.angleTo(rig.surface(name)!.base_quaternion) * 180) /
-    Math.PI
+    (node.quaternion.angleTo(rig.surface(name)!.baseQuaternion) * 180) / Math.PI
   );
 };
 
@@ -148,12 +147,12 @@ describe("ControlRig", () => {
   it("opens a group and scrubs a clip by hand", () => {
     const rig = fighter();
 
-    rig.set_group("bay", 1);
+    rig.setGroup("bay", 1);
     run(rig, 0.1);
 
     expect(rig.value("CTRL_Door_Bay_L")).toBe(105);
 
-    rig.set_clip("ANIM_Canopy_Open", 1, Infinity);
+    rig.setClip("ANIM_Canopy_Open", 1, Infinity);
     rig.update(1 / 60);
 
     expect(turned(rig, "CTRL_Canopy_C")).toBeGreaterThan(30);
@@ -200,7 +199,7 @@ describe("ControlRig", () => {
     const moves: number[] = [];
     const drive = rudders(rig, {
       side: "left",
-      on_move: (value) => moves.push(value),
+      onMove: (value) => moves.push(value),
     });
 
     run(rig, 1);
@@ -283,15 +282,15 @@ describe("Engine", () => {
     const vectors: [number, number][] = [];
     const engine = add_engine(rig, {
       side: "left",
-      on_vector: (pitch, yaw) => vectors.push([pitch, yaw]),
+      onVector: (pitch, yaw) => vectors.push([pitch, yaw]),
     });
 
     run(rig, 1);
 
     // Full stick and full pedal reach the circle, not its corner
-    expect(engine.pitch_deg).toBeCloseTo(4 / Math.SQRT2);
-    expect(engine.yaw_deg).toBeCloseTo(9.5 / Math.SQRT2);
-    expect(vectors.at(-1)).toEqual([engine.pitch_deg, engine.yaw_deg]);
+    expect(engine.pitchDeg).toBeCloseTo(4 / Math.SQRT2);
+    expect(engine.yawDeg).toBeCloseTo(9.5 / Math.SQRT2);
+    expect(vectors.at(-1)).toEqual([engine.pitchDeg, engine.yawDeg]);
   });
 
   it("caps the vectoring within the model's limits", () => {
@@ -329,7 +328,7 @@ describe("Engine", () => {
     run(rig, 1);
     mount.updateWorldMatrix(true, false);
 
-    expect(engine.pitch_deg).toBeCloseTo(6);
+    expect(engine.pitchDeg).toBeCloseTo(6);
 
     // Swung up by the gimbal, the exhaust up for a nose up
     const swung = mount.localToWorld(aft.clone()).sub(centre);

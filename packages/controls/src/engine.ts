@@ -87,7 +87,7 @@ export type EngineOptions = {
    * Called in the frame the nozzle turns, with where the exhaust points: up
    * and right of straight aft, in degrees
    */
-  on_vector?: (pitch_deg: number, yaw_deg: number) => void;
+  onVector?: (pitch_deg: number, yaw_deg: number) => void;
 };
 
 const DEFAULT_VECTORING_DEG = 10;
@@ -182,10 +182,10 @@ const virtual_part = (
   side,
   group: "gimbal",
   positive,
-  found_by: "virtual",
+  foundBy: "virtual",
   extras: { limit_shape: "ellipse" },
-  base_position: node.position.clone(),
-  base_quaternion: node.quaternion.clone(),
+  basePosition: node.position.clone(),
+  baseQuaternion: node.quaternion.clone(),
 });
 
 /**
@@ -329,8 +329,8 @@ export class Engine {
         "exit_down",
       );
 
-      rig.add_surface(yaw_part);
-      rig.add_surface(pitch_part);
+      rig.addSurface(yaw_part);
+      rig.addSurface(pitch_part);
 
       pitch.push(pitch_part);
       yaw.push(yaw_part);
@@ -382,7 +382,7 @@ export class Engine {
 
     const parts = [...pitch, ...yaw];
     const sense = (part: ControlSurface) =>
-      part.found_by === "virtual" ? 1 : sense_of(part);
+      part.foundBy === "virtual" ? 1 : sense_of(part);
 
     const drives = [
       rig.drive({
@@ -396,7 +396,7 @@ export class Engine {
         get rate() {
           return options.rate;
         },
-        on_move: (value, part) => {
+        onMove: (value, part) => {
           if (part !== pitch[0] && part !== yaw[0]) return;
 
           if (part.kind === "nozzle_pitch") {
@@ -416,7 +416,7 @@ export class Engine {
 
     if (clip) {
       drives.push(
-        rig.drive_clip({
+        rig.driveClip({
           clip: clip.clip.name,
           from: (values) => this.opening(values),
         }),
@@ -426,21 +426,21 @@ export class Engine {
     this._drive = combine_drives(drives);
 
     // Once a frame however many of its parts moved
-    this._stop = rig.on_moved(() => {
+    this._stop = rig.onMoved(() => {
       if (!this._turned) return;
 
       this._turned = false;
-      options.on_vector?.(this._pitch_deg, this._yaw_deg);
+      options.onVector?.(this._pitch_deg, this._yaw_deg);
     });
   }
 
   /** Where the exhaust points now, up of straight aft, in degrees */
-  get pitch_deg(): number {
+  get pitchDeg(): number {
     return this._pitch_deg;
   }
 
   /** Where the exhaust points now, right of straight aft, in degrees */
-  get yaw_deg(): number {
+  get yawDeg(): number {
     return this._yaw_deg;
   }
 
@@ -453,9 +453,9 @@ export class Engine {
     const schedule = this._schedule;
     const nozzle = this._options.nozzle;
 
-    schedule.nozzle_idle = nozzle?.nozzle_idle ?? 0.45;
-    schedule.nozzle_military = nozzle?.nozzle_military ?? 0;
-    schedule.nozzle_reheat = nozzle?.nozzle_reheat ?? 1;
+    schedule.nozzleIdle = nozzle?.nozzleIdle ?? 0.45;
+    schedule.nozzleMilitary = nozzle?.nozzleMilitary ?? 0;
+    schedule.nozzleReheat = nozzle?.nozzleReheat ?? 1;
 
     return nozzle_opening(this.throttle(values), schedule);
   }
@@ -471,7 +471,7 @@ export class Engine {
     this._drive.dispose();
 
     if (this._virtual) {
-      for (const name of this._virtual.names) this.rig.remove_surface(name);
+      for (const name of this._virtual.names) this.rig.removeSurface(name);
 
       this._virtual.pivot.removeFromParent();
     }

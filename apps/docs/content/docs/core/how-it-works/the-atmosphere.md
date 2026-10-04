@@ -17,7 +17,7 @@ pressure at the top of one is the bottom of the next.
 
 ## The day
 
-A real day is warmer or colder than the standard one. `temperature_offset_k`
+A real day is warmer or colder than the standard one. `temperatureOffsetK`
 warms the air at the standard pressure, so a hot day at the same altitude has
 the same pressure but thinner air, and a faster speed of sound.
 

@@ -21,7 +21,7 @@ const engines = engine_sides(rig).map((side) => add_engine(rig, { side }));
 | `nozzle`    | `Partial<NozzleSchedule>`       | 0.45, 0, 1                | How open the petals are at idle, military and reheat.                                                                |
 | `anchor`    | `Object3D \| string`            | its side's exhaust anchor | Where the exhaust leaves.                                                                                            |
 | `rate`      | `number`                        | 40                        | How fast the gimbal turns, in degrees a second.                                                                      |
-| `on_vector` | `(pitch_deg, yaw_deg) => void`  | —                         | Called in the frame the nozzle turns, with where the exhaust points: up and right of aft.                            |
+| `onVector`  | `(pitchDeg, yawDeg) => void`    | —                         | Called in the frame the nozzle turns, with where the exhaust points: up and right of aft.                            |
 
 ## `Engine`
 
@@ -35,8 +35,8 @@ const engines = engine_sides(rig).map((side) => add_engine(rig, { side }));
 | `vectoring` | `{ pitch, yaw, shape, gimbal }`: limits, `ellipse` or `box`, `model`, `virtual` or `null`. |
 | `extras`    | What the model says of its gimbal and exhaust, as `limit_shape`.                           |
 | `throttle`  | Its throttle, a function of the flight, for an afterburner to follow.                      |
-| `pitch_deg` | Where the exhaust points now, up of aft.                                                   |
-| `yaw_deg`   | And right of aft.                                                                          |
+| `pitchDeg`  | Where the exhaust points now, up of aft.                                                   |
+| `yawDeg`    | And right of aft.                                                                          |
 | `refresh()` | Read its options again.                                                                    |
 | `dispose()` | Stop driving, and take a virtual gimbal out.                                               |
 
@@ -48,5 +48,5 @@ model's nozzle parts and exhaust anchors: `["left", "right"]` for a twin,
 
 ## `fighter_controls`
 
-`fighter_controls(rig, { pitch_share?, engine? })` drives every part and adds
+`fighter_controls(rig, { pitchShare?, engine? })` drives every part and adds
 an engine for each side. It returns a drive with `engines` on it.

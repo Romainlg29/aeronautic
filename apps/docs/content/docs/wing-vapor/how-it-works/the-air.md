@@ -31,8 +31,8 @@ expansion would suggest.
 
 The parcel is solved on the moist adiabat. The liquid water it holds, against
 the pressure ratio it is expanded to, goes into a small lookup table, made
-once per day and altitude. That table is why `update_air` costs more than
-`update_flight`: a few hundred adiabats.
+once per day and altitude. That table is why `updateAir` costs more than
+`updateFlight`: a few hundred adiabats.
 
 ## Why humidity decides everything
 

@@ -13,22 +13,22 @@ import type { ControlSurface } from "./surfaces";
  */
 export type ControlMixing = {
   /** How much of an elevon's or a stabilator's throw is pitch; the rest is roll */
-  elevon_pitch: number;
+  elevonPitch: number;
 
-  /** Leading-edge flaps: degrees down per degree of angle of attack past `le_flap_start_deg` */
-  le_flap_per_alpha: number;
-  le_flap_start_deg: number;
+  /** Leading-edge flaps: degrees down per degree of angle of attack past `leFlapStartDeg` */
+  leFlapPerAlpha: number;
+  leFlapStartDeg: number;
 
   /** Thrust vectoring, from the stick and the pedals. On by default */
-  thrust_vectoring: boolean;
+  thrustVectoring: boolean;
 
   /**
    * How open the nozzle petals are, 0 to 1, at idle, at military power and
    * at full reheat: open at idle, closed down at military, wide in reheat
    */
-  nozzle_idle: number;
-  nozzle_military: number;
-  nozzle_reheat: number;
+  nozzleIdle: number;
+  nozzleMilitary: number;
+  nozzleReheat: number;
 };
 
 /**
@@ -37,7 +37,7 @@ export type ControlMixing = {
  */
 export type NozzleSchedule = Pick<
   ControlMixing,
-  "nozzle_idle" | "nozzle_military" | "nozzle_reheat"
+  "nozzleIdle" | "nozzleMilitary" | "nozzleReheat"
 >;
 
 /**
@@ -45,13 +45,13 @@ export type NozzleSchedule = Pick<
  * @returns The defaults
  */
 export const default_control_mixing = (): ControlMixing => ({
-  elevon_pitch: 0.6,
-  le_flap_per_alpha: 1.4,
-  le_flap_start_deg: 2,
-  thrust_vectoring: true,
-  nozzle_idle: 0.45,
-  nozzle_military: 0,
-  nozzle_reheat: 1,
+  elevonPitch: 0.6,
+  leFlapPerAlpha: 1.4,
+  leFlapStartDeg: 2,
+  thrustVectoring: true,
+  nozzleIdle: 0.45,
+  nozzleMilitary: 0,
+  nozzleReheat: 1,
 });
 
 const RAD = 180 / Math.PI;
@@ -134,15 +134,13 @@ export const nozzle_opening = (
   if (throttle <= MILITARY) {
     const t = Math.max(throttle, 0) / MILITARY;
 
-    return (
-      mixing.nozzle_idle + (mixing.nozzle_military - mixing.nozzle_idle) * t
-    );
+    return mixing.nozzleIdle + (mixing.nozzleMilitary - mixing.nozzleIdle) * t;
   }
 
   const t = Math.min((throttle - MILITARY) / (FULL_REHEAT - MILITARY), 1);
 
   return (
-    mixing.nozzle_military + (mixing.nozzle_reheat - mixing.nozzle_military) * t
+    mixing.nozzleMilitary + (mixing.nozzleReheat - mixing.nozzleMilitary) * t
   );
 };
 
@@ -188,7 +186,7 @@ export const mix_surface = (
 
     case "elevon":
     case "stabilator": {
-      const share = mixing.elevon_pitch;
+      const share = mixing.elevonPitch;
       const mixed = -pitch * share + roll * rolls * (1 - share);
 
       return throw_of(surface, Math.max(-1, Math.min(1, mixed)));
@@ -204,10 +202,9 @@ export const mix_surface = (
       return travel_of(surface, flight.flaps);
 
     case "le_flap": {
-      const alpha = flight.angle_of_attack_rad * RAD;
+      const alpha = flight.angleOfAttackRad * RAD;
       const scheduled =
-        Math.max(alpha - mixing.le_flap_start_deg, 0) *
-        mixing.le_flap_per_alpha;
+        Math.max(alpha - mixing.leFlapStartDeg, 0) * mixing.leFlapPerAlpha;
       const value = scheduled + flight.flaps * Math.max(surface.max, 0);
 
       return Math.min(Math.max(value, surface.min), surface.max);
@@ -231,11 +228,11 @@ export const mix_surface = (
 
     case "nozzle_pitch":
       // Nose up wants the exhaust up, pushing the tail down
-      return mixing.thrust_vectoring ? -throw_of(surface, pitch) : 0;
+      return mixing.thrustVectoring ? -throw_of(surface, pitch) : 0;
 
     case "nozzle_yaw":
       // Nose right wants the exhaust right, pushing the tail left
-      return mixing.thrust_vectoring ? throw_of(surface, yaw) : 0;
+      return mixing.thrustVectoring ? throw_of(surface, yaw) : 0;
 
     case "nozzle_petal":
       return travel_of(surface, nozzle_opening(flight.throttle, mixing));

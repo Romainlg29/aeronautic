@@ -33,41 +33,43 @@ const MAX_STEP_S = 1 / 30;
 
 /**
  * Both trails' centrelines, in the aircraft's canonical frame now: x aft,
- * y up, z out along a wing. Point k is `k * spacing_m` along the air from the
+ * y up, z out along a wing. Point k is `k * spacingM` along the air from the
  * tip's trailing edge.
  */
 export type TrailPaths = {
-  // Three floats a point. `positive` trails the tip at +z, `negative` the other
+  /** Three floats a point. `positive` trails the tip at +z, `negative` the other */
   positive: Float32Array;
   negative: Float32Array;
 
-  // How far along the air one point is from the next
-  spacing_m: number;
+  /** How far along the air one point is from the next */
+  spacingM: number;
 };
 
 /**
  * How the trails are laid, the same for every point.
  */
 export type TrailLayout = {
-  // Where the tip's trailing edge is, and its height, in the canonical frame
-  tip_x: number;
-  tip_y: number;
-  semispan_m: number;
+  /** Where the tip's trailing edge is, and its height, in the canonical frame */
+  tipX: number;
+  tipY: number;
+  semispanM: number;
 
-  // The free stream's direction in the canonical frame
-  cos_alpha: number;
-  sin_alpha: number;
+  /** The free stream's direction in the canonical frame */
+  cosAlpha: number;
+  sinAlpha: number;
 
-  // And its sideways component, from a sideslip
-  flow_z: number;
+  /** And its sideways component, from a sideslip */
+  flowZ: number;
 
-  // How far the vortex sinks, per metre of air, and how long it takes to
-  // roll up inboard
+  /**
+   * How far the vortex sinks, per metre of air, and how long it takes to
+   * roll up inboard
+   */
   descent: number;
-  rollup_m: number;
+  rollupM: number;
 
-  // How long the trail is
-  length_m: number;
+  /** How long the trail is */
+  lengthM: number;
 };
 
 /**
@@ -86,12 +88,12 @@ const shed_offset = (
   side: number,
   target: Vector3,
 ): Vector3 => {
-  const rolled = 1 - Math.exp(-along / Math.max(layout.rollup_m, 1e-3));
+  const rolled = 1 - Math.exp(-along / Math.max(layout.rollupM, 1e-3));
 
   return target.set(
-    layout.tip_x,
-    layout.tip_y - along * layout.descent,
-    side * layout.semispan_m * (1 - (1 - VORTEX_SPACING) * rolled),
+    layout.tipX,
+    layout.tipY - along * layout.descent,
+    side * layout.semispanM * (1 - (1 - VORTEX_SPACING) * rolled),
   );
 };
 
@@ -103,7 +105,7 @@ const shed_offset = (
  * @returns The trails
  */
 export const straight_trails = (layout: TrailLayout): TrailPaths => {
-  const spacing_m = layout.length_m / (TRAIL_POINTS - 1);
+  const spacing_m = layout.lengthM / (TRAIL_POINTS - 1);
 
   const lay = (side: number) => {
     const points = new Float32Array(TRAIL_POINTS * 3);
@@ -115,29 +117,29 @@ export const straight_trails = (layout: TrailLayout): TrailPaths => {
       shed_offset(layout, along, side, point);
 
       // The air the vortex was shed into has gone aft, along the stream
-      point.x += along * layout.cos_alpha;
-      point.y += along * layout.sin_alpha;
-      point.z += along * layout.flow_z;
+      point.x += along * layout.cosAlpha;
+      point.y += along * layout.sinAlpha;
+      point.z += along * layout.flowZ;
       point.toArray(points, index * 3);
     }
 
     return points;
   };
 
-  return { positive: lay(1), negative: lay(-1), spacing_m };
+  return { positive: lay(1), negative: lay(-1), spacingM: spacing_m };
 };
 
 /**
  * One frame of the aircraft's flight through the air.
  */
 type Sample = {
-  // Where it was in the air, metres, in world axes
+  /** Where it was in the air, metres, in world axes */
   position: Vector3;
 
-  // How its canonical frame was turned in the world
+  /** How its canonical frame was turned in the world */
   attitude: Quaternion;
 
-  // How far it had flown through the air, metres
+  /** How far it had flown through the air, metres */
   flown: number;
 };
 
@@ -247,7 +249,7 @@ export class TrailHistory {
 
     const now = samples[samples.length - 1];
     const into_now = scratch_inverse.copy(now.attitude).invert();
-    const spacing_m = layout.length_m / (TRAIL_POINTS - 1);
+    const spacing_m = layout.lengthM / (TRAIL_POINTS - 1);
 
     const lay = (side: number) => {
       const points = new Float32Array(TRAIL_POINTS * 3);
@@ -289,7 +291,7 @@ export class TrailHistory {
         if (beyond > 0) {
           where.addScaledVector(
             scratch_vector
-              .set(layout.cos_alpha, layout.sin_alpha, layout.flow_z)
+              .set(layout.cosAlpha, layout.sinAlpha, layout.flowZ)
               .applyQuaternion(before.attitude),
             beyond,
           );
@@ -309,7 +311,7 @@ export class TrailHistory {
       return points;
     };
 
-    return { positive: lay(1), negative: lay(-1), spacing_m };
+    return { positive: lay(1), negative: lay(-1), spacingM: spacing_m };
   }
 }
 
@@ -358,7 +360,7 @@ export const trail_point = (
 export const nearest_along = (
   points: Float32Array,
   spacing_m: number,
-  layout: Pick<TrailLayout, "cos_alpha" | "sin_alpha" | "flow_z">,
+  layout: Pick<TrailLayout, "cosAlpha" | "sinAlpha" | "flowZ">,
   x: number,
   y: number,
   z: number,
@@ -367,9 +369,9 @@ export const nearest_along = (
 
   // Onto the free stream from the trail's start, the tip's trailing edge
   let along =
-    (x - points[0]) * layout.cos_alpha +
-    (y - points[1]) * layout.sin_alpha +
-    (z - points[2]) * layout.flow_z;
+    (x - points[0]) * layout.cosAlpha +
+    (y - points[1]) * layout.sinAlpha +
+    (z - points[2]) * layout.flowZ;
 
   if (along < 0) {
     return along;

@@ -10,28 +10,18 @@ async `gl` factory and initialise the renderer before returning it:
 
 ```tsx
 import { Canvas } from "@react-three/fiber";
-import { WebGPURenderer } from "three/webgpu";
+import { webgpu_gl } from "@aeronautic/core/react";
 
-export const App = () => (
-  <Canvas
-    gl={async (props) => {
-      const renderer = new WebGPURenderer({ ...props, antialias: false });
-      await renderer.init();
-      return renderer;
-    }}
-  >
-    {/* your scene */}
-  </Canvas>
-);
+export const App = () => <Canvas gl={webgpu_gl()}>{/* your scene */}</Canvas>;
 ```
 
 ## 2. A plume
 
 `<Afterburner>` is a group with a nozzle at its origin. The plume streams out
-along the group's local **+X** and follows the group every frame.
+along the group's local **+Z**, aft of a model that flies along -Z, and follows the group every frame.
 
 ```tsx
-import { Afterburner } from "@aeronautic/afterburner";
+import { Afterburner } from "@aeronautic/afterburner/react";
 
 <Afterburner preset="afterburner" throttle={1.1} />;
 ```
@@ -57,12 +47,12 @@ whole setup with bloom, in about forty lines.
 
 ## 4. Point it the right way
 
-The plume leaves along **+X**. If your nozzle faces another way, turn the
-group, or give it a `direction`:
+The plume leaves along **+Z**: aft, for a model that flies along -Z with +Y
+up. If your nozzle faces another way, turn the group, or give it a `direction`:
 
 ```tsx
-// On the exit plane of an engine at the back of a model facing -X
-<Afterburner position={[-14, 0, 0]} direction={[1, 0, 0]} />
+// On the exit plane of an engine at the back of a model flying along +X
+<Afterburner position={[-14, 0, 0]} direction={[-1, 0, 0]} />
 
 // Pointing straight down, like a rocket
 <Afterburner preset="rocket_kerolox" direction={[0, -1, 0]} />

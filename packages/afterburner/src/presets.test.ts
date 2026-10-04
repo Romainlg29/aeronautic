@@ -18,25 +18,25 @@ describe("resolve_afterburner_params", () => {
   });
 
   it("overrides only what it is given", () => {
-    const params = resolve_afterburner_params({ exit_mach: 2 });
+    const params = resolve_afterburner_params({ exitMach: 2 });
 
-    expect(params.exit_mach).toBe(2);
+    expect(params.exitMach).toBe(2);
     expect(params.gamma).toBe(default_afterburner_params().gamma);
   });
 
   it("takes colours in any form three does", () => {
-    const params = resolve_afterburner_params({ band_color: "#ff0000" });
+    const params = resolve_afterburner_params({ bandColor: "#ff0000" });
 
-    expect(params.band_color).toBeInstanceOf(Color);
-    expect(params.band_color.getHexString()).toBe("ff0000");
+    expect(params.bandColor).toBeInstanceOf(Color);
+    expect(params.bandColor.getHexString()).toBe("ff0000");
   });
 
   it("starts from a preset", () => {
     const params = resolve_afterburner_params(undefined, "rocket_hydrolox");
 
-    expect(params.soot_per_m).toBe(0);
-    expect(params.nozzle_radius_m).toBe(
-      AFTERBURNER_PRESETS.rocket_hydrolox.params.nozzle_radius_m,
+    expect(params.sootPerM).toBe(0);
+    expect(params.nozzleRadiusM).toBe(
+      AFTERBURNER_PRESETS.rocket_hydrolox.params.nozzleRadiusM,
     );
   });
 
@@ -45,28 +45,28 @@ describe("resolve_afterburner_params", () => {
   it("scales a preset's haze with its nozzle", () => {
     const base = resolve_afterburner_params(undefined, "rocket_kerolox");
     const big = resolve_afterburner_params(
-      { nozzle_radius_m: base.nozzle_radius_m * 2 },
+      { nozzleRadiusM: base.nozzleRadiusM * 2 },
       "rocket_kerolox",
     );
 
-    expect(big.refraction_m).toBeCloseTo(base.refraction_m * 2);
-    expect(big.exit_mach).toBe(base.exit_mach);
+    expect(big.refractionM).toBeCloseTo(base.refractionM * 2);
+    expect(big.exitMach).toBe(base.exitMach);
   });
 
   it("does not scale a length given explicitly", () => {
     const params = resolve_afterburner_params(
-      { nozzle_radius_m: 2, refraction_m: 0.01 },
+      { nozzleRadiusM: 2, refractionM: 0.01 },
       "afterburner",
     );
 
-    expect(params.refraction_m).toBe(0.01);
+    expect(params.refractionM).toBe(0.01);
   });
 
   it("never shares colour objects between calls", () => {
     const a = resolve_afterburner_params(undefined, "plasma");
     const b = resolve_afterburner_params(undefined, "plasma");
 
-    expect(a.band_color).not.toBe(b.band_color);
+    expect(a.bandColor).not.toBe(b.bandColor);
   });
 });
 
@@ -80,12 +80,12 @@ describe("resolve_afterburner_profile", () => {
 
   it("layers the preset under the input", () => {
     const profile = resolve_afterburner_profile(
-      { spread_scale: 0.5 },
+      { spreadScale: 0.5 },
       "rocket_kerolox",
     );
 
-    expect(profile.burner_threshold).toBe(0);
-    expect(profile.spread_scale).toBe(0.5);
+    expect(profile.burnerThreshold).toBe(0);
+    expect(profile.spreadScale).toBe(0.5);
   });
 });
 
@@ -97,20 +97,20 @@ describe("resolve_afterburner_quality", () => {
   });
 
   it("takes a name", () => {
-    expect(resolve_afterburner_quality("low").turbulence_octaves).toBe(1);
+    expect(resolve_afterburner_quality("low").turbulenceOctaves).toBe(1);
   });
 
   it("holds the counts in range", () => {
     const quality = resolve_afterburner_quality({
-      near_steps: 10.4,
-      mid_steps: 40,
-      turbulence_octaves: 9,
+      nearSteps: 10.4,
+      midSteps: 40,
+      turbulenceOctaves: 9,
     });
 
     expect(quality).toEqual({
-      near_steps: 10,
-      mid_steps: 10,
-      turbulence_octaves: 3,
+      nearSteps: 10,
+      midSteps: 10,
+      turbulenceOctaves: 3,
     });
   });
 });

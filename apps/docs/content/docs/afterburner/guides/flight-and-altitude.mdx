@@ -6,11 +6,11 @@ description: "What altitude, airspeed and the day do to a plume, and how to fly 
 The **profile** puts the engines in the air. Three of its fields describe
 flight:
 
-| field                  | default | what it is                                        |
-| ---------------------- | ------- | ------------------------------------------------- |
-| `altitude_m`           | `0`     | Metres above sea level.                           |
-| `airspeed_m_s`         | `0`     | How fast the engines move through the air.        |
-| `temperature_offset_k` | `0`     | How much warmer the day is than the standard day. |
+| field                | default | what it is                                        |
+| -------------------- | ------- | ------------------------------------------------- |
+| `altitudeM`          | `0`     | Metres above sea level.                           |
+| `airspeedMPerS`      | `0`     | How fast the engines move through the air.        |
+| `temperatureOffsetK` | `0`     | How much warmer the day is than the standard day. |
 
 From these, the International Standard Atmosphere gives the air's pressure,
 temperature and density, to 86 km. `atmosphere(profile)` returns them on the
@@ -27,7 +27,7 @@ emission** (CH and C₂ radicals), and that doesn't depend on the soot.
 A hydrocarbon flame makes soot roughly as the pressure it burns at, to a power
 between one and two. An afterburner burns at about the ambient pressure times
 its inlet's ram. So for an air-breathing engine, the library scales
-`soot_per_m` by `(pressure × ram)^1.5`, capped at three times the sea-level
+`sootPerM` by `(pressure × ram)^1.5`, capped at three times the sea-level
 value:
 
 | condition           | soot made, against sea level |
@@ -40,6 +40,19 @@ With less soot glowing, the band emission shows through: the flame turns
 violet-blue, and the diamonds stay. At sea level, standing, the factor is
 exactly one, so every preset looks there as it was tuned.
 
+That soot is the burner flame's, so a jet only makes it while its exhaust is hot
+enough to be a flame: none at 1200 K, all of it by 1500 K
+(`PLUME_SOOT_FLAME_K`). On dry thrust or with the burner just lighting, it makes
+none. A turbine's combustor runs lean and burns its soot out before the nozzle,
+so a modern engine on dry thrust leaves no visible smoke.
+
+Inside the plume the same holds sample by sample. Soot is drawn only where the
+gas is hot enough to glow: in the flame and behind each Mach disk. Where the
+exhaust has expanded or mixed below that, only the `sootSurvival` share is
+left. Cold soot can't glow, so all it could do is darken the sky behind the
+plume, and a jet doesn't leave that kind of smoke. To draw an old, smoky
+turbojet, raise `sootSurvival`.
+
 A **rocket** doesn't breathe air. Its chamber sets its own pressure, so its
 soot doesn't change with altitude. Something else does: its exit pressure is
 fixed, so as the air thins the pressure ratio climbs and the plume balloons
@@ -47,7 +60,7 @@ wide and thin. The fuel left in its exhaust also stops burning once there is
 too little oxygen, so a kerosene rocket's bright sheath fades as it climbs.
 
 Whether an engine "breathes" comes out of its own params. An engine whose
-`dry_temperature_k` is well below its `exit_temperature_k` has a burner, so it
+`dryTemperatureK` is well below its `exitTemperatureK` has a burner, so it
 is treated as a jet. Equal temperatures mean a rocket.
 
 ## Airspeed
@@ -55,8 +68,36 @@ is treated as a jet. Equal temperatures mean a rocket.
 Air already moving with the jet shears it less. The mixing layer grows more
 slowly, so the potential core and the shock train last further: a jet in
 cruise draws a longer, tighter plume than the same engine on the stand.
-Airspeed also rams the inlet, which raises a jet's exit pressure and,
+Airspeed also rams the inlet, which raises the pressure in a jet's pipe and,
 through the formula above, its soot.
+
+A fighter's nozzle opens up to match. As the ram raises the pipe's pressure,
+its petals widen, so the gas leaves faster and cooler, still near the pressure
+the nozzle was designed for. The library does the same for an air-breathing
+engine, up to an exit of Mach 2.2 (`PLUME_NOZZLE_MAX_MACH`). Past that the ram
+outruns the nozzle and the jet leaves it underexpanded, but nothing like a
+fixed nozzle would. At Mach 1.65 the exit pressure ratio is about 1.8 rather
+than 6, and the gas leaves at about 1,300 K rather than 1,700 K. The bright
+plug of gas that would expand at the lip shrinks, and the diamond train
+carries on behind it. Standing, the nozzle is as built, and a rocket's bell
+never changes.
+
+The reheat flame itself burns inside the jet pipe, from the spray bars to the
+lip. There the gas is still slow and near its stagnation temperature, a few
+hundred kelvin hotter than it is once it has left the nozzle, so seen from
+astern the exit is the brightest thing in the plume. It is as black as the soot
+a ray crosses in it, `1 − e^(−sootPerM × path)`: the most looking straight up
+the tail, less across the pipe from the side. Dry, only the turbine and the
+pipe's wall glow, dull red (`dryGlow`).
+
+Air moving with the jet also stretches its shock train, which lasts as long as
+the jet is supersonic. Past the potential core the axis' speed over the air
+and its heat both fall away, and no shock can stand once what is left of that
+speed no longer outruns the sound in the gas there. The train has faded to a
+twentieth of its strength by that point. On the ground a fighter's axis goes
+sonic about two cores down, so it shows five or so diamonds over a few metres;
+in supersonic flight, with the air shearing it half as hard, it lasts about
+twice as long.
 
 ## Flying it
 
@@ -69,8 +110,8 @@ const flight = useFlightStore();
 
 useFrame(() => {
   flight.set({
-    altitude_m: aircraft.position.y,
-    airspeed_m_s: aircraft.velocity.length(),
+    altitudeM: aircraft.position.y,
+    airspeedMPerS: aircraft.velocity.length(),
     throttle: input.throttle,
   });
 });
@@ -88,12 +129,12 @@ engine's throttle instead, and sits on its exhaust.
 The profile belongs to the batch. Write it every frame through a batch ref:
 
 ```tsx
-const batch = useRef<AfterburnerBatchCore>(null);
+const batch = useRef<AfterburnerBatchHandle>(null);
 
 useFrame(() => {
-  batch.current?.update_profile({
-    altitude_m: aircraft.position.y,
-    airspeed_m_s: aircraft.velocity.length(),
+  batch.current?.updateProfile({
+    altitudeM: aircraft.position.y,
+    airspeedMPerS: aircraft.velocity.length(),
   });
 });
 
@@ -103,12 +144,12 @@ useFrame(() => {
 </AfterburnerBatch>;
 ```
 
-`update_profile` only writes uniforms. Calling it every frame is cheap.
+`updateProfile` only writes uniforms. Calling it every frame is cheap.
 
 For a fixed altitude, use the prop:
 
 ```tsx
-<AfterburnerBatch preset="afterburner" profile={{ altitude_m: 9000, airspeed_m_s: 250 }}>
+<AfterburnerBatch preset="afterburner" profile={{ altitudeM: 9000, airspeedMPerS: 250 }}>
 ```
 
 ## Engines that go the other way
@@ -118,7 +159,7 @@ cleaner at the ground and smokier up high: blue on the runway, orange at
 altitude. That depends on how the engine schedules its fuel, which the air
 alone can't tell.
 
-To draw one, schedule the engine's own soot with altitude. `update_params`
+To draw one, schedule the engine's own soot with altitude. `updateParams`
 rewrites one instance, so call it when the value has moved enough to matter,
 not every frame:
 
@@ -135,16 +176,16 @@ useFrame(() => {
   // Clean at the ground, sootier with height. Counters the thinning air,
   // which on its own takes soot away
   const height = Math.min(altitude_m / 11000, 1);
-  engine.current?.update_params({ soot_per_m: 0.15 + 4 * height });
+  engine.current?.updateParams({ sootPerM: 0.15 + 4 * height });
 });
 ```
 
-`soot_per_m` is the soot at sea level, standing. The pressure scaling is
+`sootPerM` is the soot at sea level, standing. The pressure scaling is
 applied on top of it, so this curve has to outrun it to turn the flame orange.
 Watch the result and tune the numbers by eye.
 
 ## The day
 
-`temperature_offset_k` warms the air at the same pressure. A hot day is a
+`temperatureOffsetK` warms the air at the same pressure. A hot day is a
 thinner one, and that changes the expansion and the haze a little. It matters
 most for rockets standing on the pad.

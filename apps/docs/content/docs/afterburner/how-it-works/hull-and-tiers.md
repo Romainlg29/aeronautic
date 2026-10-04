@@ -11,7 +11,7 @@ every pixel it covers and the plume does not runs one that finds nothing.
 The field at a station is the body radius opened out by the shell, the chew and
 the wander, all of which are shares of that body radius. The body is
 `nozzle * grow(t) * close(t)` with `grow` never past `flare`, so the whole field
-is inside `outer_radius * close(t)` — and `close` is `(1 - t)^power`, which for
+is inside `outerRadius * close(t)` — and `close` is `(1 - t)^power`, which for
 any power at or above one sits under the straight line `1 - t`.
 
 A straight line is a frustum. It needs no rings in the middle, holds whatever a
@@ -34,12 +34,12 @@ do from the cockpit while surviving none of the rasterization.
 because the vertex shader makes the same decision from the same numbers and the
 two must not drift:
 
-| Tier     | When                                      | What it costs                                                                                       |
-| -------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `NEAR`   | inside `detail_distance_m`                | 48 iterations at `high`, sphere traced, an octave of noise per sampled step, the disks in the shape |
-| `MID`    | inside `cheap_distance_m`                 | 16 iterations, laminar, still has the disks                                                         |
-| `FAR`    | beyond it                                 | **one** analytic sample through the thickest part, weighted by the span                             |
-| `CULLED` | under `min_screen_fraction` of the screen | the instance is collapsed outside the clip volume and never rasterized                              |
+| Tier     | When                                    | What it costs                                                                                       |
+| -------- | --------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `NEAR`   | inside `detailDistanceM`                | 48 iterations at `high`, sphere traced, an octave of noise per sampled step, the disks in the shape |
+| `MID`    | inside `cheapDistanceM`                 | 16 iterations, laminar, still has the disks                                                         |
+| `FAR`    | beyond it                               | **one** analytic sample through the thickest part, weighted by the span                             |
+| `CULLED` | under `minScreenFraction` of the screen | the instance is collapsed outside the clip volume and never rasterized                              |
 
 Defaults are 900m and 3000m, with a 0.1% screen-height floor.
 

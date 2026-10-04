@@ -17,12 +17,12 @@ import {
 
 const airframe = default_vapor_airframe();
 const humid: VaporAir = {
-  altitude_m: 0,
-  temperature_offset_k: 10,
-  relative_humidity: 0.9,
+  altitudeM: 0,
+  temperatureOffsetK: 10,
+  relativeHumidity: 0.9,
 };
-const dry: VaporAir = { ...humid, relative_humidity: 0.2 };
-const look = { humidity_spread: 0.05 };
+const dry: VaporAir = { ...humid, relativeHumidity: 0.2 };
+const look = { humiditySpread: 0.05 };
 
 /**
  * A flight pulling a given load at a given speed.
@@ -32,12 +32,12 @@ const look = { humidity_spread: 0.05 };
  * @returns The flight
  */
 const pulling = (speed: number, g: number, air = humid): VaporFlight => ({
-  airspeed_m_s: speed,
-  angle_of_attack_rad: angle_of_attack_for_load(
+  airspeedMPerS: speed,
+  angleOfAttackRad: angle_of_attack_for_load(
     airframe,
     g,
     speed,
-    moist_air(air.altitude_m, air.relative_humidity, air.temperature_offset_k),
+    moist_air(air.altitudeM, air.relativeHumidity, air.temperatureOffsetK),
   ),
 });
 
@@ -52,8 +52,8 @@ describe("vapor_state", () => {
     const hard = vapor_state(airframe, pulling(170, 7), humid, look).field;
     const gentle = vapor_state(airframe, pulling(170, 1), humid, look).field;
 
-    expect(hard.tip_reach_m).toBeGreaterThan(10);
-    expect(gentle.tip_reach_m).toBe(0);
+    expect(hard.tipReachM).toBeGreaterThan(10);
+    expect(gentle.tipReachM).toBe(0);
   });
 
   it("trails a thread from the tip that swells as it rolls up", () => {
@@ -69,7 +69,7 @@ describe("vapor_state", () => {
 
       while (
         radius < 5 &&
-        vapor_deficit(state, x, y + radius, z) > field.saturation_deficit
+        vapor_deficit(state, x, y + radius, z) > field.saturationDeficit
       ) {
         radius += 0.01;
       }
@@ -77,26 +77,26 @@ describe("vapor_state", () => {
       return radius;
     };
 
-    const rolled = Math.round((2 * field.tip_rollup_m) / field.trail_spacing_m);
+    const rolled = Math.round((2 * field.tipRollupM) / field.trailSpacingM);
 
-    expect(field.tip_rollup_m).toBeGreaterThan(0.5 * airframe.span_m);
+    expect(field.tipRollupM).toBeGreaterThan(0.5 * airframe.spanM);
     expect(width(0)).toBeGreaterThan(0);
     expect(width(0)).toBeLessThan(0.7 * width(rolled));
   });
 
   it("trails them further in moister air", () => {
-    const moister = { ...humid, relative_humidity: 0.97 };
+    const moister = { ...humid, relativeHumidity: 0.97 };
 
     expect(
       vapor_state(airframe, pulling(170, 6, moister), moister, look).field
-        .tip_reach_m,
+        .tipReachM,
     ).toBeGreaterThan(
-      vapor_state(airframe, pulling(170, 6), humid, look).field.tip_reach_m,
+      vapor_state(airframe, pulling(170, 6), humid, look).field.tipReachM,
     );
   });
 
   it("only makes the cone near the speed of sound, and a little past it", () => {
-    const sound = moist_air(0, 0.9, 10).sound_m_s;
+    const sound = moist_air(0, 0.9, 10).soundMPerS;
     const at = (mach: number) =>
       vapor_state(airframe, pulling(mach * sound, 1), humid, look).field;
 
@@ -104,29 +104,29 @@ describe("vapor_state", () => {
     const subcritical = at(0.9);
     const transonic = at(0.99);
 
-    expect(transonic.cone_bound_m).toBeGreaterThan(
-      Math.max(slow.cone_bound_m * 3, airframe.fuselage_radius_m * 2),
+    expect(transonic.coneBoundM).toBeGreaterThan(
+      Math.max(slow.coneBoundM * 3, airframe.fuselageRadiusM * 2),
     );
     // Short of the body's critical Mach number there's no pocket to fill
-    expect(subcritical.cone_bound_m).toBeLessThan(transonic.cone_bound_m / 2);
+    expect(subcritical.coneBoundM).toBeLessThan(transonic.coneBoundM / 2);
 
     // Just supersonic, it holds on round the aft body, its shock at the tail
     const supersonic = at(1.05);
 
-    expect(supersonic.cone_bound_m).toBeGreaterThan(0);
-    expect(supersonic.cone_shock).toBeGreaterThan(transonic.cone_shock);
+    expect(supersonic.coneBoundM).toBeGreaterThan(0);
+    expect(supersonic.coneShock).toBeGreaterThan(transonic.coneShock);
 
     // And a few hundredths on it's gone
-    expect(at(1.15).cone_bound_m).toBe(0);
-    expect(at(1.8).cone_bound_m).toBe(0);
+    expect(at(1.15).coneBoundM).toBe(0);
+    expect(at(1.8).coneBoundM).toBe(0);
   });
 
   it("swells the cone smoothly through the critical Mach number", () => {
-    const sound = moist_air(0, 0.9, 10).sound_m_s;
+    const sound = moist_air(0, 0.9, 10).soundMPerS;
     let last: number | undefined;
 
     for (let mach = 0.9; mach <= 1.0; mach += 0.002) {
-      const { cone_strength } = vapor_state(
+      const { coneStrength: cone_strength } = vapor_state(
         airframe,
         pulling(mach * sound, 1),
         humid,
@@ -147,7 +147,7 @@ describe("vapor_state", () => {
     // A point well outside the box fogs nothing
     const outside = vapor_deficit(state, max[0] + 5, max[1] + 5, max[2] + 5);
 
-    expect(outside).toBeLessThan(state.field.saturation_deficit);
+    expect(outside).toBeLessThan(state.field.saturationDeficit);
     expect(min[0]).toBeLessThan(max[0]);
   });
 
@@ -184,14 +184,14 @@ describe("a roll or a sideslip", () => {
   it("loads the downgoing wing in a roll", () => {
     const [positive, negative] = behind_tips({
       ...pulling(170, 6),
-      roll_rate_rad_s: 3,
+      rollRateRadPerS: 3,
     });
 
     expect(positive).toBeGreaterThan(negative * 1.2);
   });
 
   it("loads the windward wing in a sideslip, and blows the trails downwind", () => {
-    const flight = { ...pulling(170, 6), sideslip_rad: 0.08 };
+    const flight = { ...pulling(170, 6), sideslipRad: 0.08 };
     const [positive, negative] = behind_tips(flight);
 
     expect(positive).toBeGreaterThan(negative);
@@ -219,11 +219,11 @@ describe("a second lifting surface", () => {
     ...trapezoid_shape(airframe),
     secondary: {
       kind,
-      semispan_m: 2.8,
-      tip_leading_m: kind === "canard" ? -6 : 7,
-      tip_chord_m: 0.9,
-      tip_height_m: 0.4,
-      area_m2: 7,
+      semispanM: 2.8,
+      tipLeadingM: kind === "canard" ? -6 : 7,
+      tipChordM: 0.9,
+      tipHeightM: 0.4,
+      areaM2: 7,
     },
   });
 
@@ -234,19 +234,19 @@ describe("a second lifting surface", () => {
   it("trails a canard's tips in a hard pull", () => {
     const field = state_with("canard");
 
-    expect(field.second_circulation).toBeGreaterThan(0);
-    expect(field.second_reach_m).toBeGreaterThan(5);
+    expect(field.secondCirculation).toBeGreaterThan(0);
+    expect(field.secondReachM).toBeGreaterThan(5);
   });
 
   it("takes the canard's lift off the wing", () => {
-    expect(state_with("canard").tip_circulation).toBeLessThan(
-      vapor_state(airframe, pulling(150, 7), humid, look).field.tip_circulation,
+    expect(state_with("canard").tipCirculation).toBeLessThan(
+      vapor_state(airframe, pulling(150, 7), humid, look).field.tipCirculation,
     );
   });
 
   it("loads a tailplane far more lightly than a canard", () => {
-    expect(state_with("tail").second_circulation).toBeLessThan(
-      state_with("canard").second_circulation / 4,
+    expect(state_with("tail").secondCirculation).toBeLessThan(
+      state_with("canard").secondCirculation / 4,
     );
   });
 });
@@ -266,9 +266,9 @@ describe("wing_deficit", () => {
 
       return wing_deficit(
         state,
-        station.leading_m + xi * station.chord_m,
-        station.mid_m +
-          2 * station.thickness * station.chord_m * xi * (1 - xi) +
+        station.leadingM + xi * station.chordM,
+        station.midM +
+          2 * station.thickness * station.chordM * xi * (1 - xi) +
           0.01,
         span,
       );
@@ -290,7 +290,7 @@ describe("wing_deficit", () => {
     );
 
   it("ends in a shock once the flow over it goes supersonic", () => {
-    const sound = moist_air(0, 0.9, 10).sound_m_s;
+    const sound = moist_air(0, 0.9, 10).soundMPerS;
     const state = vapor_state(airframe, pulling(0.97 * sound, 5), humid, look);
 
     // A quarter of the suction gone within one evaporation length behind
@@ -299,20 +299,20 @@ describe("wing_deficit", () => {
   });
 
   it("lets bigger droplets linger longer behind the shock", () => {
-    const sound = moist_air(0, 0.9, 10).sound_m_s;
+    const sound = moist_air(0, 0.9, 10).soundMPerS;
     const flight = pulling(0.97 * sound, 5);
 
     const fine = vapor_state(airframe, flight, humid, {
       ...look,
-      droplet_radius_m: 1e-6,
+      dropletRadiusM: 1e-6,
     });
     const coarse = vapor_state(airframe, flight, humid, {
       ...look,
-      droplet_radius_m: 3e-6,
+      dropletRadiusM: 3e-6,
     });
 
-    expect(coarse.field.evaporation_m).toBeCloseTo(
-      fine.field.evaporation_m * 9,
+    expect(coarse.field.evaporationM).toBeCloseTo(
+      fine.field.evaporationM * 9,
       6,
     );
     expect(sharpest_drop(along_chord(coarse, 3), 2)).toBeLessThan(
@@ -331,7 +331,7 @@ describe("wing_deficit", () => {
     const station = shape_station(state.shape, 3);
 
     expect(
-      wing_deficit(state, station.leading_m + 1, station.mid_m - 0.5, 3),
+      wing_deficit(state, station.leadingM + 1, station.midM - 0.5, 3),
     ).toBe(0);
   });
 });

@@ -39,51 +39,63 @@ const MAX_TRACK_DELTA_S = 0.25;
  * What can be written to a flight. Everything else follows from it.
  */
 export type FlightInput = {
-  // True airspeed, in metres per second
-  airspeed_m_s: number;
+  /** True airspeed, in metres per second */
+  airspeedMPerS: number;
 
-  // The angle between the aircraft's forward axis and the oncoming air, in
-  // the plane of its up axis, in radians. Positive with the nose above the
-  // flight path
-  angle_of_attack_rad: number;
+  /**
+   * The angle between the aircraft's forward axis and the oncoming air, in
+   * the plane of its up axis, in radians. Positive with the nose above the
+   * flight path
+   */
+  angleOfAttackRad: number;
 
-  // How far the oncoming air comes from one side, in radians. Positive when
-  // it blows from the right, the nose left of the flight path
-  sideslip_rad: number;
+  /**
+   * How far the oncoming air comes from one side, in radians. Positive when
+   * it blows from the right, the nose left of the flight path
+   */
+  sideslipRad: number;
 
-  // Lift over weight, in g: one in level flight, more in a pull
-  load_factor: number;
+  /** Lift over weight, in g: one in level flight, more in a pull */
+  loadFactor: number;
 
-  // Roll, pitch and yaw rates in the aircraft's own frame, in radians per
-  // second: right wing down, nose up and nose right positive
-  roll_rate_rad_s: number;
-  pitch_rate_rad_s: number;
-  yaw_rate_rad_s: number;
+  /**
+   * Roll, pitch and yaw rates in the aircraft's own frame, in radians per
+   * second: right wing down, nose up and nose right positive
+   */
+  rollRateRadPerS: number;
+  pitchRateRadPerS: number;
+  yawRateRadPerS: number;
 
-  // How hard the engines run: 0 at idle, 1 at military power, on to 1.1 at
-  // full reheat, as the afterburner reads it
+  /**
+   * How hard the engines run: 0 at idle, 1 at military power, on to 1.1 at
+   * full reheat, as the afterburner reads it
+   */
   throttle: number;
 
-  // The pilot's controls. Stick and pedals from -1 to 1: right, aft (nose
-  // up) and right pedal positive
+  /**
+   * The pilot's controls. Stick and pedals from -1 to 1: right, aft (nose
+   * up) and right pedal positive
+   */
   roll: number;
   pitch: number;
   yaw: number;
 
-  // Flaps, air brake and landing gear from 0 to 1: 1 is fully down, out and
-  // down
+  /**
+   * Flaps, air brake and landing gear from 0 to 1: 1 is fully down, out and
+   * down
+   */
   flaps: number;
   airbrake: number;
   gear: number;
 
-  // Metres above sea level
-  altitude_m: number;
+  /** Metres above sea level */
+  altitudeM: number;
 
-  // How much warmer the day is than the standard one, in kelvin
-  temperature_offset_k: number;
+  /** How much warmer the day is than the standard one, in kelvin */
+  temperatureOffsetK: number;
 
-  // Relative humidity, 0 to 1
-  relative_humidity: number;
+  /** Relative humidity, 0 to 1 */
+  relativeHumidity: number;
 };
 
 /**
@@ -91,26 +103,28 @@ export type FlightInput = {
  * that follow from it.
  */
 export type FlightValues = FlightInput & {
-  // The flight Mach number
+  /** The flight Mach number */
   mach: number;
 
-  // ½ρV², in pascals
-  dynamic_pressure_pa: number;
+  /** ½ρV², in pascals */
+  dynamicPressurePa: number;
 
-  // The air: its temperature in kelvin, its pressure in pascals and as a share
-  // of sea level's, its density in kg/m³ and as a share of sea level's on a
-  // standard day, and the speed of sound in it
-  temperature_k: number;
-  pressure_pa: number;
-  pressure_ratio: number;
-  density_kg_m3: number;
-  density_ratio: number;
-  sound_m_s: number;
+  /**
+   * The air: its temperature in kelvin, its pressure in pascals and as a share
+   * of sea level's, its density in kg/m³ and as a share of sea level's on a
+   * standard day, and the speed of sound in it
+   */
+  temperatureK: number;
+  pressurePa: number;
+  pressureRatio: number;
+  densityKgPerM3: number;
+  densityRatio: number;
+  soundMPerS: number;
 
-  // Where its vapour would condense, in kelvin
-  dew_point_k: number;
+  /** Where its vapour would condense, in kelvin */
+  dewPointK: number;
 
-  // The stagnation over static pressure an inlet recovers
+  /** The stagnation over static pressure an inlet recovers */
   ram: number;
 };
 
@@ -118,41 +132,47 @@ export type FlightValues = FlightInput & {
  * How `track` reads an object.
  */
 export type FlightTrackOptions = CaptureFrame & {
-  // Where sea level is on the world's y axis, in metres. Left out, the
-  // altitude is not tracked and keeps whatever was written
-  sea_level_y?: number;
+  /**
+   * Where sea level is on the world's y axis, in metres. Left out, the
+   * altitude is not tracked and keeps whatever was written
+   */
+  seaLevelY?: number;
 
-  // The wind, in world space, metres per second: the airspeed is the
-  // object's speed through the air, not over the ground
+  /**
+   * The wind, in world space, metres per second: the airspeed is the
+   * object's speed through the air, not over the ground
+   */
   wind?: readonly [number, number, number];
 
-  // Which way is up in the world, for the gravity in the load factor. +Y by
-  // default
-  world_up?: readonly [number, number, number];
+  /**
+   * Which way is up in the world, for the gravity in the load factor. +Y by
+   * default
+   */
+  worldUp?: readonly [number, number, number];
 };
 
 /**
- * A level cruise at sea level on a standard, middling-humid day.
+ * Level at sea level on a standard, middling-humid day, at full reheat.
  * @returns Fresh inputs
  */
 export const default_flight_input = (): FlightInput => ({
-  airspeed_m_s: 0,
-  angle_of_attack_rad: 0,
-  sideslip_rad: 0,
-  load_factor: 1,
-  roll_rate_rad_s: 0,
-  pitch_rate_rad_s: 0,
-  yaw_rate_rad_s: 0,
-  throttle: 1,
+  airspeedMPerS: 0,
+  angleOfAttackRad: 0,
+  sideslipRad: 0,
+  loadFactor: 1,
+  rollRateRadPerS: 0,
+  pitchRateRadPerS: 0,
+  yawRateRadPerS: 0,
+  throttle: 1.1,
   roll: 0,
   pitch: 0,
   yaw: 0,
   flaps: 0,
   airbrake: 0,
   gear: 0,
-  altitude_m: 0,
-  temperature_offset_k: 0,
-  relative_humidity: 0.6,
+  altitudeM: 0,
+  temperatureOffsetK: 0,
+  relativeHumidity: 0.6,
 });
 
 // Dry air's density at sea level on a standard day, kg/m³
@@ -205,22 +225,22 @@ export class Flight {
     const start = { ...default_flight_input(), ...input };
 
     this._air = moist_air(
-      start.altitude_m,
-      start.relative_humidity,
-      start.temperature_offset_k,
+      start.altitudeM,
+      start.relativeHumidity,
+      start.temperatureOffsetK,
     );
 
     this.values = {
       ...start,
       mach: 0,
-      dynamic_pressure_pa: 0,
-      temperature_k: SEA_LEVEL_K,
-      pressure_pa: SEA_LEVEL_PA,
-      pressure_ratio: 1,
-      density_kg_m3: 0,
-      density_ratio: 1,
-      sound_m_s: 0,
-      dew_point_k: 0,
+      dynamicPressurePa: 0,
+      temperatureK: SEA_LEVEL_K,
+      pressurePa: SEA_LEVEL_PA,
+      pressureRatio: 1,
+      densityKgPerM3: 0,
+      densityRatio: 1,
+      soundMPerS: 0,
+      dewPointK: 0,
       ram: 1,
     };
 
@@ -279,7 +299,7 @@ export class Flight {
    * Work the flight out from how an object moved since the last call: the
    * airspeed and the angles from its velocity in its own frame, the load
    * factor from its acceleration and gravity, the rates from how it turned,
-   * and the altitude from its height if `sea_level_y` is given.
+   * and the altitude from its height if `seaLevelY` is given.
    *
    * Call it once a frame. The first call, and one after a long gap, only
    * starts watching. What it cannot see, the throttle, the controls and the
@@ -374,7 +394,7 @@ export class Flight {
     const speed = v.length();
 
     // Gravity felt as an acceleration upward, plus the one the path makes
-    const [gx, gy, gz] = options.world_up ?? [0, 1, 0];
+    const [gx, gy, gz] = options.worldUp ?? [0, 1, 0];
     const ax = this._acceleration.x + gx * G0;
     const ay = this._acceleration.y + gy * G0;
     const az = this._acceleration.z + gz * G0;
@@ -408,28 +428,28 @@ export class Flight {
     this._last_rotation.copy(scratch_rotation);
 
     const input: Partial<FlightInput> = {
-      airspeed_m_s: speed,
-      angle_of_attack_rad: speed > 1e-3 ? Math.atan2(-up, forward) : 0,
-      sideslip_rad:
+      airspeedMPerS: speed,
+      angleOfAttackRad: speed > 1e-3 ? Math.atan2(-up, forward) : 0,
+      sideslipRad:
         speed > 1e-3 ? Math.asin(Math.min(Math.max(-left / speed, -1), 1)) : 0,
-      load_factor: (ax * e[4] + ay * e[5] + az * e[6]) / G0,
+      loadFactor: (ax * e[4] + ay * e[5] + az * e[6]) / G0,
 
       // About aft, up and left: right wing down is a turn about forward, nose
       // up about right, nose right about down
-      roll_rate_rad_s: -this._rates.x,
-      pitch_rate_rad_s: -this._rates.z,
-      yaw_rate_rad_s: -this._rates.y,
+      rollRateRadPerS: -this._rates.x,
+      pitchRateRadPerS: -this._rates.z,
+      yawRateRadPerS: -this._rates.y,
     };
 
-    if (options.sea_level_y !== undefined) {
-      input.altitude_m = scratch_position.y - options.sea_level_y;
+    if (options.seaLevelY !== undefined) {
+      input.altitudeM = scratch_position.y - options.seaLevelY;
     }
 
     return this.set(input);
   }
 
   /** Start tracking over: the next `track` only starts watching */
-  reset_tracking() {
+  resetTracking() {
     this._tracking = false;
   }
 
@@ -441,35 +461,35 @@ export class Flight {
     const values = this.values;
 
     if (
-      values.altitude_m !== this._air_key[0] ||
-      values.temperature_offset_k !== this._air_key[1] ||
-      values.relative_humidity !== this._air_key[2]
+      values.altitudeM !== this._air_key[0] ||
+      values.temperatureOffsetK !== this._air_key[1] ||
+      values.relativeHumidity !== this._air_key[2]
     ) {
       this._air = moist_air(
-        values.altitude_m,
-        values.relative_humidity,
-        values.temperature_offset_k,
+        values.altitudeM,
+        values.relativeHumidity,
+        values.temperatureOffsetK,
       );
 
-      this._air_key[0] = values.altitude_m;
-      this._air_key[1] = values.temperature_offset_k;
-      this._air_key[2] = values.relative_humidity;
+      this._air_key[0] = values.altitudeM;
+      this._air_key[1] = values.temperatureOffsetK;
+      this._air_key[2] = values.relativeHumidity;
 
       const air = this._air;
 
-      values.temperature_k = air.temperature_k;
-      values.pressure_pa = air.pressure_pa;
-      values.pressure_ratio = air.pressure_pa / SEA_LEVEL_PA;
-      values.density_kg_m3 = air.density_kg_m3;
-      values.density_ratio = air.density_kg_m3 / STANDARD_DENSITY;
-      values.sound_m_s = air.sound_m_s;
-      values.dew_point_k = air.dew_point_k;
+      values.temperatureK = air.temperatureK;
+      values.pressurePa = air.pressurePa;
+      values.pressureRatio = air.pressurePa / SEA_LEVEL_PA;
+      values.densityKgPerM3 = air.densityKgPerM3;
+      values.densityRatio = air.densityKgPerM3 / STANDARD_DENSITY;
+      values.soundMPerS = air.soundMPerS;
+      values.dewPointK = air.dewPointK;
     }
 
-    const speed = Math.max(values.airspeed_m_s, 0);
+    const speed = Math.max(values.airspeedMPerS, 0);
 
-    values.mach = speed / values.sound_m_s;
-    values.dynamic_pressure_pa = 0.5 * values.density_kg_m3 * speed * speed;
+    values.mach = speed / values.soundMPerS;
+    values.dynamicPressurePa = 0.5 * values.densityKgPerM3 * speed * speed;
     values.ram = ram_pressure(values.mach);
   }
 

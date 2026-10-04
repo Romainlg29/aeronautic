@@ -35,7 +35,7 @@ export type PartOptions = Omit<DriveSelect, "kinds"> & {
   rate?: number;
 
   /** Called in the frame a part moves, with its value in its unit */
-  on_move?: (value: number, part: ControlSurface) => void;
+  onMove?: (value: number, part: ControlSurface) => void;
 };
 
 /**
@@ -69,8 +69,8 @@ const install = (
     get rate() {
       return options.rate;
     },
-    get on_move() {
-      return options.on_move;
+    get onMove() {
+      return options.onMove;
     },
   });
 
@@ -124,7 +124,7 @@ export const elevators = (rig: ControlRig, options: PartOptions = {}) =>
  */
 export type TailOptions = PartOptions & {
   /** How much of its throw is pitch; the rest is roll. 0.6 by default */
-  pitch_share?: number;
+  pitchShare?: number;
 };
 
 /**
@@ -144,7 +144,7 @@ const pitch_and_roll = (
     [kind],
     options,
     (values, part) => {
-      const share = options.pitch_share ?? 0.6;
+      const share = options.pitchShare ?? 0.6;
 
       return (
         -values.pitch * share + values.roll * roll_sense(part) * (1 - share)
@@ -207,10 +207,10 @@ export const flaps = (rig: ControlRig, options: PartOptions = {}) =>
  */
 export type LeadingEdgeFlapOptions = PartOptions & {
   /** Where they start to droop, in degrees of angle of attack. 2 by default */
-  start_deg?: number;
+  startDeg?: number;
 
   /** Degrees down per degree of angle of attack past it. 1.4 by default */
-  per_deg?: number;
+  perDeg?: number;
 };
 
 /**
@@ -229,10 +229,9 @@ export const leading_edge_flaps = (
     ["le_flap"],
     options,
     (values, part) => {
-      const alpha = (values.angle_of_attack_rad * 180) / Math.PI;
+      const alpha = (values.angleOfAttackRad * 180) / Math.PI;
       const scheduled =
-        Math.max(alpha - (options.start_deg ?? 2), 0) *
-        (options.per_deg ?? 1.4);
+        Math.max(alpha - (options.startDeg ?? 2), 0) * (options.perDeg ?? 1.4);
 
       return scheduled + values.flaps * Math.max(part.max, 0);
     },
@@ -296,7 +295,7 @@ export type GearOptions = {
   rate?: number;
 
   /** Called in the frame a part moves */
-  on_move?: (value: number, part: ControlSurface) => void;
+  onMove?: (value: number, part: ControlSurface) => void;
 
   /**
    * The model's retraction clip, scrubbed rather than the legs driven one by
@@ -325,8 +324,8 @@ export const gear = (rig: ControlRig, options: GearOptions = {}) => {
     get rate() {
       return options.rate;
     },
-    get on_move() {
-      return options.on_move;
+    get onMove() {
+      return options.onMove;
     },
   };
 
@@ -356,7 +355,7 @@ export const gear = (rig: ControlRig, options: GearOptions = {}) => {
 
   if (options.clip !== false) {
     drives.push(
-      rig.drive_clip({
+      rig.driveClip({
         clip: options.clip ?? GEAR_CLIP,
         side: options.side,
         from: (values) => 1 - down(values),

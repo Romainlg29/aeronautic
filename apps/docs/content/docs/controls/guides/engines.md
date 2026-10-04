@@ -41,7 +41,7 @@ The petals follow a schedule: open at idle (0.45 of their travel), closed down
 at military power (0), wide open in full reheat (1). Change it with `nozzle`:
 
 ```tsx
-<Engine nozzle={{ nozzle_idle: 0.6, nozzle_reheat: 0.9 }} />
+<Engine nozzle={{ nozzleIdle: 0.6, nozzleReheat: 0.9 }} />
 ```
 
 A model that opens its nozzle with a clip, as `ANIM_Nozzle_L_Open`, has the
@@ -80,16 +80,16 @@ round limit.
 
 ## Where it points
 
-`on_vector` is called in the frame the nozzle turns, with where the exhaust
+`onVector` is called in the frame the nozzle turns, with where the exhaust
 points, in degrees up and right of straight aft:
 
 ```tsx
-<Engine on_vector={(pitch_deg, yaw_deg) => gauge.set(pitch_deg, yaw_deg)} />
+<Engine onVector={(pitch_deg, yaw_deg) => gauge.set(pitch_deg, yaw_deg)} />
 ```
 
 `useEngine()` inside an engine gives the `Engine` itself: its parts, its
-anchor, its `vectoring` limits and shape, its `extras`, and `pitch_deg` and
-`yaw_deg` as they are now.
+anchor, its `vectoring` limits and shape, its `extras`, and `pitchDeg` and
+`yawDeg` as they are now.
 
 ## With `<ControlSurfaces>`
 

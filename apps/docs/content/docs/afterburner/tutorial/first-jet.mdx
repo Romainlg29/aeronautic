@@ -17,17 +17,10 @@ Start from an empty React app with `three`, `@react-three/fiber`,
 
 ```tsx title="app.tsx"
 import { Canvas } from "@react-three/fiber";
-import { WebGPURenderer } from "three/webgpu";
+import { webgpu_gl } from "@aeronautic/core/react";
 
 export const App = () => (
-  <Canvas
-    camera={{ position: [10, 4, 16], fov: 40 }}
-    gl={async (props) => {
-      const renderer = new WebGPURenderer({ ...props, antialias: false });
-      await renderer.init();
-      return renderer;
-    }}
-  >
+  <Canvas camera={{ position: [-16, 4, 10], fov: 40 }} gl={webgpu_gl()}>
     <Scene throttle={1.1} />
   </Canvas>
 );
@@ -78,17 +71,17 @@ export const Grade = () => {
 
 ## The engine
 
-The plume leaves the `<Afterburner>` group's origin along its **+X**. Put the
-engine can behind the origin, on −X, so the plume comes out of its mouth:
+The plume leaves the `<Afterburner>` group's origin along its **+Z**. Put the
+engine can behind the origin, on −Z, so the plume comes out of its mouth:
 
 ```tsx title="scene.tsx"
 import { OrbitControls } from "@react-three/drei";
-import { Afterburner } from "@aeronautic/afterburner";
+import { Afterburner } from "@aeronautic/afterburner/react";
 import { Grade } from "./grade";
 
 const Nozzle = () => (
-  // A cylinder is along Y; a quarter turn about Z lays it along X
-  <mesh position={[-1, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+  // A cylinder is along Y; a quarter turn about X lays it along Z
+  <mesh position={[0, 0, -1]} rotation={[-Math.PI / 2, 0, 0]}>
     <cylinderGeometry args={[0.54, 0.6, 2, 32, 1, true]} />
     <meshStandardMaterial color="#3d424c" metalness={0.6} side={2} />
   </mesh>
@@ -100,7 +93,7 @@ export const Scene = ({ throttle }: { throttle: number }) => (
     <hemisphereLight args={["#8090b0", "#101010", 0.6]} />
     <Nozzle />
     <Afterburner preset="afterburner" throttle={throttle} />
-    <OrbitControls target={[8, 0, 0]} />
+    <OrbitControls target={[0, 0, 8]} />
     <Grade />
   </>
 );
@@ -115,9 +108,9 @@ the right size.
 `throttle` runs from 0 to 1.1. Up to 1 the engine is on dry thrust, from idle to
 military power. Its exhaust is too cool to see, as a real one is: only the
 turbine glows a dull red up the nozzle, seen from behind. Past the profile's
-`burner_threshold`, 1 by default, the burner lights, and it is in fully at 1.1.
+`burnerThreshold`, 1 by default, the burner lights, and it is in fully at 1.1.
 The plume eases toward a new throttle over a quarter of a second, the batch's
-`response_s`, so the light-off is a moment rather than a frame. Keep it in state and pass it down:
+`responseS`, so the light-off is a moment rather than a frame. Keep it in state and pass it down:
 
 ```tsx
 const [throttle, set_throttle] = useState(1.1);

@@ -43,7 +43,7 @@ import {
   add_engine,
 } from "@aeronautic/controls";
 
-elevons(rig, { pitch_share: 0.7 });
+elevons(rig, { pitchShare: 0.7 });
 rudders(rig);
 gear(rig);
 cockpit(rig);
@@ -63,7 +63,7 @@ const probe = rig.drive({
   rate: 20,
 });
 
-const bay = rig.drive_clip({
+const bay = rig.driveClip({
   clip: "ANIM_Bay_Open",
   from: (flight) => (flight.airbrake > 0.5 ? 1 : 0),
 });
@@ -76,9 +76,9 @@ Without React there is no context to carry an engine's thrust, so hand it over:
 engine's throttle from the flight.
 
 ```ts
-import { AfterburnerBatchCore } from "@aeronautic/afterburner";
+import { AfterburnerBatch } from "@aeronautic/afterburner";
 
-const batch = new AfterburnerBatchCore({
+const batch = new AfterburnerBatch({
   preset: "afterburner",
   source: flight,
 });
@@ -87,7 +87,7 @@ scene.add(batch.mesh);
 batch.add({
   object: left.anchor ?? undefined,
   offset: { direction: [0, 0, -1] },
-  throttle_from: left.throttle,
+  throttleFrom: left.throttle,
 });
 ```
 

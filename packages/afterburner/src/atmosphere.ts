@@ -17,17 +17,17 @@ import type { AfterburnerProfile } from "./types";
  * The air at one profile's altitude.
  */
 export type AirState = {
-  // In kelvin, the day's offset included
-  temperature_k: number;
+  /** In kelvin, the day's offset included */
+  temperatureK: number;
 
-  // Pressure and density as shares of sea level's on a standard day
+  /** Pressure and density as shares of sea level's on a standard day */
   pressure: number;
   density: number;
 
-  // How fast sound runs in it
-  sound_m_s: number;
+  /** How fast sound runs in it */
+  soundMPerS: number;
 
-  // The stagnation over static pressure an inlet moving through it recovers
+  /** The stagnation over static pressure an inlet moving through it recovers */
   ram: number;
 };
 
@@ -40,22 +40,20 @@ export type AirState = {
  * @returns The air
  */
 export const atmosphere = (profile: AfterburnerProfile): AirState => {
-  const standard = standard_atmosphere(profile.altitude_m);
+  const standard = standard_atmosphere(profile.altitudeM);
 
   const temperature_k = Math.max(
-    standard.temperature_k + profile.temperature_offset_k,
+    standard.temperatureK + profile.temperatureOffsetK,
     1,
   );
 
   const sound_m_s = speed_of_sound(temperature_k);
 
   return {
-    temperature_k,
+    temperatureK: temperature_k,
     pressure: standard.pressure,
     density: (standard.pressure * SEA_LEVEL_K) / temperature_k,
-    sound_m_s,
-    ram: ram_pressure(Math.max(profile.airspeed_m_s, 0) / sound_m_s),
+    soundMPerS: sound_m_s,
+    ram: ram_pressure(Math.max(profile.airspeedMPerS, 0) / sound_m_s),
   };
 };
-
-export { standard_atmosphere };

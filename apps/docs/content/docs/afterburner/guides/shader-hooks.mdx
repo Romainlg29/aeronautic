@@ -62,17 +62,17 @@ widened to. See [Shaped nozzles](../nozzle-shapes/#any-outline).
 
 A **sample** (`PlumeSampleContext`) has:
 
-| field        | what it is                                               |
-| ------------ | -------------------------------------------------------- |
-| `point`      | The point, in the nozzle's frame, in metres.             |
-| `x`          | Metres downstream of the exit.                           |
-| `core`       | How far through the potential core, 0 to 1.              |
-| `half_width` | The jet's half-width here, in metres.                    |
-| `centre`     | The centreline excess, 0 to 1.                           |
-| `speed`      | The local centreline velocity, m/s.                      |
-| `mixture`    | How much of the gas here is exhaust, 0 to 1.             |
-| `across`     | How far out the sample is, in half-widths, after eddies. |
-| `context`    | The jet, profile, time and blackbody nodes.              |
+| field       | what it is                                               |
+| ----------- | -------------------------------------------------------- |
+| `point`     | The point, in the nozzle's frame, in metres.             |
+| `x`         | Metres downstream of the exit.                           |
+| `core`      | How far through the potential core, 0 to 1.              |
+| `halfWidth` | The jet's half-width here, in metres.                    |
+| `centre`    | The centreline excess, 0 to 1.                           |
+| `speed`     | The local centreline velocity, m/s.                      |
+| `mixture`   | How much of the gas here is exhaust, 0 to 1.             |
+| `across`    | How far out the sample is, in half-widths, after eddies. |
+| `context`   | The jet, profile, time and blackbody nodes.              |
 
 A **pixel** (`AfterburnerPixel`) has `origin`, `direction` and `span` (the ray
 in the nozzle's frame, and where it enters and leaves), `lod` (0 near, 1 mid,

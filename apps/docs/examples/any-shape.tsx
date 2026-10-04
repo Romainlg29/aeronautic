@@ -1,10 +1,7 @@
 import { useFrame } from "@react-three/fiber";
-import {
-  angle_of_attack_for_load,
-  moist_air,
-  WingVapor,
-  type WingVaporCore,
-} from "@aeronautic/wing-vapor";
+import { moist_air } from "@aeronautic/core";
+import { WingVapor, type WingVaporHandle } from "@aeronautic/wing-vapor/react";
+import { angle_of_attack_for_load } from "@aeronautic/wing-vapor/physics";
 import { type FC, type RefObject, useMemo, useRef, useState } from "react";
 import {
   ConeGeometry,
@@ -26,7 +23,7 @@ import { Stage } from "./stage";
 // them is typed in but the geometry
 
 const SUN: [number, number, number] = [5, 10, 5];
-const AIR = { altitude_m: 300, temperature_offset_k: 10 };
+const AIR = { altitudeM: 300, temperatureOffsetK: 10 };
 
 // A planform's half, as [span, aft] points round its outline, root first.
 // The model flies -Z, so aft is +Z
@@ -245,15 +242,15 @@ const Aircraft: FC<{
 }> = ({ design, mach, g, humidity, readout }) => {
   const model = useMemo(() => build(DESIGNS[design]), [design]);
   const body = useRef<Group>(null);
-  const vapor = useRef<WingVaporCore>(null);
+  const vapor = useRef<WingVaporHandle>(null);
 
   useFrame(() => {
     const current = vapor.current;
 
     if (!current || !body.current) return;
 
-    const air = moist_air(AIR.altitude_m, humidity, AIR.temperature_offset_k);
-    const airspeed_m_s = mach * air.sound_m_s;
+    const air = moist_air(AIR.altitudeM, humidity, AIR.temperatureOffsetK);
+    const airspeed_m_s = mach * air.soundMPerS;
     const alpha = angle_of_attack_for_load(
       current.airframe,
       g,
@@ -261,17 +258,20 @@ const Aircraft: FC<{
       air,
     );
 
-    current.update_air({ relative_humidity: humidity });
-    current.update_flight({ airspeed_m_s, angle_of_attack_rad: alpha });
+    current.updateAir({ relativeHumidity: humidity });
+    current.updateFlight({
+      airspeedMPerS: airspeed_m_s,
+      angleOfAttackRad: alpha,
+    });
     body.current.rotation.x = alpha;
 
     if (readout.current) {
       const measured = current.airframe;
 
       readout.current.textContent =
-        `measured: span ${measured.span_m.toFixed(1)} m · ` +
-        `sweep ${((measured.leading_edge_sweep_rad * 180) / Math.PI).toFixed(0)}° · ` +
-        `root chord ${measured.root_chord_m.toFixed(1)} m · ` +
+        `measured: span ${measured.spanM.toFixed(1)} m · ` +
+        `sweep ${((measured.leadingEdgeSweepRad * 180) / Math.PI).toFixed(0)}° · ` +
+        `root chord ${measured.rootChordM.toFixed(1)} m · ` +
         `α ${((alpha * 180) / Math.PI).toFixed(1)}°`;
     }
   });
@@ -284,8 +284,8 @@ const Aircraft: FC<{
         capture={model}
         air={AIR}
         // A light airframe: what the load factor is pulled against
-        airframe={{ mass_kg: 12_000 }}
-        look={{ sun_direction: SUN }}
+        airframe={{ massKg: 12_000 }}
+        look={{ sunDirection: SUN }}
         forward={[0, 0, -1]}
       />
     </group>
