@@ -80,12 +80,12 @@ const DEG = Math.PI / 180;
 // How the fake flies. The Mach number it settles at, at idle, at military
 // power and at full reheat, less what the gear, the flaps and the air brake
 // cost. Reheat takes it through Mach one and on past where the vapor cone
-// fades, about Mach 1.25 to 1.6
+// is gone, about Mach 1.12
 const IDLE_MACH = 0.3;
 const DRY_MACH = 0.9;
 const REHEAT_MACH = 1.8;
-// Where it starts: lit, just through Mach one, the cone still on it
-const START_THROTTLE = 1.02;
+// Where it starts: lit, holding just over Mach one, the cone on it
+const START_THROTTLE = 1.012;
 const DRAG_MACH = { gear: 0.1, flaps: 0.05, airbrake: 0.15 };
 // How long it takes to get most of the way to that speed, in seconds
 const SPEED_S = 4;

@@ -38,12 +38,34 @@ shock.
 
 ## The cone
 
-The fuselage, as a slender body of revolution. Its transonic pocket keeps
-expanding until the shock that ends it, is felt further out the nearer Mach
-one, and is cut off by the shock: a cone opening aft, soft at its front and
-hard at its back. Past Mach one the pocket is the aft body's, ended by the
-tail's shock, and it fades out between Mach 1.25 and 1.6, as it is seen to do
-low down.
+The fuselage, as a slender body of revolution. Its suction grows as its
+thickness squared times the log of one over β times its thickness, so it
+reaches sonic, its critical Mach number, only at about 0.96 for a fighter's
+fineness. Short of that the flow stays subsonic and recovers smoothly along
+the body, and it seldom fogs.
+
+Past it a transonic pocket opens within a few hundredths of a Mach number. It
+keeps expanding until the shock that ends it, is felt further out the nearer
+Mach one, and is cut off by the shock: a cone opening aft, soft at its front
+and hard at its back. Past Mach one the pocket is the aft body's, ended by the
+tail's shock, and it is gone by about Mach 1.12. Accelerating through, it
+lasts a few seconds, as it does on film.
+
+## The captured wing
+
+A capture reads the wing off the model in strips, and a fin's root or a
+fairing can make one strip thicker or longer than its neighbours. Each
+strip's thickness is capped at one and a half times the root's, and the table
+is smoothed along the span with a local straight-line fit over about a
+twentieth of it. A step in the table would otherwise stand in the vapor as a
+wall.
+
+How high the sheet reaches is set by the chord, but never by more than the
+wing's mean chord: a field is felt about as far off as the patch making it is
+wide, and inboard, where the strake and the tail run together into one long
+chord the body carries, the local chord would stand the sheet up beside the
+fuselage. Its inboard edge also softens with height, about a metre wider per
+metre up, as the surface's pressure blurs the further off it is felt.
 
 ## Keeping it finite
 

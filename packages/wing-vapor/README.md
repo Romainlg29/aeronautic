@@ -256,12 +256,15 @@ docs, goes through each step in more detail.
      rooftop ended by a shock, which stands further aft the faster the flight
      and drops the pressure back to subsonic. In drier air only the pocket
      fogs, and its aft edge is the shock.
-   - The **cone** is the fuselage as a slender body. Its transonic pocket keeps
-     expanding until the shock that ends it, is felt further out the nearer
-     Mach one, and is cut off by the shock. Hence a cone opening aft, soft at
-     its front and hard at its back. Past Mach one the pocket is the aft
-     body's, ended by the tail's shock, and it fades out between Mach 1.25
-     and 1.6, as it is seen to do low down.
+   - The **cone** is the fuselage as a slender body. Below its critical Mach
+     number, about 0.96 for a fighter's fineness, the flow round it stays
+     subsonic, so its suction is weak and recovers smoothly. Past it a
+     transonic pocket opens within a few hundredths. It keeps expanding until
+     the shock that ends it, is felt further out the nearer Mach one, and is
+     cut off by the shock. Hence a cone opening aft, soft at its front and hard
+     at its back. Past Mach one the pocket is the aft body's, ended by the
+     tail's shock, and it is gone by about Mach 1.12. So it lasts the few
+     seconds it takes to go through, as it does on film.
 
    A linear theory's suction diverges at Mach one, so every deficit is eased
    into what an isentropic expansion to a local Mach 1.4 makes.
