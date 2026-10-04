@@ -152,8 +152,8 @@ export const NozzleShapes: FC = () => {
 
   return (
     <Stage
-      camera={[-9, 6, 14]}
-      target={[0, 0, 3]}
+      camera={[-7, 7, -9]}
+      target={[0, 0, 4]}
       floor={-2}
       overlay={
         <div className="example-controls">
