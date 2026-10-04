@@ -120,6 +120,12 @@ export const MAX_LOCAL_MACH = 1.4;
 // semispan: the body's own flow, not the wing's, is what the root sits in
 export const ROOT_FADE = 0.12;
 
+// How much wider that fade grows per metre up off the surface. A field off a
+// surface is the surface's pressure blurred over about its height, so the
+// sheet's inboard edge leans and softens with height instead of standing up
+// as a wall beside the body
+export const ROOT_BLUR = 1;
+
 // The leading edge's radius, as a share of the chord: what keeps thin-airfoil
 // theory's suction peak finite
 export const NOSE_RADIUS = 0.03;
@@ -147,8 +153,9 @@ export const CONE_STRENGTH = 4;
 // How far out a body's field reaches, in body lengths over β
 export const CONE_REACH = 0.25;
 
-// Where the cone's shock stands, as a share of the body's length, at the
-// bottom and top of the transonic range; and how far back it leans per body
+// Where the body's suction peaks, as a share of its length, below its
+// critical Mach number: the shoulder. Then where the shock ending its pocket
+// stands once it has one, at Mach one; and how far back it leans per body
 // length out
 export const CONE_SHOCK_SUBSONIC = 0.55;
 export const CONE_SHOCK_SONIC = 0.92;
@@ -156,9 +163,22 @@ export const CONE_SHOCK_SONIC = 0.92;
 // And past Mach one, where it has reached the tail
 export const CONE_SHOCK_SUPERSONIC = 0.98;
 
-// The Mach numbers over which a supersonic body's vapour fades out
-export const SUPERSONIC_FADE: [number, number] = [1.25, 1.6];
+// The Mach numbers over which a supersonic body's vapour fades out. Past Mach
+// one the pocket's shock is the tail's and the expansion ahead of it thins
+// to a sliver as the Mach cone closes: the cone is filmed within a few
+// hundredths of Mach one, and gone by about 1.15
+export const SUPERSONIC_FADE: [number, number] = [1.03, 1.15];
 export const CONE_SHOCK_LEAN = 0.08;
+
+// How far past its critical Mach number a body's pocket takes to grow from
+// nothing to the whole transonic expansion
+export const POCKET_GROWTH = 0.03;
+
+// How long the body's flow takes to recompress behind its shoulder with no
+// shock to do it, as a share of its length; and how thin the shock that ends
+// a pocket is
+export const CONE_RECOMPRESSION = 0.3;
+export const CONE_SHOCK_THICKNESS = 0.01;
 
 // How long the pocket ahead of the cone's shock is, as a share of the body
 export const CONE_POCKET_LENGTH = 0.45;
@@ -203,6 +223,13 @@ export type VaporField = {
   // The attached flow's lift, as a mean section lift times a chord: the
   // table's loading spreads it along the span
   section_lift_m: number;
+
+  // The longest chord that sets how high the wing's field reaches: its mean.
+  // A field is felt about as far off as the patch making it is wide, and a
+  // finite wing's is no wider than its span allows. Inboard, where the strake
+  // and the tail run together into one long body-borne chord, the local chord
+  // would stand the sheet up in walls
+  reach_chord_m: number;
 
   // How much of the leading edge's suction peak has separated into the
   // leading-edge vortex, 0 to 1: a sharp edge past a few degrees sheds it all
@@ -266,14 +293,16 @@ export type VaporField = {
   evaporation_m: number;
 
   // The body: its nose, length, radius, axis height; the strength of its
-  // suction, where the shock stands, how much of it supersonic flight leaves,
-  // and how far out it can fog
+  // suction, where the shock stands and how far aft of it the flow has
+  // recompressed, how much of it supersonic flight leaves, and how far out it
+  // can fog
   nose_m: number;
   body_length_m: number;
   body_radius_m: number;
   body_height_m: number;
   cone_strength: number;
   cone_shock: number;
+  cone_shock_width: number;
   cone_fade: number;
   cone_bound_m: number;
 };
@@ -880,14 +909,15 @@ export const wing_deficit = (
   // disturbance is felt about as far off the surface as it is long, so near
   // the nose, where the suction is a narrow peak, it reaches less high
   const reach =
-    ((WING_FIELD_HEIGHT * chord) /
+    ((WING_FIELD_HEIGHT * Math.min(chord, field.reach_chord_m)) /
       Math.max(compressibility_beta(mach), WING_HEIGHT_MIN_BETA)) *
     nose_reach(along);
 
+  const blur = (ROOT_BLUR * height) / field.semispan_m;
   const fade =
     smoothstep(
-      field.root_span_m / field.semispan_m,
-      field.root_span_m / field.semispan_m + ROOT_FADE,
+      field.root_span_m / field.semispan_m - blur,
+      field.root_span_m / field.semispan_m + ROOT_FADE + blur,
       eta,
     ) *
     (1 - smoothstep(0.9, 1, eta)) *
@@ -1027,7 +1057,12 @@ export const cone_deficit = (
 
   const shock = field.cone_shock + (CONE_SHOCK_LEAN * r) / field.body_length_m;
   const ahead = Math.max(
-    1 - smoothstep(shock - 0.01, shock + 0.01, xi),
+    1 -
+      smoothstep(
+        shock - CONE_SHOCK_THICKNESS,
+        shock + field.cone_shock_width,
+        xi,
+      ),
     Math.exp(
       (-Math.max(xi - shock, 0) * field.body_length_m) /
         Math.max(field.evaporation_m, 1e-3),
@@ -1070,6 +1105,91 @@ export const cone_deficit = (
  */
 export const cone_pocket = (xi: number, shock: number): number =>
   smoothstep(shock - CONE_POCKET_LENGTH, shock, xi);
+
+/**
+ * A slender body's peak suction, subsonic.
+ *
+ * Its suction is (R/L)² ln(L/R) times a constant, and Prandtl–Glauert's
+ * affine stretch only puts β into the logarithm's argument: a body of
+ * revolution is far less sensitive to compressibility than a wing, whose
+ * suction goes as 1/β.
+ * @param strength Its suction at low speed, as a pressure coefficient's size
+ * @param ratio Its radius over its length
+ * @param mach The Mach number
+ * @returns The suction, as a pressure coefficient's size
+ */
+export const slender_suction = (
+  strength: number,
+  ratio: number,
+  mach: number,
+): number =>
+  strength *
+  (1 +
+    Math.log(1 / compressibility_beta(mach)) /
+      Math.max(Math.log(1 / Math.max(ratio, 1e-3)), 1));
+
+/**
+ * The Mach number at which a slender body's peak suction first reaches
+ * sonic: below it the flow round it is subsonic everywhere, and it has no
+ * pocket and no shock.
+ * @param strength Its suction at low speed
+ * @param ratio Its radius over its length
+ * @returns The critical Mach number
+ */
+export const body_critical_mach = (strength: number, ratio: number): number => {
+  if (strength <= 0) {
+    return 1;
+  }
+
+  let low = 0.3;
+  let high = 1;
+
+  for (let iteration = 0; iteration < 24; iteration++) {
+    const middle = (low + high) / 2;
+
+    if (-slender_suction(strength, ratio, middle) > critical_pressure(middle)) {
+      low = middle;
+    } else {
+      high = middle;
+    }
+  }
+
+  return (low + high) / 2;
+};
+
+/**
+ * The low-speed suction to hand the cone's Kármán–Tsien correction, for it
+ * to make the body's suction at this Mach number.
+ *
+ * Without a pocket that is a slender body's; with its whole pocket grown,
+ * Kármán–Tsien's transonic one, held finite by `MIN_BETA` and capped later
+ * at `MAX_LOCAL_MACH`. Between, the two are mixed by how far it has grown.
+ * @param strength Its suction at low speed
+ * @param ratio Its radius over its length
+ * @param mach The Mach number
+ * @param growth How far its pocket has grown, 0 to 1
+ * @returns The suction to correct, as a pressure coefficient's size
+ */
+export const cone_strength = (
+  strength: number,
+  ratio: number,
+  mach: number,
+  growth: number,
+): number => {
+  if (strength <= 0) {
+    return 0;
+  }
+
+  const slender = -slender_suction(strength, ratio, mach);
+  const transonic = karman_tsien(-strength, mach);
+  const wanted = slender + (transonic - slender) * growth;
+
+  // Kármán–Tsien, C_p = C_p0 / (β + k C_p0), turned round for C_p0
+  const beta = compressibility_beta(mach);
+  const k = (mach * mach) / (2 * (1 + beta));
+
+  return -(wanted * beta) / (1 - k * wanted);
+};
 
 /**
  * A Sears–Haack body's radius: the least drag for its volume, and close to
@@ -1234,6 +1354,7 @@ export const vapor_state = (
       smoothstep(3 * DEGREE, 8 * DEGREE, Math.abs(alpha)),
     section_lift_m:
       Math.max(state.potential_lift_coefficient, 0) * (area_m2 / span),
+    reach_chord_m: Math.max(area_m2 / span, 0.05),
     cos2_sweep: Math.max(effective_cos, 0.05),
     normal_mach: state.mach * Math.sqrt(effective_cos),
 
@@ -1293,9 +1414,7 @@ export const vapor_state = (
     body_height_m: airframe.fuselage_height_m,
     cone_strength: 0,
     cone_shock: 0,
-    // Past Mach one the pocket's shock is the tail's, and linear theory's
-    // 1/β weakens it and draws it in as the speed grows; vapour round the aft
-    // body is seen to about Mach 1.3 low down, and no further
+    cone_shock_width: CONE_SHOCK_THICKNESS,
     cone_fade:
       1 - smoothstep(SUPERSONIC_FADE[0], SUPERSONIC_FADE[1], state.mach),
     cone_bound_m: 0,
@@ -1495,7 +1614,7 @@ export const vapor_state = (
 
     if (needed < 1 && strongest > needed && Number.isFinite(wing_front)) {
       const reach =
-        (WING_FIELD_HEIGHT * deepest) /
+        (WING_FIELD_HEIGHT * Math.min(deepest, field.reach_chord_m)) /
         Math.max(compressibility_beta(field.normal_mach), WING_HEIGHT_MIN_BETA);
 
       field.wing_bound_m = reach * Math.log(strongest / needed) * 1.1 + 0.05;
@@ -1512,15 +1631,25 @@ export const vapor_state = (
   // The cone
   {
     const ratio = airframe.fuselage_radius_m / field.body_length_m;
-
-    field.cone_strength =
+    const strength =
       ratio > 0 ? CONE_STRENGTH * ratio * ratio * Math.log(1 / ratio) : 0;
+
+    // Below its critical Mach number the body has no pocket: its suction is
+    // a slender body's, barely compressible, and recompresses smoothly. Past
+    // it the pocket grows within a few hundredths into the full transonic
+    // expansion, ended by a shock that runs aft to the tail by Mach one
+    const critical = body_critical_mach(strength, ratio);
+    const growth = smoothstep(critical, critical + POCKET_GROWTH, state.mach);
+
+    field.cone_strength = cone_strength(strength, ratio, state.mach, growth);
+    field.cone_shock_width =
+      CONE_RECOMPRESSION + (CONE_SHOCK_THICKNESS - CONE_RECOMPRESSION) * growth;
     field.cone_shock =
       CONE_SHOCK_SUBSONIC +
       (CONE_SHOCK_SONIC - CONE_SHOCK_SUBSONIC) *
-        smoothstep(0.85, 1.02, state.mach) +
+        smoothstep(critical, 1.01, state.mach) +
       (CONE_SHOCK_SUPERSONIC - CONE_SHOCK_SONIC) *
-        smoothstep(1, 1.2, state.mach);
+        smoothstep(1, SUPERSONIC_FADE[0] + 0.03, state.mach);
 
     let strongest = 0;
 
@@ -1569,6 +1698,7 @@ export const vapor_state = (
       const b = field.cone_bound_m;
       const shock_x =
         (field.cone_shock +
+          field.cone_shock_width +
           (CONE_SHOCK_LEAN * b) / field.body_length_m +
           0.02) *
           field.body_length_m -

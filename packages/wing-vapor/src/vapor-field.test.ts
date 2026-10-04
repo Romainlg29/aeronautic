@@ -97,31 +97,47 @@ describe("vapor_state", () => {
 
   it("only makes the cone near the speed of sound, and a little past it", () => {
     const sound = moist_air(0, 0.9, 10).sound_m_s;
+    const at = (mach: number) =>
+      vapor_state(airframe, pulling(mach * sound, 1), humid, look).field;
 
-    const slow = vapor_state(airframe, pulling(0.6 * sound, 1), humid, look);
-    const transonic = vapor_state(
-      airframe,
-      pulling(0.97 * sound, 1),
-      humid,
-      look,
-    );
-    const fast = vapor_state(airframe, pulling(1.8 * sound, 1), humid, look);
+    const slow = at(0.6);
+    const subcritical = at(0.9);
+    const transonic = at(0.99);
 
-    expect(transonic.field.cone_bound_m).toBeGreaterThan(
-      Math.max(slow.field.cone_bound_m * 3, airframe.fuselage_radius_m * 2),
+    expect(transonic.cone_bound_m).toBeGreaterThan(
+      Math.max(slow.cone_bound_m * 3, airframe.fuselage_radius_m * 2),
     );
-    expect(fast.field.cone_bound_m).toBe(0);
+    // Short of the body's critical Mach number there's no pocket to fill
+    expect(subcritical.cone_bound_m).toBeLessThan(transonic.cone_bound_m / 2);
 
     // Just supersonic, it holds on round the aft body, its shock at the tail
-    const supersonic = vapor_state(
-      airframe,
-      pulling(1.15 * sound, 1),
-      humid,
-      look,
-    ).field;
+    const supersonic = at(1.05);
 
     expect(supersonic.cone_bound_m).toBeGreaterThan(0);
-    expect(supersonic.cone_shock).toBeGreaterThan(transonic.field.cone_shock);
+    expect(supersonic.cone_shock).toBeGreaterThan(transonic.cone_shock);
+
+    // And a few hundredths on it's gone
+    expect(at(1.15).cone_bound_m).toBe(0);
+    expect(at(1.8).cone_bound_m).toBe(0);
+  });
+
+  it("swells the cone smoothly through the critical Mach number", () => {
+    const sound = moist_air(0, 0.9, 10).sound_m_s;
+    let last: number | undefined;
+
+    for (let mach = 0.9; mach <= 1.0; mach += 0.002) {
+      const { cone_strength } = vapor_state(
+        airframe,
+        pulling(mach * sound, 1),
+        humid,
+        look,
+      ).field;
+
+      if (last !== undefined) {
+        expect(Math.abs(cone_strength - last)).toBeLessThan(0.005);
+      }
+      last = cone_strength;
+    }
   });
 
   it("fits every part inside its bounds", () => {

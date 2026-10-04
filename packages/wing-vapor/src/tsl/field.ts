@@ -33,8 +33,10 @@ import {
   BURST_SWELL,
   CONE_POCKET_LENGTH,
   CONE_SHOCK_LEAN,
+  CONE_SHOCK_THICKNESS,
   NOSE_RADIUS,
   NOSE_REACH,
+  ROOT_BLUR,
   ROOT_FADE,
   SHOCK_WIDTH,
   TIP_START_SHARE,
@@ -628,22 +630,32 @@ const wing_part = (
   const coefficient = select(peak.lessThan(f.wing_sonic), pocket, here);
 
   const reach = f.wing_reach
-    .mul(chord)
+    .mul(min(chord, f.reach_chord_m))
     .mul(min(along.add(NOSE_RADIUS).div(NOSE_REACH), 1));
 
   const root = f.root_span_m.div(f.semispan_m);
 
-  const fade = smoothstep(root, root.add(ROOT_FADE), eta)
+  const blur = height.mul(ROOT_BLUR).div(f.semispan_m);
+
+  const fade = smoothstep(root.sub(blur), root.add(ROOT_FADE).add(blur), eta)
     .mul(smoothstep(0.9, 1, eta).oneMinus())
     .mul(smoothstep(-0.04, 0, xi))
     .mul(smoothstep(1, 1.06, xi).oneMinus());
 
+  // What it would be at the surface, and so how high up it still fogs: it
+  // falls off as exp(-height / reach)
+  const at_surface = capped(
+    coefficient.mul(f.wing_scale).negate(),
+    f.wing_cap,
+  ).mul(fade);
+  const top = reach.mul(
+    log(max(at_surface, 1e-6).div(max(f.saturation_deficit, 1e-6))),
+  );
+
   const deficit = select(
     height.lessThan(0).or(eta.greaterThanEqual(1)),
     float(0),
-    capped(coefficient.mul(f.wing_scale).negate(), f.wing_cap)
-      .mul(exp(height.negate().div(reach)))
-      .mul(fade),
+    at_surface.mul(exp(height.negate().div(reach))),
   );
 
   // The layer over the planform, as far up as it can fog
@@ -658,7 +670,11 @@ const wing_part = (
   return {
     deficit,
     outside: select(f.wing_bound_m.greaterThan(0), outside, float(FAR)),
-    step: clamp(reach.mul(0.25), 0.04, 1),
+    // Fine in the sheet, to resolve it, and coarser the further above where
+    // it still fogs: in the clear air over the body, or over a lightly loaded
+    // station, the sheet's own steps would refine the march through whatever
+    // else is there, and the change in step would show as an edge
+    step: clamp(max(reach.mul(0.25), height.sub(top).mul(0.5)), 0.04, 1),
   };
 };
 
@@ -695,7 +711,11 @@ const cone_part = (f: VaporFieldNodes, p: V3): Part => {
 
   const shock = f.cone_shock.add(r.mul(CONE_SHOCK_LEAN).div(f.body_length_m));
   const ahead = max(
-    smoothstep(shock.sub(0.01), shock.add(0.01), xi).oneMinus(),
+    smoothstep(
+      shock.sub(CONE_SHOCK_THICKNESS),
+      shock.add(f.cone_shock_width),
+      xi,
+    ).oneMinus(),
     exp(
       max(xi.sub(shock), 0)
         .mul(f.body_length_m)
@@ -729,7 +749,11 @@ const cone_part = (f: VaporFieldNodes, p: V3): Part => {
     float(0),
   );
 
-  const shock_x = shock.add(0.02).mul(f.body_length_m).sub(f.nose_m);
+  const shock_x = shock
+    .add(f.cone_shock_width)
+    .add(0.02)
+    .mul(f.body_length_m)
+    .sub(f.nose_m);
 
   const outside = max(
     r.sub(f.cone_bound_m),

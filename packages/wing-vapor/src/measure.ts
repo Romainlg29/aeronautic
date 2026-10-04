@@ -81,6 +81,18 @@ const RESUME_CHORD = 0.4;
 const OUTER_FROM = 0.5;
 const OUTER_TO = 0.92;
 
+// The thickest a section is taken to be for its chord, against the wing's
+// median: a wing's root is a little thicker than its tip, while the root of
+// a fin or the side of a body read as section is far thicker
+const ROOT_THICKNESS = 1.5;
+
+// How far along the span the table is smoothed over, as a share of the
+// semispan. The pressure field over a wing cannot jump from one station to
+// the next: the flow evens a step in the planform out over a span of the
+// order of its chord. A table that kept one, a body's aft end or a fin's root
+// ending at one station, would draw a wall of vapour standing on the span
+const SPAN_SMOOTHING = 0.06;
+
 // Pixels deeper than this many times their column's median are something
 // standing on the section, a fin or a store, and not the section
 const SECTION_DEPTH = 3;
@@ -236,6 +248,94 @@ const fit_line = (xs: number[], ys: number[]): [number, number] => {
   for (let index = 0; index < n; index++) {
     covariance += (xs[index] - mean_x) * (ys[index] - mean_y);
     variance += (xs[index] - mean_x) ** 2;
+  }
+
+  const slope = variance > 0 ? covariance / variance : 0;
+
+  return [mean_y - slope * mean_x, slope];
+};
+
+/**
+ * Smooth the measured wing along the span, from its root to its tip: each
+ * station's edges, mid-plane and thickness become a straight line's, fitted
+ * over the stations round it with Gaussian weights. A straight edge, a crank
+ * or the tip keep their place and slope; a step is evened out over
+ * `SPAN_SMOOTHING` of the semispan either side.
+ * @param shape The wing, smoothed in place
+ * @param from The first station that is wing
+ */
+const smooth_table = (shape: WingShape, from: number) => {
+  const sigma = SPAN_SMOOTHING * (SHAPE_STATIONS - 1);
+  const reach = Math.ceil(3 * sigma);
+
+  const trailing = shape.leading_m.map(
+    (leading, station) => leading + shape.chord_m[station],
+  );
+  const rows = [shape.leading_m, trailing, shape.mid_m, shape.thickness].map(
+    (row) => Float32Array.from(row),
+  );
+
+  for (let station = from; station < SHAPE_STATIONS; station++) {
+    const xs: number[] = [];
+    const weights: number[] = [];
+
+    for (
+      let other = Math.max(station - reach, from);
+      other <= Math.min(station + reach, SHAPE_STATIONS - 1);
+      other++
+    ) {
+      xs.push(other - station);
+      weights.push(Math.exp(-((other - station) ** 2) / (2 * sigma * sigma)));
+    }
+
+    const [leading, trail, mid, thickness] = rows.map(
+      (row) =>
+        weighted_line(
+          xs,
+          xs.map((x) => row[station + x]),
+          weights,
+        )[0],
+    );
+
+    shape.leading_m[station] = leading;
+    shape.chord_m[station] = Math.max(trail - leading, 1e-3);
+    shape.mid_m[station] = mid;
+    shape.thickness[station] = thickness;
+  }
+};
+
+/**
+ * A straight line through weighted points, by least squares.
+ * @param xs Where
+ * @param ys What
+ * @param weights How much each counts
+ * @returns Its intercept and slope
+ */
+const weighted_line = (
+  xs: number[],
+  ys: number[],
+  weights: number[],
+): [number, number] => {
+  let total = 0;
+  let mean_x = 0;
+  let mean_y = 0;
+
+  for (let index = 0; index < xs.length; index++) {
+    total += weights[index];
+    mean_x += weights[index] * xs[index];
+    mean_y += weights[index] * ys[index];
+  }
+
+  mean_x /= total;
+  mean_y /= total;
+
+  let covariance = 0;
+  let variance = 0;
+
+  for (let index = 0; index < xs.length; index++) {
+    covariance +=
+      weights[index] * (xs[index] - mean_x) * (ys[index] - mean_y);
+    variance += weights[index] * (xs[index] - mean_x) ** 2;
   }
 
   const slope = variance > 0 ? covariance / variance : 0;
@@ -505,9 +605,14 @@ export const measure_airframe = (views: AirframeViews): MeasuredAirframe => {
       shape.leading_m[station] = column.leading;
       shape.chord_m[station] = chord;
       shape.mid_m[station] = column.mid;
-      shape.thickness[station] = Math.min(column.thickness / chord, 0.3);
+      shape.thickness[station] = Math.min(
+        column.thickness / chord,
+        ROOT_THICKNESS * thickness,
+      );
     }
   }
+
+  smooth_table(shape, root_station);
 
   shape.loading.set(lattice_loading(shape));
   shape.secondary = measure_secondary(columns, root_station, semispan);
