@@ -20,7 +20,7 @@ import {
  * @returns The point's radius, in round radii of the outline's area
  */
 const measure = (y: number, z: number, aspect: number, squareness: number) => {
-  const { area_scale } = nozzle_outline_fit(aspect, squareness);
+  const { areaScale: area_scale } = nozzle_outline_fit(aspect, squareness);
   const n = clamp_nozzle_squareness(squareness);
   const stretch = Math.sqrt(aspect);
 
@@ -44,7 +44,7 @@ describe("nozzle_outline_fit", () => {
   it("is a unit circle for a round nozzle", () => {
     const fit = nozzle_outline_fit(1, 2);
 
-    expect(fit.area_scale).toBeCloseTo(1, 10);
+    expect(fit.areaScale).toBeCloseTo(1, 10);
     expect(fit.reach).toBeCloseTo(1, 10);
   });
 
@@ -99,14 +99,14 @@ describe("nozzle_outline_fit", () => {
     const profile = resolve_afterburner_profile();
     const round = jet_state(resolve_afterburner_params(), 1, profile);
     const oval = jet_state(
-      resolve_afterburner_params({ nozzle_aspect: 2 }),
+      resolve_afterburner_params({ nozzleAspect: 2 }),
       1,
       profile,
     );
     const { reach } = nozzle_outline_fit(2, 2);
 
-    expect(oval.outer_near_m).toBeCloseTo(round.outer_near_m * reach, 6);
-    expect(oval.outer_far_m).toBeCloseTo(round.outer_far_m * reach, 6);
-    expect(oval.reach_m).toBeCloseTo(round.reach_m, 6);
+    expect(oval.outerNearM).toBeCloseTo(round.outerNearM * reach, 6);
+    expect(oval.outerFarM).toBeCloseTo(round.outerFarM * reach, 6);
+    expect(oval.reachM).toBeCloseTo(round.reachM, 6);
   });
 });

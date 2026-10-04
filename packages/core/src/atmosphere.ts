@@ -1,9 +1,10 @@
-// The air the aircraft flies through, and the water it carries
+// The air everything flies through, and the water it carries
 //
 // The International Standard Atmosphere for the pressure and the temperature,
-// and the moist air on top of it: how much vapour the air holds, and how much
-// it could. Everything the vapour does comes down to the gap between the two,
-// so this is the module the rest of the package is measured against
+// to 86 km and isothermal above, and the moist air on top of it: how much
+// vapour the air holds, and how much it could. Every package reads its air
+// from here, so an aircraft's afterburner and its wing vapour fly through the
+// same day
 
 // g₀M/R*, in kelvin per metre: what the hydrostatic equation integrates over
 const HYDROSTATIC = 0.0341632;
@@ -25,56 +26,71 @@ export const VAPOUR_RATIO = 0.622;
 export const LATENT_HEAT = 2.501e6;
 
 // Where each layer starts, in metres, and its lapse rate in kelvin per metre
-// Above the last the air is taken as isothermal. Vapour is a tropospheric
-// business, but a jet may fly higher and the air above still has to be right
+// Above the last the air is taken as isothermal, which it nearly is to 100 km
 const LAYERS: [base_m: number, lapse_k_m: number][] = [
   [0, -0.0065],
   [11_000, 0],
   [20_000, 0.001],
   [32_000, 0.0028],
   [47_000, 0],
+  [51_000, -0.0028],
+  [71_000, -0.002],
+  [86_000, 0],
 ];
 
-const CEILING_M = 51_000;
+const CEILING_M = 120_000;
 
 /**
  * The air at one altitude, with the water in it.
  */
 export type MoistAir = {
-  // In kelvin, the day's offset included
-  temperature_k: number;
+  /** In kelvin, the day's offset included */
+  temperatureK: number;
 
-  // In pascals
-  pressure_pa: number;
+  /** In pascals */
+  pressurePa: number;
 
-  // In kilograms per cubic metre
-  density_kg_m3: number;
+  /** In kilograms per cubic metre */
+  densityKgPerM3: number;
 
-  // How fast sound runs in it, metres per second
-  sound_m_s: number;
+  /** How fast sound runs in it, metres per second */
+  soundMPerS: number;
 
-  // The vapour's partial pressure, in pascals
-  vapour_pa: number;
+  /** The vapour's partial pressure, in pascals */
+  vapourPa: number;
 
-  // Kilograms of vapour per kilogram of dry air
-  mixing_ratio: number;
+  /** Kilograms of vapour per kilogram of dry air */
+  mixingRatio: number;
 
-  // Where the vapour would start to condense if the air were cooled at this
-  // pressure, in kelvin
-  dew_point_k: number;
+  /**
+   * Where the vapour would start to condense if the air were cooled at this
+   * pressure, in kelvin
+   */
+  dewPointK: number;
 
-  // The relative humidity it was made with, 0 to 1
-  relative_humidity: number;
+  /** The relative humidity it was made with, 0 to 1 */
+  relativeHumidity: number;
+};
+
+/**
+ * The standard atmosphere at one altitude.
+ */
+export type StandardAir = {
+  /** In kelvin */
+  temperatureK: number;
+
+  /** In pascals, and as a share of sea level's */
+  pressurePa: number;
+  pressure: number;
 };
 
 /**
  * The standard atmosphere's temperature and pressure at one altitude.
  * @param altitude_m Metres above sea level
- * @returns The standard temperature in kelvin and the pressure in pascals
+ * @returns The standard temperature in kelvin, and the pressure in pascals and
+ *   as a share of sea level's
  */
-export const standard_atmosphere = (
-  altitude_m: number,
-): { temperature_k: number; pressure_pa: number } => {
+export const standard_atmosphere = (altitude_m: number): StandardAir => {
   const height = Math.max(0, Math.min(altitude_m, CEILING_M));
 
   let temperature_k = SEA_LEVEL_K;
@@ -100,7 +116,36 @@ export const standard_atmosphere = (
     temperature_k = next_k;
   }
 
-  return { temperature_k, pressure_pa: pressure * SEA_LEVEL_PA };
+  return {
+    temperatureK: temperature_k,
+    pressurePa: pressure * SEA_LEVEL_PA,
+    pressure,
+  };
+};
+
+/**
+ * How fast sound runs in dry air.
+ * @param temperature_k The temperature, in kelvin
+ * @returns The speed of sound, in metres per second
+ */
+export const speed_of_sound = (temperature_k: number): number =>
+  Math.sqrt(AIR_GAMMA * AIR_GAS_CONSTANT * Math.max(temperature_k, 1));
+
+/**
+ * The stagnation over static pressure an inlet moving through the air
+ * recovers: isentropic, less what a supersonic inlet's shocks lose
+ * (MIL-E-5007).
+ * @param mach The flight Mach number
+ * @returns The pressure ratio
+ */
+export const ram_pressure = (mach: number): number => {
+  const m = Math.max(mach, 0);
+  const recovery = m > 1 ? 1 - 0.075 * Math.pow(m - 1, 1.35) : 1;
+
+  return (
+    Math.pow(1 + ((AIR_GAMMA - 1) / 2) * m * m, AIR_GAMMA / (AIR_GAMMA - 1)) *
+    Math.max(recovery, 0.2)
+  );
 };
 
 /**
@@ -160,7 +205,7 @@ export const moist_air = (
   const standard = standard_atmosphere(altitude_m);
 
   const temperature_k = Math.max(
-    standard.temperature_k + temperature_offset_k,
+    standard.temperatureK + temperature_offset_k,
     150,
   );
 
@@ -169,21 +214,21 @@ export const moist_air = (
   // Never more than the air's own pressure, however hot the day
   const vapour_pa = Math.min(
     humidity * saturation_pressure(temperature_k),
-    standard.pressure_pa * 0.5,
+    standard.pressurePa * 0.5,
   );
 
   const density_kg_m3 =
-    (standard.pressure_pa - 0.378 * vapour_pa) /
+    (standard.pressurePa - 0.378 * vapour_pa) /
     (AIR_GAS_CONSTANT * temperature_k);
 
   return {
-    temperature_k,
-    pressure_pa: standard.pressure_pa,
-    density_kg_m3,
-    sound_m_s: Math.sqrt(AIR_GAMMA * AIR_GAS_CONSTANT * temperature_k),
-    vapour_pa,
-    mixing_ratio: mixing_ratio(vapour_pa, standard.pressure_pa),
-    dew_point_k: dew_point(vapour_pa),
-    relative_humidity: humidity,
+    temperatureK: temperature_k,
+    pressurePa: standard.pressurePa,
+    densityKgPerM3: density_kg_m3,
+    soundMPerS: speed_of_sound(temperature_k),
+    vapourPa: vapour_pa,
+    mixingRatio: mixing_ratio(vapour_pa, standard.pressurePa),
+    dewPointK: dew_point(vapour_pa),
+    relativeHumidity: humidity,
   };
 };

@@ -24,4 +24,4 @@ as it is now, up to 400 m long. The tip's
 back a point is sets how rolled up and how spread the vortex is there.
 
 The roll rate is measured the same way, from how the attitude turns between
-frames, unless `flight.roll_rate_rad_s` gives it.
+frames, unless `flight.rollRateRadPerS` gives it.

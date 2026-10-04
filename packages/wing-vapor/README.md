@@ -39,12 +39,14 @@ forms. This README is the short version. For the jet and rocket plumes, see
 ## Install
 
 ```bash
-pnpm add @aeronautic/wing-vapor
+pnpm add @aeronautic/wing-vapor @aeronautic/core three@~0.186
 ```
 
-The same peer dependencies as `@aeronautic/afterburner`: `react` 19, `three` 0.186.x and
-`@react-three/fiber` 9 (or 10). It needs a `WebGPURenderer`, which falls back to
-WebGL 2 by itself. It doesn't run on the classic `WebGLRenderer`.
+The same peer dependencies as `@aeronautic/afterburner`: `@aeronautic/core`,
+`three` 0.186.x, plus `react` 19 and `@react-three/fiber` 9 (or 10) for
+`@aeronautic/wing-vapor/react`. It needs a `WebGPURenderer`, which falls back to
+WebGL 2 by itself. It doesn't run on the classic `WebGLRenderer`. In R3F, `gl={webgpu_gl()}`
+from `@aeronautic/core/react` makes one.
 
 ## Quick start
 
@@ -52,7 +54,7 @@ WebGL 2 by itself. It doesn't run on the classic `WebGLRenderer`.
 inside the model, and give it the airframe, the flight and the day:
 
 ```tsx
-import { WingVapor } from "@aeronautic/wing-vapor";
+import { WingVapor } from "@aeronautic/wing-vapor/react";
 
 const Jet = () => (
   <group>
@@ -61,15 +63,15 @@ const Jet = () => (
       // The model flies along its local -Z, with +Y up (the defaults)
       forward={[0, 0, -1]}
       airframe={{
-        span_m: 14,
-        root_chord_m: 9.2,
-        tip_chord_m: 1.6,
-        leading_edge_sweep_rad: (55 * Math.PI) / 180,
-        apex_m: -5.66, // the leading edge meets the centreline 5.66 m ahead
+        spanM: 14,
+        rootChordM: 9.2,
+        tipChordM: 1.6,
+        leadingEdgeSweepRad: (55 * Math.PI) / 180,
+        apexM: -5.66, // the leading edge meets the centreline 5.66 m ahead
       }}
-      flight={{ airspeed_m_s: 170, angle_of_attack_rad: 0.35 }}
-      air={{ altitude_m: 300, relative_humidity: 0.9 }}
-      look={{ sun_direction: [5, 10, 5] }}
+      flight={{ airspeedMPerS: 170, angleOfAttackRad: 0.35 }}
+      air={{ altitudeM: 300, relativeHumidity: 0.9 }}
+      look={{ sunDirection: [5, 10, 5] }}
     />
   </group>
 );
@@ -79,20 +81,28 @@ The flight changes every frame in a real scene. Write it through the ref, which
 costs no React render:
 
 ```tsx
-const vapor = useRef<WingVaporCore>(null);
+const vapor = useRef<WingVaporHandle>(null);
 
 useFrame(() => {
-  vapor.current?.update_flight({ airspeed_m_s, angle_of_attack_rad });
+  vapor.current?.updateFlight({
+    airspeedMPerS: airspeed_m_s,
+    angleOfAttackRad: angle_of_attack_rad,
+  });
 });
 
 <WingVapor ref={vapor} airframe={airframe} />;
 ```
 
+Inside an `@aeronautic/core` `<FlightProvider>`, you don't need to write it at
+all. The vapour reads the airspeed, the angles, the altitude and the day from
+the flight whenever it changes, inside its own frame update. Pass
+`source={null}` to ignore the flight.
+
 A flight model usually knows the load factor, not the angle of attack.
 `angle_of_attack_for_load(airframe, g, airspeed, air)` inverts the lift curve
 for it.
 
-Without React, `WingVaporCore` is the same thing: add `vapor.mesh` to the scene
+Without React, the `WingVapor` class from the package root is the same thing: add `vapor.mesh` to the scene
 and set `vapor.object` to the object it follows.
 
 ## Any shape: capture it
@@ -107,7 +117,7 @@ const { scene } = useGLTF("/jet.glb");
   <WingVapor
     capture={scene}
     // Not the shape the air flies round
-    capture_filter={(mesh) => !/Gear|Pylon|Missile/.test(mesh.name)}
+    captureFilter={(mesh) => !/Gear|Pylon|Missile/.test(mesh.name)}
     flight={flight}
     air={air}
   />
@@ -154,7 +164,7 @@ duct changes nothing a cloud forms in.
 
 `<WingVapor capture>` measures a few milliseconds a frame, so a big model
 doesn't stall the page; until it is done the vapour flies `airframe` as given.
-Without React, `await vapor.capture_async(model, { budget_ms, signal })`, or
+Without React, `await vapor.captureAsync(model, { budgetMs, signal })`, or
 `capture_airframe_async` for the measurement alone. `vapor.capture` and
 `capture_airframe` are the same, all at once.
 
@@ -195,10 +205,10 @@ quantity in SI units.
   fuselage as a body of revolution for the cone, and the mass, for the load
   factor. The defaults are the docs' delta fighter. `capture` fills in all of
   the shape for you.
-- **`flight`**: `airspeed_m_s` and `angle_of_attack_rad`, and if you have
-  them `sideslip_rad` and `roll_rate_rad_s`. Without a roll rate, the vapour
+- **`flight`**: `airspeedMPerS` and `angleOfAttackRad`, and if you have
+  them `sideslipRad` and `rollRateRadPerS`. Without a roll rate, the vapour
   measures it from how the group it follows turns.
-- **`air`**: `altitude_m`, `temperature_offset_k` and `relative_humidity`.
+- **`air`**: `altitudeM`, `temperatureOffsetK` and `relativeHumidity`.
   Everything comes down to the humidity. The cooling a wing or a vortex makes
   is tens of kelvin at most, so at 30 % on a warm day nothing fogs.
 - **`look`**: the sun's direction and colour, the sky's light, the droplets'
@@ -251,12 +261,15 @@ docs, goes through each step in more detail.
      rooftop ended by a shock, which stands further aft the faster the flight
      and drops the pressure back to subsonic. In drier air only the pocket
      fogs, and its aft edge is the shock.
-   - The **cone** is the fuselage as a slender body. Its transonic pocket keeps
-     expanding until the shock that ends it, is felt further out the nearer
-     Mach one, and is cut off by the shock. Hence a cone opening aft, soft at
-     its front and hard at its back. Past Mach one the pocket is the aft
-     body's, ended by the tail's shock, and it fades out between Mach 1.25
-     and 1.6, as it is seen to do low down.
+   - The **cone** is the fuselage as a slender body. Below its critical Mach
+     number, about 0.96 for a fighter's fineness, the flow round it stays
+     subsonic, so its suction is weak and recovers smoothly. Past it a
+     transonic pocket opens within a few hundredths. It keeps expanding until
+     the shock that ends it, is felt further out the nearer Mach one, and is
+     cut off by the shock. Hence a cone opening aft, soft at its front and hard
+     at its back. Past Mach one the pocket is the aft body's, ended by the
+     tail's shock, and it is gone by about Mach 1.12. So it lasts the few
+     seconds it takes to go through, as it does on film.
 
    A linear theory's suction diverges at Mach one, so every deficit is eased
    into what an isentropic expansion to a local Mach 1.4 makes.
@@ -295,7 +308,7 @@ there. The sun's light is split as clouds' is. The droplets' forward peak is
 dimmed by e^−τ. What has scattered many times diffuses round the cloud, and is
 dimmed only by e^−τ/4. That gives a thick cone its grey underside. The shadow
 samples leave out the tip vortices: a tube a metre across shades almost
-nothing. `effects.self_shadow` turns it off.
+nothing. `effects.selfShadow` turns it off.
 
 ### Trails that follow the flight
 
@@ -328,7 +341,7 @@ trails up at all. Two more things keep a frame's cost even:
 - **Detail.** Smaller than 6 % of the screen's height, the moisture's patches,
   the dearest part of a sample, are dropped.
 
-`max_steps` caps any one pixel. Measure yours with
+`quality` (`"low"`, `"medium"`, `"high"`, `"ultra"` or `{ maxSteps }`) caps any one pixel. Measure yours with
 `trackTimestamp: true` and `renderer.resolveTimestampsAsync("render")`, from
 the worst view (the camera in the vapor cone) and the common one. A frame's
 timestamps can resolve a frame or more late, and are coarse, so add them up
@@ -344,8 +357,8 @@ take a trimmed mean, rather than reading one frame at a time.
   carry no water yet.
 - The numbers are textbook correlations, good to ten or twenty per cent. That
   is far better than the eye can tell in a cloud that appears or not on a
-  degree of dew point. `tip_core_radius`, `tip_core_share` and
-  `leading_edge_core_radius` are the empirical ones.
+  degree of dew point. `tipCoreRadius`, `tipCoreShare` and
+  `leadingEdgeCoreRadius` are the empirical ones.
 
 ## License
 

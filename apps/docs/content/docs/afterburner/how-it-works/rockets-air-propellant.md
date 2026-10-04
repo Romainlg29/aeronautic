@@ -9,8 +9,8 @@ A rocket plume is the same field with different physics leaning on it. A
 preset (`src/presets.ts`) is nothing but numbers: the per-nozzle `params`, and
 the batch's `profile`.
 
-- **There is no burner.** `burner_threshold` is 0, and `dry_temperature_k`
-  equals `exit_temperature_k`.
+- **There is no burner.** `burnerThreshold` is 0, and `dryTemperatureK`
+  equals `exitTemperatureK`.
 - **The exit is faster and the gas lighter.** Exit Mach 3 to 4.5, a molar mass
   of 13 to 23, so the exhaust leaves at two to four kilometres a second against
   a jet's one. The potential core is short, the mixing layer is supersonic (its
@@ -20,10 +20,10 @@ the batch's `profile`.
   dense and yellow-orange, with an opaque tail that trails smoke. Hydrolox
   exhaust is water vapour: nearly invisible but for the Mach disks and the haze.
   Methalox sits between, a violet band glow and a little soot. A solid booster's
-  exhaust is alumina, white and scattering, lit by `sky_light` and
-  `sun_light`.
+  exhaust is alumina, white and scattering, lit by `skyLight` and
+  `sunLight`.
 
-Lengths come from `nozzle_radius_m`, so a preset resized stays the same plume
+Lengths come from `nozzleRadiusM`, so a preset resized stays the same plume
 at a different size. Speeds do not scale, because the gas does not go faster
 out of a bigger nozzle.
 
@@ -34,7 +34,7 @@ on the group draws the same flame twice the size rather than a thicker one.
 ### Sunlight on the smoke
 
 Sky light comes from everywhere, so it lights smoke evenly. The sun comes from
-one way, and `sun_light`, aimed by `sun_x`, `sun_y` and `sun_z` (toward the sun,
+one way, and `sunLight`, aimed by `sunDirection` (toward the sun,
 in world space), adds three things to the particles' scattering:
 
 - **Forward scattering.** A Henyey-Greenstein phase with `g = 0.6`: smoke seen
@@ -50,18 +50,18 @@ in world space), adds three things to the particles' scattering:
 
 It is zero by default, which is night or a plume lit by the sky alone, and the
 `solid_booster` preset turns it on. Give it the direction of the scene's
-directional light, and keep it in the units `sky_light` and `exposure` share.
+directional light, and keep it in the units `skyLight` and `exposure` share.
 
 ---
 
 ## The air, and what altitude does to a plume
 
-`altitude_m`, `temperature_offset_k` and `airspeed_m_s` replace the old
+`altitudeM`, `temperatureOffsetK` and `airspeedMPerS` replace the old
 `ambient_temperature_k`. `standard_atmosphere` is the 1976 ISA to 86 km, with
 its eight layers, and isothermal above. `atmosphere(profile)` adds three things.
 The day's offset warms the air at the same pressure, so a hot day is a thinner
 one. Then the speed of sound, and the ram an inlet recovers: isentropic, less
-the MIL-E-5007 loss once supersonic. Each params `pressure_ratio` is now **at sea
+the MIL-E-5007 loss once supersonic. Each params `pressureRatio` is now **at sea
 level, standing still**. The plume works out its own from there:
 
 | Engine | What fixes its exit pressure | So as it climbs                                                                                                    |
@@ -94,13 +94,13 @@ Six things follow from the ratio and the air.
   never crosses the ambient.
 - **Quench.** The fuel left in the exhaust burns only where there is air to
   burn it in: `quench = ρ(1 + c) / (ρ + c)` with `c = 0.03`. It multiplies
-  `afterburning_k`, so the bright sheath of a kerosene rocket fades as it
+  `afterburningK`, so the bright sheath of a kerosene rocket fades as it
   climbs. It also scales soot burnout: high up there is no oxygen to burn the
   soot, so all of it survives.
 - **Soot formation, and why a reheat flame turns blue up high.** A
   hydrocarbon flame's soot grows as about the pressure it burns at to a power of
   one to two. An afterburner burns at roughly the ambient pressure times its
-  inlet's ram, so a jet's `soot_per_m` is scaled by
+  inlet's ram, so a jet's `sootPerM` is scaled by
   `(pressure * ram)^PLUME_SOOT_PRESSURE_EXPONENT` (1.5, capped at 3), blended in
   by `breathes`. A rocket's chamber sets its own pressure, so its soot stays.
   The yellow-orange of a reheat flame on the runway is nearly all soot
@@ -123,7 +123,7 @@ stand.
 **Reach** had to change for altitude as well. High up, the first disk stands
 tens of metres down a ballooning plume, past where the thermal length would
 have cut the plume off. The shortest a plume is now drawn reaches the first
-disk plus a cell and a half behind it: `max(8r, (first_disk + 1.5) * spacing)`.
+disk plus a cell and a half behind it: `max(8r, (firstDisk + 1.5) * spacing)`.
 
 ---
 
@@ -132,16 +132,16 @@ disk plus a cell and a half behind it: `max(8r, (first_disk + 1.5) * spacing)`.
 A rocket runs fuel-rich on purpose: lighter exhaust is faster exhaust, and a
 cooler chamber is one that survives. The mix is the mass ratio of oxidiser to
 fuel (O/F), and it decides most of what the plume looks like. `propellant.ts`
-turns `{ fuel, mixture_ratio }` into the params that carry it, through the
+turns `{ fuel, mixtureRatio }` into the params that carry it, through the
 equivalence ratio `φ = stoichiometric / OF`. Above one is rich.
 
-| Law                                         | Kerosene | Methane | Hydrogen |
-| ------------------------------------------- | -------- | ------- | -------- |
-| stoichiometric O/F                          | 3.4      | 4       | 7.94     |
-| `soot_per_m = k · max(φ - 1, 0)^1.5`, `k`   | 7.5      | 3.3     | 0        |
-| `afterburning_k = heat · (1 - 1/φ)`, `heat` | 3100     | 5000    | 2850     |
+| Law                                        | Kerosene | Methane | Hydrogen |
+| ------------------------------------------ | -------- | ------- | -------- |
+| stoichiometric O/F                         | 3.4      | 4       | 7.94     |
+| `sootPerM = k · max(φ - 1, 0)^1.5`, `k`    | 7.5      | 3.3     | 0        |
+| `afterburningK = heat · (1 - 1/φ)`, `heat` | 3100     | 5000    | 2850     |
 
-- `soot_survival = clamp(0.15 + 1.36 (φ - 1.11), 0, 0.95)`. The richer the
+- `sootSurvival = clamp(0.15 + 1.36 (φ - 1.11), 0, 0.95)`. The richer the
   mix, the less oxygen the mixing layer has left to burn the soot with.
 - The chamber is hottest a little rich of even, at `φ = 1.05`, and cooler on
   either side: `share = max(1 - 0.45 (φ - 1.05)², 0.4)`.

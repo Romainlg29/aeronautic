@@ -1,11 +1,8 @@
 import { useAnimations, useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import {
-  angle_of_attack_for_load,
-  moist_air,
-  WingVapor,
-  type WingVaporCore,
-} from "@aeronautic/wing-vapor";
+import { moist_air } from "@aeronautic/core";
+import { WingVapor, type WingVaporHandle } from "@aeronautic/wing-vapor/react";
+import { angle_of_attack_for_load } from "@aeronautic/wing-vapor/physics";
 import { type FC, type RefObject, useEffect, useRef, useState } from "react";
 import { type Group, LoopOnce, type Mesh, type Object3D } from "three";
 import { base_path } from "@/lib/shared";
@@ -59,7 +56,7 @@ const SCENARIOS = {
 type Scenario = keyof typeof SCENARIOS;
 
 // A humid summer day, low over the sea
-const AIR = { altitude_m: 300, temperature_offset_k: 10 };
+const AIR = { altitudeM: 300, temperatureOffsetK: 10 };
 
 type Flight = {
   mach: number;
@@ -98,7 +95,7 @@ const Fighter: FC<{
 }> = ({ flight, readout }) => {
   const { scene, animations } = useGLTF(MODEL);
   const body = useRef<Group>(null);
-  const vapor = useRef<WingVaporCore>(null);
+  const vapor = useRef<WingVaporHandle>(null);
   const roll = useRef<Group>(null);
   const { actions } = useAnimations(animations, body);
 
@@ -126,11 +123,11 @@ const Fighter: FC<{
 
     // A flight model knows the g; the vapour wants the angle of attack
     const air = moist_air(
-      AIR.altitude_m,
+      AIR.altitudeM,
       flight.humidity,
-      AIR.temperature_offset_k,
+      AIR.temperatureOffsetK,
     );
-    const airspeed_m_s = flight.mach * air.sound_m_s;
+    const airspeed_m_s = flight.mach * air.soundMPerS;
 
     // Breathing a little round the asked-for load, as a real pull does
     const g = flight.g * (1 + 0.04 * Math.sin(clock.elapsedTime * 0.9));
@@ -141,8 +138,11 @@ const Fighter: FC<{
       air,
     );
 
-    current.update_air({ relative_humidity: flight.humidity });
-    current.update_flight({ airspeed_m_s, angle_of_attack_rad: alpha });
+    current.updateAir({ relativeHumidity: flight.humidity });
+    current.updateFlight({
+      airspeedMPerS: airspeed_m_s,
+      angleOfAttackRad: alpha,
+    });
 
     // The flight path is level: the nose is up by the angle of attack
     body.current.rotation.x = alpha;
@@ -157,9 +157,9 @@ const Fighter: FC<{
       const state = current.state;
 
       readout.current.textContent =
-        `Mach ${state.flight.mach.toFixed(2)} · ${state.flight.load_factor.toFixed(1)} g · ` +
+        `Mach ${state.flight.mach.toFixed(2)} · ${state.flight.loadFactor.toFixed(1)} g · ` +
         `α ${((alpha * 180) / Math.PI).toFixed(1)}° · ` +
-        `dew point ${(state.air.temperature_k - state.air.dew_point_k).toFixed(1)} K below the air`;
+        `dew point ${(state.air.temperatureK - state.air.dewPointK).toFixed(1)} K below the air`;
     }
   });
 
@@ -174,9 +174,9 @@ const Fighter: FC<{
         <WingVapor
           ref={vapor}
           capture={scene}
-          capture_filter={airframe_only}
+          captureFilter={airframe_only}
           air={AIR}
-          look={{ sun_direction: SUN }}
+          look={{ sunDirection: SUN }}
           forward={[0, 0, -1]}
         />
       </group>

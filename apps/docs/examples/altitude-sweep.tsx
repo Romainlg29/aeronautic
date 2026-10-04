@@ -2,8 +2,8 @@ import { useFrame } from "@react-three/fiber";
 import {
   Afterburner,
   AfterburnerBatch,
-  type AfterburnerBatchCore,
-} from "@aeronautic/afterburner";
+  type AfterburnerBatchHandle,
+} from "@aeronautic/afterburner/react";
 import { type FC, type RefObject, useRef, useState } from "react";
 import { Nozzle, Stage } from "./stage";
 
@@ -17,7 +17,7 @@ const PERIOD_S = 30;
  * @returns Nothing
  */
 const Climb: FC<{
-  batch: RefObject<AfterburnerBatchCore | null>;
+  batch: RefObject<AfterburnerBatchHandle | null>;
   readout: RefObject<HTMLSpanElement | null>;
   paused: boolean;
 }> = ({ batch, readout, paused }) => {
@@ -31,7 +31,10 @@ const Climb: FC<{
     const altitude_m = height * CEILING_M;
     const airspeed_m_s = Math.sqrt(height) * CRUISE_M_S;
 
-    batch.current?.update_profile({ altitude_m, airspeed_m_s });
+    batch.current?.updateProfile({
+      altitudeM: altitude_m,
+      airspeedMPerS: airspeed_m_s,
+    });
 
     if (readout.current) {
       readout.current.textContent = `${(altitude_m / 1000).toFixed(1)} km at ${airspeed_m_s.toFixed(0)} m/s`;
@@ -46,7 +49,7 @@ const Climb: FC<{
  * @returns The example
  */
 export const AltitudeSweep: FC = () => {
-  const batch = useRef<AfterburnerBatchCore>(null);
+  const batch = useRef<AfterburnerBatchHandle>(null);
   const readout = useRef<HTMLSpanElement>(null);
   const [paused, set_paused] = useState(false);
 

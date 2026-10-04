@@ -33,14 +33,14 @@ preset. Add one when you want to:
 
 Each plume picks a tier in the vertex shader, every frame:
 
-| tier   | when                                                            | what it draws            |
-| ------ | --------------------------------------------------------------- | ------------------------ |
-| near   | closer than `detail_distance_m` (900)                           | full march, with eddies  |
-| mid    | up to `cheap_distance_m` (3000)                                 | the march without eddies |
-| far    | beyond                                                          | a single sample          |
-| culled | under `min_screen_fraction` of the screen height, or off screen | nothing                  |
+| tier   | when                                                          | what it draws            |
+| ------ | ------------------------------------------------------------- | ------------------------ |
+| near   | closer than `detailDistanceM` (900)                           | full march, with eddies  |
+| mid    | up to `cheapDistanceM` (3000)                                 | the march without eddies |
+| far    | beyond                                                        | a single sample          |
+| culled | under `minScreenFraction` of the screen height, or off screen | nothing                  |
 
-All three are batch props, and fields on `AfterburnerBatchCore`.
+All three are batch props, and fields on `AfterburnerBatch`.
 
 `batch.stats()` returns how many plumes are in each tier last frame:
 
@@ -59,7 +59,7 @@ batch.stats(); // { nozzles: 40, near: 2, mid: 9, far: 25, culled: 4 }
 | `high`   | 64         | 24        | 2            |
 | `ultra`  | 112        | 40        | 3            |
 
-Or pass your own: `quality={{ near_steps: 80 }}`. Step counts are uniforms and
+Or pass your own: `quality={{ nearSteps: 80 }}`. Step counts are uniforms and
 change live. Only the octave count is compiled in, so changing it recompiles
 the material. An octave is one fetch from a small baked noise volume, so the
 third costs a texture read, not another round of hashing.
@@ -75,7 +75,7 @@ tier's count. So a frame costs about the same however close the camera comes.
    and astern of a fighter, the worst case goes from 6.8 ms to 2.7 ms.
 2. **Quality.** `low` suits phones.
 3. **Haze.** `haze={false}` saves a copy of the frame and some work per pixel.
-4. **`detail_distance_m`.** Drop eddies sooner.
+4. **`detailDistanceM`.** Drop eddies sooner.
 5. **Device pixel ratio.** A raymarch costs per pixel. `dpr={[1, 1.5]}` on the
    canvas caps it.
 

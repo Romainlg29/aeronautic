@@ -1,0 +1,44 @@
+---
+title: The controls
+description: "Every moving part of the fighter, on sliders: the stick, the pedals, the throttle, the flaps, the air brake, the gear and the canopy."
+---
+
+<Example name="the-controls" />
+
+The fighter stands on its wheels, gear down, at idle. One
+`<ControlSurfaces>` drives all of it from the flight the sliders write:
+
+- **The stick** moves the elevons, together for pitch and against each other
+  for roll, the stick in the cockpit, and the nozzles' gimbals.
+- **The pedals** move the rudders, the pedals in the cockpit and the
+  nozzles' gimbals. With the air brake out, they open one side's drag
+  rudders further.
+- **The throttle** opens and closes the nozzles' petals, moves the throttle
+  lever up to its reheat detent and lights the plumes.
+- **The flaps** droop the leading-edge flaps: this fighter has no trailing
+  edge flaps of its own.
+- **The air brake** opens the brakes on the wings and splits both drag
+  rudders.
+- **The gear** scrubs the model's own retraction clip, its doors and legs in
+  the order they were animated, and moves the gear lever.
+- **The canopy** isn't in a flight, so it is moved by hand:
+  `rig.setClip("ANIM_Canopy_Open", share)`.
+
+Each part moves at its actuator's rate, so the surfaces lag the stick a
+little and the gear takes a couple of seconds.
+
+```tsx
+const flight = new Flight({ gear: 1, throttle: 0 });
+
+<FlightProvider flight={flight}>
+  <primitive object={scene} />
+  <ControlSurfaces
+    ref={rig}
+    object={scene}
+    animations={animations}
+    exhaust={<Afterburner preset="afterburner" direction={[0, 0, -1]} />}
+  />
+</FlightProvider>;
+```
+
+Next, [thrust vectoring](../thrust-vectoring/).

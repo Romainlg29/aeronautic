@@ -1,0 +1,73 @@
+---
+title: Quick start
+description: "Every moving part of a model, moving with its flight."
+---
+
+## Move it
+
+Put `<ControlSurfaces>` next to the model, inside a `<FlightProvider>`:
+
+```tsx
+import { FlightProvider } from "@aeronautic/core/react";
+import { ControlSurfaces } from "@aeronautic/controls/react";
+import { useGLTF } from "@react-three/drei";
+
+const Jet = () => {
+  const gltf = useGLTF("/fighter.glb");
+
+  return (
+    <FlightProvider initial={{ gear: 1 }}>
+      <primitive object={gltf.scene} />
+      <ControlSurfaces object={gltf.scene} animations={gltf.animations} />
+    </FlightProvider>
+  );
+};
+```
+
+It finds the model's parts, and drives each from the flight: the stick, the
+pedals, the throttle, the flaps, the air brake and the gear. Pass
+`animations` so that a part the model animates with a clip, as its gear
+retracting, is moved through that clip.
+
+## Fly it
+
+Write the pilot's controls to the flight:
+
+```tsx
+const flight = useFlightStore();
+
+useFrame(() => {
+  flight?.set({
+    roll: input.stick_x,
+    pitch: input.stick_y,
+    yaw: input.pedals,
+    throttle: input.throttle,
+    gear: input.gear_down ? 1 : 0,
+  });
+});
+```
+
+The stick and the pedals run from −1 to 1, right, aft and right pedal
+positive. The throttle runs from 0 at idle through 1 at military power to 1.1
+at full reheat. The flaps, the air brake and the gear run from 0 to 1. See
+[Writing it](../../../core/guides/writing-it/).
+
+## Light it
+
+Give each engine an afterburner with `exhaust`. It sits on the engine's
+exhaust, turns with the nozzle and runs at the engine's throttle:
+
+```tsx
+<ControlSurfaces
+  object={gltf.scene}
+  animations={gltf.animations}
+  exhaust={<Afterburner preset="afterburner" direction={[0, 0, -1]} />}
+/>
+```
+
+## See it
+
+<Example name="the-controls" />
+
+Next, [choose the parts](../../guides/choosing-parts/), or see
+[how a model says what moves](../../guides/model-metadata/).

@@ -9,15 +9,15 @@ import {
 } from "./trails";
 
 const layout: TrailLayout = {
-  tip_x: 5,
-  tip_y: 0,
-  semispan_m: 7,
-  cos_alpha: 1,
-  sin_alpha: 0,
-  flow_z: 0,
+  tipX: 5,
+  tipY: 0,
+  semispanM: 7,
+  cosAlpha: 1,
+  sinAlpha: 0,
+  flowZ: 0,
   descent: 0,
-  rollup_m: 1e9,
-  length_m: 200,
+  rollupM: 1e9,
+  lengthM: 200,
 };
 
 const point = (points: Float32Array, index: number) =>
@@ -132,9 +132,11 @@ describe("TrailHistory", () => {
 
 describe("nearest_along", () => {
   it("finds how far along a curved trail a point beside it is", () => {
-    const { positive, spacing_m } = fly(new Vector3(0, 1, 0), 0.4, 3).paths(
-      layout,
-    );
+    const { positive, spacingM: spacing_m } = fly(
+      new Vector3(0, 1, 0),
+      0.4,
+      3,
+    ).paths(layout);
 
     const index = 40;
     const beside = point(positive, index).add(new Vector3(0, 0.5, 0));

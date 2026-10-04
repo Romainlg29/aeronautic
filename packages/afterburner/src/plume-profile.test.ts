@@ -14,6 +14,7 @@ import {
   jet_state,
   plume_lod,
   plume_screen_span,
+  sonic_distance,
   soot_formation,
   PLUME_LOD_CULLED,
   PLUME_LOD_FAR,
@@ -32,7 +33,7 @@ const FULL = AFTERBURNER_MAX_THROTTLE;
 
 describe("burner_lit", () => {
   it("is out below the threshold, all the way to military power", () => {
-    expect(burner_lit(profile.burner_threshold - 0.01, profile)).toBe(0);
+    expect(burner_lit(profile.burnerThreshold - 0.01, profile)).toBe(0);
     expect(burner_lit(0, profile)).toBe(0);
     expect(burner_lit(1, profile)).toBe(0);
   });
@@ -43,11 +44,11 @@ describe("burner_lit", () => {
 
   it("fades its first zone in just past the threshold", () => {
     const lighting = burner_lit(
-      profile.burner_threshold + PLUME_LIGHT_OFF / 2,
+      profile.burnerThreshold + PLUME_LIGHT_OFF / 2,
       profile,
     );
 
-    const lit = burner_lit(profile.burner_threshold + PLUME_LIGHT_OFF, profile);
+    const lit = burner_lit(profile.burnerThreshold + PLUME_LIGHT_OFF, profile);
 
     expect(lighting).toBeGreaterThan(0);
     expect(lighting).toBeLessThan(PLUME_MIN_REHEAT);
@@ -69,7 +70,7 @@ describe("burner_lit", () => {
   });
 
   it("survives a threshold set at full travel, where the span degenerates", () => {
-    const stepped = { ...profile, burner_threshold: AFTERBURNER_MAX_THROTTLE };
+    const stepped = { ...profile, burnerThreshold: AFTERBURNER_MAX_THROTTLE };
 
     expect(Number.isFinite(burner_lit(AFTERBURNER_MAX_THROTTLE, stepped))).toBe(
       true,
@@ -99,16 +100,16 @@ describe("dry thrust", () => {
     const half = jet_state(params, 0.5, profile);
     const military = jet_state(params, 1, profile);
 
-    expect(idle.exit_temperature_k).toBeLessThan(half.exit_temperature_k);
-    expect(half.exit_temperature_k).toBeLessThan(military.exit_temperature_k);
-    expect(military.exit_temperature_k).toBeCloseTo(params.dry_temperature_k);
+    expect(idle.exitTemperatureK).toBeLessThan(half.exitTemperatureK);
+    expect(half.exitTemperatureK).toBeLessThan(military.exitTemperatureK);
+    expect(military.exitTemperatureK).toBeCloseTo(params.dryTemperatureK);
   });
 
   it("leaves a little over the air at idle", () => {
     const ambient = 288.15;
 
     expect(dry_temperature(params, 0, profile, ambient)).toBeCloseTo(
-      ambient + (params.dry_temperature_k - ambient) * profile.idle_temperature,
+      ambient + (params.dryTemperatureK - ambient) * profile.idleTemperature,
     );
   });
 
@@ -135,17 +136,24 @@ describe("dry thrust", () => {
     expect(jet_state(params, AFTERBURNER_MAX_THROTTLE, profile).glow).toBe(0);
   });
 
+  it("fills the pipe with the burner's flame instead", () => {
+    expect(jet_state(params, 1, profile).pipeFlame).toBe(0);
+    expect(
+      jet_state(params, AFTERBURNER_MAX_THROTTLE, profile).pipeFlame,
+    ).toBeCloseTo(params.sootPerM);
+  });
+
   it("shows no diamonds until the burner relights the train", () => {
     const military = jet_state(params, 1, profile);
     const full = jet_state(params, AFTERBURNER_MAX_THROTTLE, profile);
 
-    expect(military.shock_heat).toBe(0);
+    expect(military.shockHeat).toBe(0);
     expect(military.compression).toBe(1);
-    expect(full.shock_heat).toBeGreaterThan(0);
+    expect(full.shockHeat).toBeGreaterThan(0);
   });
 
   it("never opens up for a rocket, which has no dry state", () => {
-    const rocket = { ...profile, burner_threshold: 0 };
+    const rocket = { ...profile, burnerThreshold: 0 };
 
     expect(jet_state(params, 0, rocket).adaptation).toBe(1);
     expect(jet_state(params, 0, rocket).glow).toBe(0);
@@ -175,7 +183,7 @@ describe("plume_adaptation", () => {
 
 describe("burner_lit, for a rocket", () => {
   it("is always lit when there is no burner to light", () => {
-    const rocket = { ...profile, burner_threshold: 0 };
+    const rocket = { ...profile, burnerThreshold: 0 };
 
     expect(burner_lit(0, rocket)).toBe(1);
     expect(burner_lit(0.5, rocket)).toBe(1);
@@ -186,68 +194,68 @@ describe("jet_state", () => {
   const params = default_afterburner_params();
 
   it("leaves a matched nozzle at its own Mach number and radius", () => {
-    const matched = { ...params, pressure_ratio: 1 };
-    const state = jet_state(matched, FULL, { ...profile, idle_pressure: 1 });
+    const matched = { ...params, pressureRatio: 1 };
+    const state = jet_state(matched, FULL, { ...profile, idlePressure: 1 });
 
-    expect(state.mach).toBeCloseTo(matched.exit_mach, 5);
-    expect(state.radius_m).toBeCloseTo(matched.nozzle_radius_m, 5);
-    expect(state.temperature_k).toBeCloseTo(matched.exit_temperature_k, 3);
+    expect(state.mach).toBeCloseTo(matched.exitMach, 5);
+    expect(state.radiusM).toBeCloseTo(matched.nozzleRadiusM, 5);
+    expect(state.temperatureK).toBeCloseTo(matched.exitTemperatureK, 3);
   });
 
   it("expands an underexpanded jet: faster, colder and wider", () => {
-    const state = jet_state({ ...params, pressure_ratio: 2 }, FULL, profile);
+    const state = jet_state({ ...params, pressureRatio: 2 }, FULL, profile);
 
-    expect(state.mach).toBeGreaterThan(params.exit_mach);
-    expect(state.temperature_k).toBeLessThan(params.exit_temperature_k);
-    expect(state.radius_m).toBeGreaterThan(params.nozzle_radius_m);
+    expect(state.mach).toBeGreaterThan(params.exitMach);
+    expect(state.temperatureK).toBeLessThan(params.exitTemperatureK);
+    expect(state.radiusM).toBeGreaterThan(params.nozzleRadiusM);
   });
 
   it("pinches an overexpanded one", () => {
-    const state = jet_state({ ...params, pressure_ratio: 0.6 }, FULL, profile);
+    const state = jet_state({ ...params, pressureRatio: 0.6 }, FULL, profile);
 
-    expect(state.mach).toBeLessThan(params.exit_mach);
-    expect(state.radius_m).toBeLessThan(params.nozzle_radius_m);
+    expect(state.mach).toBeLessThan(params.exitMach);
+    expect(state.radiusM).toBeLessThan(params.nozzleRadiusM);
   });
 
   it("spaces the shock cells as Pack's formula does", () => {
     const state = jet_state(params, FULL, profile);
 
-    expect(state.shock_spacing_m).toBeCloseTo(
-      1.306 * 2 * state.radius_m * Math.sqrt(state.mach ** 2 - 1),
+    expect(state.shockSpacingM).toBeCloseTo(
+      1.306 * 2 * state.radiusM * Math.sqrt(state.mach ** 2 - 1),
       6,
     );
   });
 
   it("makes no shock train in a subsonic jet", () => {
     const state = jet_state(
-      { ...params, exit_mach: 0.6, pressure_ratio: 1 },
+      { ...params, exitMach: 0.6, pressureRatio: 1 },
       FULL,
       profile,
     );
 
-    expect(state.shock_heat).toBe(0);
+    expect(state.shockHeat).toBe(0);
   });
 
   it("grows the potential core with the Mach number", () => {
     const slow = jet_state(
-      { ...params, pressure_ratio: 1, exit_mach: 1.2 },
+      { ...params, pressureRatio: 1, exitMach: 1.2 },
       FULL,
       profile,
     );
     const fast = jet_state(
-      { ...params, pressure_ratio: 1, exit_mach: 2.5 },
+      { ...params, pressureRatio: 1, exitMach: 2.5 },
       FULL,
       profile,
     );
 
-    expect(fast.core_length_m / fast.radius_m).toBeGreaterThan(
-      slow.core_length_m / slow.radius_m,
+    expect(fast.coreLengthM / fast.radiusM).toBeGreaterThan(
+      slow.coreLengthM / slow.radiusM,
     );
   });
 
   it("is shorter on dry thrust than in full reheat", () => {
-    expect(jet_state(params, 0.3, profile).reach_m).toBeLessThan(
-      jet_state(params, FULL, profile).reach_m,
+    expect(jet_state(params, 0.3, profile).reachM).toBeLessThan(
+      jet_state(params, FULL, profile).reachM,
     );
   });
 
@@ -255,9 +263,9 @@ describe("jet_state", () => {
     const one = jet_state(params, FULL, profile);
     const two = jet_state(params, FULL, profile, 2);
 
-    expect(two.core_length_m).toBeCloseTo(one.core_length_m * 2, 6);
-    expect(two.reach_m).toBeCloseTo(one.reach_m * 2, 6);
-    expect(two.velocity_m_s).toBeCloseTo(one.velocity_m_s, 6);
+    expect(two.coreLengthM).toBeCloseTo(one.coreLengthM * 2, 6);
+    expect(two.reachM).toBeCloseTo(one.reachM * 2, 6);
+    expect(two.velocityMPerS).toBeCloseTo(one.velocityMPerS, 6);
   });
 });
 
@@ -265,21 +273,21 @@ describe("jet_half_width and jet_centreline", () => {
   const state = jet_state(default_afterburner_params(), FULL, profile);
 
   it("leaves the lip at the jet's radius, at full strength", () => {
-    expect(jet_half_width(0, state)).toBeCloseTo(state.radius_m);
+    expect(jet_half_width(0, state)).toBeCloseTo(state.radiusM);
     expect(jet_centreline(0, state)).toBeCloseTo(1);
   });
 
   it("decays as one over the distance far downstream", () => {
-    const x = state.core_length_m * 20;
+    const x = state.coreLengthM * 20;
 
-    expect(jet_centreline(x, state) * (x / state.core_length_m)).toBeCloseTo(
+    expect(jet_centreline(x, state) * (x / state.coreLengthM)).toBeCloseTo(
       1,
       3,
     );
   });
 
   it("spreads faster once the core has closed", () => {
-    const core = state.core_length_m;
+    const core = state.coreLengthM;
 
     const before =
       jet_half_width(core, state) - jet_half_width(core - 1, state);
@@ -343,7 +351,7 @@ describe("plume_lod", () => {
     // Read off the defaults rather than written down, so changing the plume's
     // length is what fails this rather than a comment going quietly stale
     const at_changeover = plume_screen_span(
-      jet_state(default_afterburner_params(), FULL, profile).reach_m,
+      jet_state(default_afterburner_params(), FULL, profile).reachM,
       3000,
       screen_scale,
     );
@@ -363,5 +371,78 @@ describe("soot_formation", () => {
 
   it("leaves a rocket's alone, its chamber setting the pressure", () => {
     expect(soot_formation(0.3, 1, 0)).toBe(1);
+  });
+
+  it("makes none for a jet whose exhaust is too cool to be a flame", () => {
+    expect(soot_formation(1, 1, 1, 1000)).toBe(0);
+    expect(soot_formation(1, 1, 1, 1700)).toBe(1);
+    expect(soot_formation(1, 1, 0, 1000)).toBe(1);
+  });
+
+  it("leaves a jet in full reheat its soot, and dry or lighting none", () => {
+    const params = default_afterburner_params();
+    const lighting = profile.burnerThreshold + PLUME_LIGHT_OFF * 0.5;
+
+    const full = jet_state(params, AFTERBURNER_MAX_THROTTLE, profile, 1);
+
+    expect(full.sootFormed).toBeCloseTo(1);
+    expect(jet_state(params, lighting, profile, 1).sootFormed).toBe(0);
+    expect(jet_state(params, 0.5, profile, 1).sootFormed).toBe(0);
+  });
+});
+
+describe("jet_state's friction heat", () => {
+  const params = default_afterburner_params();
+
+  it("is a quarter of the jet's kinetic energy over the air", () => {
+    const state = jet_state(params, FULL, profile);
+    const gas_constant = 8314.46 / params.molarMassGPerMol;
+    const cp = (params.gamma * gas_constant) / (params.gamma - 1);
+
+    expect(state.kineticK).toBeCloseTo(state.velocityMPerS ** 2 / (8 * cp), 3);
+    expect(state.kineticK).toBeGreaterThan(100);
+  });
+
+  it("falls as the air moves with the jet", () => {
+    const standing = jet_state(params, FULL, profile);
+    const flying = jet_state(params, FULL, {
+      ...profile,
+      airspeedMPerS: 300,
+    });
+
+    expect(flying.kineticK).toBeLessThan(standing.kineticK);
+  });
+});
+
+describe("sonic_distance", () => {
+  // Air's γR, and a reheat's jet at sea level
+  const gamma_r = 1.3 * 287;
+
+  it("ends the train of a jet never supersonic over the air at its exit", () => {
+    expect(sonic_distance(200, 1500, 288, gamma_r)).toBe(0);
+  });
+
+  it("goes sonic a couple of cores down a fighter's reheat", () => {
+    const cores = sonic_distance(1272, 1586, 288, gamma_r);
+
+    expect(cores).toBeGreaterThan(1.8);
+    expect(cores).toBeLessThan(2.6);
+  });
+
+  it("lasts longer the faster the jet runs over the air", () => {
+    expect(sonic_distance(2500, 1586, 288, gamma_r)).toBeGreaterThan(
+      sonic_distance(1272, 1586, 288, gamma_r),
+    );
+  });
+
+  it("ends a fighter's train within a few metres on the ground", () => {
+    const params = { ...default_afterburner_params(), nozzleRadiusM: 0.29 };
+    const full = jet_state(params, 1.1, default_afterburner_profile());
+
+    // Where the train is all but gone: a twentieth of its swing
+    const end = full.shockLengthM * 3;
+
+    expect(end).toBeGreaterThan(4);
+    expect(end).toBeLessThan(9);
   });
 });

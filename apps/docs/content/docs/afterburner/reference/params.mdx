@@ -7,33 +7,33 @@ description: "Every per-nozzle param, its unit, default and meaning."
 
 Params describe **one engine**: its nozzle, the gas leaving it, and what that gas carries. They ride on the instance, so two engines in one batch may burn differently. Every one is a physical quantity in SI units.
 
-Pass any subset as `params`. The rest come from the preset, then from the defaults below (`default_afterburner_params()`, a fighter engine at full reheat). `params` also takes `propellant: { fuel, mixture_ratio }`: see [Presets and propellants](../../guides/presets-and-propellants/#rockets-by-propellant). `band_color` takes any three.js `ColorRepresentation`.
+Pass any subset as `params`. The rest come from the preset, then from the defaults below (`default_afterburner_params()`, a fighter engine at full reheat). `params` also takes `propellant: { fuel, mixtureRatio }`: see [Presets and propellants](../../guides/presets-and-propellants/#rockets-by-propellant). `bandColor` takes any three.js `ColorRepresentation`.
 
-| field                                             | default     | in short                                                                                                                              |
-| ------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| [`nozzle_radius_m`](#nozzle_radius_m)             | `0.5`       | The nozzle exit radius, in metres.                                                                                                    |
-| [`nozzle_aspect`](#nozzle_aspect)                 | `1`         | The exit's width over its height.                                                                                                     |
-| [`nozzle_squareness`](#nozzle_squareness)         | `2`         | How square the exit is, as a superellipse's exponent.                                                                                 |
-| [`nozzle_roll`](#nozzle_roll)                     | `0`         | How far the outline is turned about the plume's axis, in radians.                                                                     |
-| [`nozzle_outline_length`](#nozzle_outline_length) | `1`         | How far downstream the outline lasts, in potential core lengths.                                                                      |
-| [`exit_mach`](#exit_mach)                         | `1.45`      | The Mach number the nozzle is built to, at its exit plane.                                                                            |
-| [`pressure_ratio`](#pressure_ratio)               | `1.35`      | Exit pressure over ambient, at full power, standing still at sea level.                                                               |
-| [`exit_temperature_k`](#exit_temperature_k)       | `1700`      | The gas's static temperature at the exit plane at full power, in kelvin.                                                              |
-| [`dry_temperature_k`](#dry_temperature_k)         | `1000`      | And on dry thrust, with the burner out.                                                                                               |
-| [`gamma`](#gamma)                                 | `1.3`       | The exhaust's ratio of specific heats, about 1.3 for a jet and 1.2 for a rocket's hot, dissociated products.                          |
-| [`molar_mass_g_mol`](#molar_mass_g_mol)           | `28.8`      | The exhaust's mean molar mass, in grams per mole.                                                                                     |
-| [`soot_per_m`](#soot_per_m)                       | `0.5`       | Soot in the exhaust, as its absorption coefficient at 550 nm, per metre.                                                              |
-| [`soot_survival`](#soot_survival)                 | `0.03`      | How much of that soot survives into the far plume, 0 to 1.                                                                            |
-| [`particles_per_m`](#particles_per_m)             | `0`         | Grey particles in the exhaust, as their extinction coefficient per metre.                                                             |
-| [`particle_albedo`](#particle_albedo)             | `0`         | How much of that extinction is scattering rather than absorption, 0 to 1.                                                             |
-| [`afterburning_k`](#afterburning_k)               | `450`       | How much hotter the exhaust gets where it mixes with the air, in kelvin.                                                              |
-| [`band_color`](#band_color)                       | `"#6d78ff"` | The colour of the gas's own band emission.                                                                                            |
-| [`band_strength`](#band_strength)                 | `0.06`      | How bright that band emission is, per metre of exhaust at the reference temperature, in units of the reference blackbody's luminance. |
-| [`turbulence`](#turbulence)                       | `0.8`       | How turbulent the mixing layer is, as a share of a mixing length.                                                                     |
-| [`meander`](#meander)                             | `0.12`      | How far the far plume meanders off its axis, as a share of its width.                                                                 |
-| [`refraction_m`](#refraction_m)                   | `0.05`      | How far the hot exhaust bends what is behind it, in metres of displacement.                                                           |
+| field                                         | default     | in short                                                                                                                              |
+| --------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| [`nozzleRadiusM`](#nozzleradiusm)             | `0.5`       | The nozzle exit radius, in metres.                                                                                                    |
+| [`nozzleAspect`](#nozzleaspect)               | `1`         | The exit's width over its height.                                                                                                     |
+| [`nozzleSquareness`](#nozzlesquareness)       | `2`         | How square the exit is, as a superellipse's exponent.                                                                                 |
+| [`nozzleRoll`](#nozzleroll)                   | `0`         | How far the outline is turned about the plume's axis, in radians.                                                                     |
+| [`nozzleOutlineLength`](#nozzleoutlinelength) | `1`         | How far downstream the outline lasts, in potential core lengths.                                                                      |
+| [`exitMach`](#exitmach)                       | `1.45`      | The Mach number the nozzle is built to, at its exit plane.                                                                            |
+| [`pressureRatio`](#pressureratio)             | `1.35`      | Exit pressure over ambient, at full power, standing still at sea level.                                                               |
+| [`exitTemperatureK`](#exittemperaturek)       | `1700`      | The gas's static temperature at the exit plane at full power, in kelvin.                                                              |
+| [`dryTemperatureK`](#drytemperaturek)         | `1000`      | And on dry thrust, with the burner out.                                                                                               |
+| [`gamma`](#gamma)                             | `1.3`       | The exhaust's ratio of specific heats, about 1.3 for a jet and 1.2 for a rocket's hot, dissociated products.                          |
+| [`molarMassGPerMol`](#molarmassgpermol)       | `28.8`      | The exhaust's mean molar mass, in grams per mole.                                                                                     |
+| [`sootPerM`](#sootperm)                       | `0.5`       | Soot in the exhaust, as its absorption coefficient at 550 nm, per metre.                                                              |
+| [`sootSurvival`](#sootsurvival)               | `0.03`      | How much of that soot survives into the far plume, 0 to 1.                                                                            |
+| [`particlesPerM`](#particlesperm)             | `0`         | Grey particles in the exhaust, as their extinction coefficient per metre.                                                             |
+| [`particleAlbedo`](#particlealbedo)           | `0`         | How much of that extinction is scattering rather than absorption, 0 to 1.                                                             |
+| [`afterburningK`](#afterburningk)             | `450`       | How much hotter the exhaust gets where it mixes with the air, in kelvin.                                                              |
+| [`bandColor`](#bandcolor)                     | `"#6d78ff"` | The colour of the gas's own band emission.                                                                                            |
+| [`bandStrength`](#bandstrength)               | `0.06`      | How bright that band emission is, per metre of exhaust at the reference temperature, in units of the reference blackbody's luminance. |
+| [`turbulence`](#turbulence)                   | `0.8`       | How turbulent the mixing layer is, as a share of a mixing length.                                                                     |
+| [`meander`](#meander)                         | `0.12`      | How far the far plume meanders off its axis, as a share of its width.                                                                 |
+| [`refractionM`](#refractionm)                 | `0.05`      | How far the hot exhaust bends what is behind it, in metres of displacement.                                                           |
 
-## nozzle_radius_m
+## nozzleRadiusM
 
 `number` · default `0.5`
 
@@ -41,27 +41,27 @@ The nozzle exit radius, in metres. Every length in the plume is set by it and by
 
 For a nozzle that isn't round, the radius of the round exit of the same area: the outline below sets the shape, this its size.
 
-## nozzle_aspect
+## nozzleAspect
 
 `number` · default `1`
 
 The exit's width over its height. One is round, or square; an oval fighter nozzle is about 1.4, a flat vectoring one 3 or more.
 
-The width runs along the nozzle frame's z and the height along its y. A plume aimed with `direction` keeps its y as near up as the turn allows, so a wide nozzle aimed level is wide side to side.
+The width runs along the nozzle frame's x and the height along its y. A plume aimed with `direction` keeps its y as near up as the turn allows, so a wide nozzle aimed level is wide side to side.
 
-## nozzle_squareness
+## nozzleSquareness
 
 `number` · default `2`
 
 How square the exit is, as a superellipse's exponent. Two is an ellipse, four a rounded rectangle, eight and up a sharp one; one is a diamond. Held between 0.5 and 24.
 
-## nozzle_roll
+## nozzleRoll
 
 `number` · default `0`
 
-How far the outline is turned about the plume's axis, in radians. Right handed about +X, the way the gas runs, as a rotation about X is: a quarter turn stands a wide exit on its side.
+How far the outline is turned about the plume's axis, in radians. Right handed about the way the gas runs, as a rotation about that axis is: a quarter turn stands a wide exit on its side.
 
-## nozzle_outline_length
+## nozzleOutlineLength
 
 `number` · default `1`
 
@@ -69,13 +69,13 @@ How far downstream the outline lasts, in potential core lengths.
 
 A jet from a shaped exit mixes round: its corners and its long sides shear faster than the rest, and by the end of the core little of the shape is left. Zero is round from the lip.
 
-## exit_mach
+## exitMach
 
 `number` · default `1.45`
 
 The Mach number the nozzle is built to, at its exit plane. About 1.5 for a fighter's convergent-divergent nozzle, 3 to 4.5 for a rocket bell at sea level.
 
-## pressure_ratio
+## pressureRatio
 
 `number` · default `1.35`
 
@@ -85,7 +85,7 @@ Above one the jet is underexpanded and balloons, then recompresses through a tra
 
 It moves with the air the profile puts the engine in. A rocket's exit pressure is fixed by its chamber, so as the air thins with altitude the ratio climbs and the plume balloons. A jet's is fixed by what its inlet swallows, which falls with the air and climbs with the ram of flight.
 
-## exit_temperature_k
+## exitTemperatureK
 
 `number` · default `1700`
 
@@ -93,7 +93,7 @@ The gas's static temperature at the exit plane at full power, in kelvin.
 
 Static, not stagnation: a nozzle trades heat for speed, so a rocket whose chamber is at 3500 K leaves its bell at nearer 1500. What the gas recovers behind a Mach disk is what makes the disk glow.
 
-## dry_temperature_k
+## dryTemperatureK
 
 `number` · default `1000`
 
@@ -105,13 +105,13 @@ And on dry thrust, with the burner out. A rocket has no burner, so for a rocket 
 
 The exhaust's ratio of specific heats, about 1.3 for a jet and 1.2 for a rocket's hot, dissociated products.
 
-## molar_mass_g_mol
+## molarMassGPerMol
 
 `number` · default `28.8`
 
 The exhaust's mean molar mass, in grams per mole. Air is 29; hydrogen-rich exhaust is about 13, which is why it is so fast.
 
-## soot_per_m
+## sootPerM
 
 `number` · default `0.5`
 
@@ -119,7 +119,9 @@ Soot in the exhaust, as its absorption coefficient at 550 nm, per metre.
 
 Soot absorbs and emits as one over the wavelength, so it reddens what it glows and what it lets through. A clean afterburner has a trace, a kerosene rocket enough that its plume is opaque, and soot that has cooled is smoke.
 
-## soot_survival
+For a jet this is its burner flame's soot: it makes none while its exhaust is too cool to be a flame, see `PLUME_SOOT_FLAME_K`.
+
+## sootSurvival
 
 `number` · default `0.03`
 
@@ -127,19 +129,19 @@ How much of that soot survives into the far plume, 0 to 1.
 
 Soot meeting hot air burns. A reheat's trace is gone a few diameters aft, which is why a fighter leaves no smoke; a kerosene rocket makes far more than the mixing layer can burn, and trails it for kilometres.
 
-## particles_per_m
+## particlesPerM
 
 `number` · default `0`
 
 Grey particles in the exhaust, as their extinction coefficient per metre. The alumina of a solid motor burning aluminium; zero for a liquid engine.
 
-## particle_albedo
+## particleAlbedo
 
 `number` · default `0`
 
 How much of that extinction is scattering rather than absorption, 0 to 1. Alumina is white, so it scatters nearly everything.
 
-## afterburning_k
+## afterburningK
 
 `number` · default `450`
 
@@ -147,7 +149,7 @@ How much hotter the exhaust gets where it mixes with the air, in kelvin.
 
 Exhaust leaves rich, carrying fuel it had no oxygen for, and that fuel burns the moment it meets the atmosphere. This is the bright sheath round a kerosene rocket, and most of what a hydrogen engine shows at all.
 
-## band_color
+## bandColor
 
 `Color` · default `"#6d78ff"`
 
@@ -155,7 +157,7 @@ The colour of the gas's own band emission.
 
 Chemiluminescence from the radicals in the burning gas: the violet-blue of. CH and C₂ in a hydrocarbon flame, cyan for an argon plasma. The one colour the shader is given rather than works out, because it is a line spectrum.
 
-## band_strength
+## bandStrength
 
 `number` · default `0.06`
 
@@ -173,7 +175,7 @@ How turbulent the mixing layer is, as a share of a mixing length. Zero is a lami
 
 How far the far plume meanders off its axis, as a share of its width.
 
-## refraction_m
+## refractionM
 
 `number` · default `0.05`
 

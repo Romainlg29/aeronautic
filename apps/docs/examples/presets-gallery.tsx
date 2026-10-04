@@ -1,9 +1,12 @@
 import {
-  Afterburner,
+  AFTERBURNER_MAX_THROTTLE,
   AFTERBURNER_PRESETS,
-  type AfterburnerParamsInput,
   type AfterburnerPresetName,
+  resolve_afterburner_params,
+  resolve_afterburner_profile,
 } from "@aeronautic/afterburner";
+import { jet_state } from "@aeronautic/afterburner/physics";
+import { Afterburner } from "@aeronautic/afterburner/react";
 import { type FC, useState } from "react";
 import { Aim, Nozzle, Stage } from "./stage";
 
@@ -15,12 +18,18 @@ const NAMES = Object.keys(AFTERBURNER_PRESETS) as AfterburnerPresetName[];
  */
 export const PresetsGallery: FC = () => {
   const [name, set_name] = useState<AfterburnerPresetName>("rocket_methalox");
-  // Widened: some presets leave the radius to the defaults
-  const params: AfterburnerParamsInput = AFTERBURNER_PRESETS[name].params;
-  const radius = params.nozzle_radius_m ?? 0.5;
+  const params = resolve_afterburner_params(undefined, name);
+  const radius = params.nozzleRadiusM;
 
-  // Far enough back to see the whole plume, whatever its size
-  const reach = radius * 40;
+  // Far enough back to see the whole plume at full power, and the can: its
+  // reach as the physics works it out, not a guess at it
+  const reach =
+    jet_state(
+      params,
+      AFTERBURNER_MAX_THROTTLE,
+      resolve_afterburner_profile(undefined, name),
+    ).reachM +
+    radius * 4;
 
   return (
     <Stage
@@ -43,8 +52,8 @@ export const PresetsGallery: FC = () => {
       }
     >
       <Aim
-        camera={[reach * 0.45, reach * 0.12, reach * 0.75]}
-        target={[reach * 0.4, 0, 0]}
+        camera={[-reach * 0.95, reach * 0.15, reach * 0.4]}
+        target={[0, 0, reach * 0.4]}
       />
       <Nozzle radius_m={radius} />
       <Afterburner preset={name} />

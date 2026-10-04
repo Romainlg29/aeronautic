@@ -1,6 +1,8 @@
 import {
   BoxGeometry,
+  Color,
   type Camera,
+  type ColorRepresentation,
   type DataTexture,
   Matrix4,
   Mesh,
@@ -9,7 +11,12 @@ import {
   Vector3,
 } from "three";
 import type { MeshBasicNodeMaterial } from "three/webgpu";
-import { canonical_frame, capture_views, type CaptureOptions } from "./capture";
+import {
+  canonical_frame,
+  capture_views,
+  type CaptureOptions,
+  type Flight,
+} from "@aeronautic/core";
 import { condensation_table } from "./condensation";
 import {
   capture_airframe_async,
@@ -26,7 +33,11 @@ import {
   type VaporAirframe,
   type VaporEffects,
   type VaporFlight,
+  resolve_vapor_quality,
+  type VaporColor,
   type VaporLook,
+  type VaporQuality,
+  type VaporQualityName,
 } from "./types";
 import { vapor_constants, vapor_state, type VaporState } from "./vapor-field";
 import {
@@ -56,14 +67,16 @@ import { trapezoid_shape, type WingShape } from "./wing-shape";
  * Where the airframe's frame sits on the object it follows.
  */
 export type WingVaporFrame = {
-  // Its origin, in the object's frame: where the airframe's stations are
-  // measured from
+  /**
+   * Its origin, in the object's frame: where the airframe's stations are
+   * measured from
+   */
   position?: readonly [number, number, number];
 
-  // Which way the aircraft flies, in the object's frame. By default -Z
+  /** Which way the aircraft flies, in the object's frame. By default -Z */
   forward?: readonly [number, number, number];
 
-  // Which way is up for it. By default +Y
+  /** Which way is up for it. By default +Y */
   up?: readonly [number, number, number];
 };
 
@@ -76,22 +89,36 @@ export type WingVaporOptions = {
   air?: Partial<VaporAir>;
   look?: Partial<VaporLook>;
 
-  // Which phenomena to draw. Compiled in
+  /** Which phenomena to draw. Compiled in */
   effects?: Partial<VaporEffects>;
 
-  // What it follows: the aircraft's model, or any node of it. None: the
-  // world's origin, or wherever `frame` puts it
+  /**
+   * What it follows: the aircraft's model, or any node of it. None: the
+   * world's origin, or wherever `frame` puts it
+   */
   object?: Object3D | null;
 
   frame?: WingVaporFrame;
 
-  // The wing as a table, from `capture_airframe`, in place of the airframe's
-  // trapezoid
+  /**
+   * The wing as a table, from `capture_airframe`, in place of the airframe's
+   * trapezoid
+   */
   shape?: WingShape | null;
 
-  // The most iterations a pixel's march may take
-  max_steps?: number;
+  /** What a frame may spend: a preset's name, or the fields. `high` by default */
+  quality?: VaporQualityName | Partial<VaporQuality>;
+
+  /**
+   * A shared flight to read the airspeed, the angles, the altitude and the
+   * day from, every frame. What it gives wins over `flight` and `air`
+   */
+  source?: Flight | null;
 };
+
+// The condensation table is rebuilt for every change of the air, so a shared
+// flight's altitude is read to the nearest this many metres
+const SOURCE_ALTITUDE_STEP_M = 10;
 
 // The longest a frame may advance the noise's clock, so a tab coming back
 // from the background does not jump the patches a kilometre downstream
@@ -143,7 +170,10 @@ const unchanged = <T extends object>(current: T, change: Partial<T>) =>
  * the vapour stops at the wing it sits on.
  */
 export class WingVapor {
-  /** The mesh to put in the scene */
+  /**
+   * The mesh to put in the scene. Its `userData.wingVapor` is this, for finding
+   * every one in a scene
+   */
   readonly mesh: Mesh<BoxGeometry, MeshBasicNodeMaterial>;
 
   /** The uniforms the material is driven by */
@@ -153,7 +183,14 @@ export class WingVapor {
   object: Object3D | null;
 
   /** How fast the moisture's clock runs, one being real time */
-  time_scale = 1;
+  timeScale = 1;
+
+  /**
+   * A shared flight, read every frame: its airspeed, angle of attack and
+   * sideslip win over `flight`, and its altitude and day over `air`. null
+   * flies only what is written
+   */
+  source: Flight | null;
 
   private _airframe: VaporAirframe;
   private _flight: VaporFlight;
@@ -178,6 +215,10 @@ export class WingVapor {
 
   private _frame_number = -1;
 
+  // The source last read, and at which of its writes
+  private _read_from: Flight | null = null;
+  private _read_version = -1;
+
   // The attitude last frame, and the roll rate measured from it
   private readonly _attitude = new Quaternion();
   private _attitude_set = false;
@@ -192,10 +233,11 @@ export class WingVapor {
     this._effects = { ...default_vapor_effects(), ...options.effects };
 
     this.object = options.object ?? null;
+    this.source = options.source ?? null;
 
     this.uniforms = create_vapor_uniforms();
     this.uniforms.seed.value = (seeds++ * 7.31) % 100;
-    this.uniforms.max_steps.value = options.max_steps ?? 160;
+    this.setQuality(options.quality);
 
     this._table = create_vapor_table();
     this._shape_texture = create_shape_texture();
@@ -214,6 +256,7 @@ export class WingVapor {
     );
 
     mesh.name = "WingVapor";
+    mesh.userData.wingVapor = this;
     mesh.frustumCulled = false;
 
     // Placed in world space by hand, whatever it is parented to
@@ -228,8 +271,8 @@ export class WingVapor {
 
     this.mesh = mesh;
 
-    this.set_frame(options.frame ?? {});
-    this.write_look();
+    this.setFrame(options.frame ?? {});
+    this.writeLook();
     this._state = this.refresh();
   }
 
@@ -262,7 +305,7 @@ export class WingVapor {
    * Change some of the flight and keep the rest. Cheap enough for every frame.
    * @param flight The airspeed, the angle of attack, or both
    */
-  update_flight(flight: Partial<VaporFlight>) {
+  updateFlight(flight: Partial<VaporFlight>) {
     if (unchanged(this._flight, flight)) return;
 
     this._flight = { ...this._flight, ...flight };
@@ -274,7 +317,7 @@ export class WingVapor {
    * table, a few hundred moist adiabats: fine every frame, but not free.
    * @param air The altitude, the temperature offset or the humidity
    */
-  update_air(air: Partial<VaporAir>) {
+  updateAir(air: Partial<VaporAir>) {
     if (unchanged(this._air, air)) return;
 
     this._air = { ...this._air, ...air };
@@ -285,7 +328,7 @@ export class WingVapor {
    * Change some of the airframe and keep the rest.
    * @param airframe What to change
    */
-  update_airframe(airframe: Partial<VaporAirframe>) {
+  updateAirframe(airframe: Partial<VaporAirframe>) {
     this._airframe = { ...this._airframe, ...airframe };
     this._shape = null;
     this._state = this.refresh();
@@ -296,7 +339,7 @@ export class WingVapor {
    * back to the trapezoid with null.
    * @param shape The wing, as `capture_airframe` measures it
    */
-  set_shape(shape: WingShape | null) {
+  setShape(shape: WingShape | null) {
     this._captured = shape;
     this._shape = null;
     this._state = this.refresh();
@@ -324,7 +367,7 @@ export class WingVapor {
       capture_views(object, { ...this._frame_options, ...options }),
     );
 
-    this.apply_capture(measured);
+    this.applyCapture(measured);
 
     return measured;
   }
@@ -338,9 +381,9 @@ export class WingVapor {
    *   signal to give up on
    * @returns What was measured
    */
-  async capture_async(
+  async captureAsync(
     object: Object3D,
-    options: CaptureOptions & { budget_ms?: number; signal?: AbortSignal } = {},
+    options: CaptureOptions & { budgetMs?: number; signal?: AbortSignal } = {},
   ): Promise<MeasuredAirframe> {
     const measured = await capture_airframe_async(object, {
       ...this._frame_options,
@@ -348,7 +391,7 @@ export class WingVapor {
     });
 
     options.signal?.throwIfAborted();
-    this.apply_capture(measured);
+    this.applyCapture(measured);
 
     return measured;
   }
@@ -358,28 +401,36 @@ export class WingVapor {
    * back with `deserialize_capture`.
    * @param measured The fitted dials and the wing's table
    */
-  apply_capture(measured: MeasuredAirframe) {
+  applyCapture(measured: MeasuredAirframe) {
     this._airframe = { ...this._airframe, ...measured.airframe };
-    this.set_shape(measured.shape);
+    this.setShape(measured.shape);
   }
 
   /**
    * Change some of the look and keep the rest.
    * @param look What to change
    */
-  update_look(look: Partial<VaporLook>) {
+  updateLook(look: Partial<VaporLook>) {
     if (unchanged(this._look, look)) return;
 
     this._look = { ...this._look, ...look };
-    this.write_look();
+    this.writeLook();
     this._state = this.refresh();
+  }
+
+  /**
+   * Change what a frame may spend. Live, nothing rebuilds.
+   * @param quality A preset's name, or the fields, over `high`
+   */
+  setQuality(quality?: VaporQualityName | Partial<VaporQuality>) {
+    this.uniforms.maxSteps.value = resolve_vapor_quality(quality).maxSteps;
   }
 
   /**
    * Change which phenomena are drawn. Rebuilds the material.
    * @param effects Which to draw, over every one on
    */
-  set_effects(effects: Partial<VaporEffects>) {
+  setEffects(effects: Partial<VaporEffects>) {
     const next = { ...default_vapor_effects(), ...effects };
 
     if (
@@ -409,13 +460,13 @@ export class WingVapor {
    * Move the airframe's frame on what it follows.
    * @param frame Its origin, and which ways are forward and up
    */
-  set_frame(frame: WingVaporFrame) {
+  setFrame(frame: WingVaporFrame) {
     this._frame_options = frame;
     this._frame.copy(canonical_frame(frame));
   }
 
   /** The airframe's frame on what it follows, as last set */
-  get frame_options(): Readonly<WingVaporFrame> {
+  get frameOptions(): Readonly<WingVaporFrame> {
     return this._frame_options;
   }
 
@@ -442,7 +493,7 @@ export class WingVapor {
 
     // A roll the flight does not give is the one the attitude shows
     const flight =
-      this._flight.roll_rate_rad_s === undefined
+      this._flight.rollRateRadPerS === undefined
         ? { ...this._flight, roll_rate_rad_s: this._roll_rate }
         : this._flight;
 
@@ -455,7 +506,7 @@ export class WingVapor {
       this._history,
     );
 
-    write_trail_texture(this._trail_texture, state.trails, state.second_trails);
+    write_trail_texture(this._trail_texture, state.trails, state.secondTrails);
 
     if (rebuilt) {
       write_shape_texture(this._shape_texture, state.shape, state.path);
@@ -466,59 +517,59 @@ export class WingVapor {
     // Nothing that can fog: a box of no size, which draws nothing. The mesh
     // stays in the scene, so its frames still lay the trails' history
     if (state.visible) {
-      this.uniforms.box_min.value.set(...state.bounds.min);
-      this.uniforms.box_max.value.set(...state.bounds.max);
+      this.uniforms.boxMin.value.set(...state.bounds.min);
+      this.uniforms.boxMax.value.set(...state.bounds.max);
     } else {
-      this.uniforms.box_min.value.set(0, 0, 0);
-      this.uniforms.box_max.value.set(0, 0, 0);
+      this.uniforms.boxMin.value.set(0, 0, 0);
+      this.uniforms.boxMax.value.set(0, 0, 0);
     }
 
     // The table only changes with the day, and the humidity's spread
     const key = [
-      this._air.altitude_m,
-      this._air.temperature_offset_k,
-      this._air.relative_humidity,
-      this._look.humidity_spread,
+      this._air.altitudeM,
+      this._air.temperatureOffsetK,
+      this._air.relativeHumidity,
+      this._look.humiditySpread,
     ].join();
 
     if (key !== this._table_key) {
       this._table_key = key;
       write_vapor_table(
         this._table,
-        condensation_table(state.air, this._look.humidity_spread),
+        condensation_table(state.air, this._look.humiditySpread),
       );
     }
 
     return state;
   }
 
-  private write_look() {
+  private writeLook() {
     const look = this._look;
     const u = this.uniforms;
 
-    const [sr, sg, sb] = look.sun_color;
-    const [kr, kg, kb] = look.sky_color;
+    const [sr, sg, sb] = linear_rgb(look.sunColor);
+    const [kr, kg, kb] = linear_rgb(look.skyColor);
 
     u.sun.value.set(
-      sr * look.sun_intensity,
-      sg * look.sun_intensity,
-      sb * look.sun_intensity,
+      sr * look.sunIntensity,
+      sg * look.sunIntensity,
+      sb * look.sunIntensity,
     );
     u.sky.value.set(
-      kr * look.sky_intensity,
-      kg * look.sky_intensity,
-      kb * look.sky_intensity,
+      kr * look.skyIntensity,
+      kg * look.skyIntensity,
+      kb * look.skyIntensity,
     );
 
     u.exposure.value = look.exposure;
 
     // A gram per cubic metre of droplets this size: 3 w / 2 ρ r
     u.extinction.value =
-      (3 * 1e-3) / (2 * 1000 * Math.max(look.droplet_radius_m, 1e-8));
+      (3 * 1e-3) / (2 * 1000 * Math.max(look.dropletRadiusM, 1e-8));
 
     u.anisotropy.value = Math.min(Math.max(look.anisotropy, -0.95), 0.95);
-    u.eddy_m.value = Math.max(look.eddy_m, 1e-3);
-    u.shutter_s.value = Math.max(look.shutter_s, 0);
+    u.eddyM.value = Math.max(look.eddyM, 1e-3);
+    u.shutterS.value = Math.max(look.shutterS, 0);
   }
 
   /**
@@ -534,8 +585,8 @@ export class WingVapor {
    * @param camera The camera
    */
   private budget(camera: Camera) {
-    const min = this.uniforms.box_min.value;
-    const max = this.uniforms.box_max.value;
+    const min = this.uniforms.boxMin.value;
+    const max = this.uniforms.boxMax.value;
 
     // The box's eight corners on screen, as the rectangle round them
     scratch_project.multiplyMatrices(
@@ -590,7 +641,7 @@ export class WingVapor {
 
     const covered = (width * height) / 4;
 
-    this.uniforms.step_scale.value = Math.min(
+    this.uniforms.stepScale.value = Math.min(
       Math.max(Math.sqrt(covered / STEP_AREA), 1),
       MAX_STEP_SCALE,
     );
@@ -604,7 +655,7 @@ export class WingVapor {
    * @param attitude Its attitude now
    * @param delta_s How long since the last frame
    */
-  private measure_roll(attitude: Quaternion, delta_s: number) {
+  private measureRoll(attitude: Quaternion, delta_s: number) {
     if (this._attitude_set && delta_s > 1e-4 && delta_s < 1) {
       // The turn since the last frame, in the aircraft's own frame then
       const turn = scratch_turn
@@ -625,6 +676,41 @@ export class WingVapor {
 
     this._attitude.copy(attitude);
     this._attitude_set = true;
+  }
+
+  /**
+   * Take the flight and the day from the shared flight, if there is one and
+   * it changed. Written in place: the refresh at the end of the frame picks
+   * it up, and nothing is allocated.
+   */
+  private readSource() {
+    const source = this.source;
+
+    if (
+      !source ||
+      (source === this._read_from && source.version === this._read_version)
+    ) {
+      return;
+    }
+
+    this._read_from = source;
+    this._read_version = source.version;
+
+    const values = source.values;
+    const flight = this._flight;
+    const air = this._air;
+
+    flight.airspeedMPerS = values.airspeedMPerS;
+    flight.angleOfAttackRad = values.angleOfAttackRad;
+
+    // The flight's sideslip is from the right; the vapour's from +z, the left
+    flight.sideslipRad = -values.sideslipRad;
+
+    air.altitudeM =
+      Math.round(values.altitudeM / SOURCE_ALTITUDE_STEP_M) *
+      SOURCE_ALTITUDE_STEP_M;
+    air.temperatureOffsetK = values.temperatureOffsetK;
+    air.relativeHumidity = values.relativeHumidity;
   }
 
   /**
@@ -658,8 +744,8 @@ export class WingVapor {
       .setFromMatrixPosition(camera.matrixWorld)
       .applyMatrix4(scratch_inverse);
 
-    this.uniforms.sun_direction.value
-      .fromArray(this._look.sun_direction)
+    this.uniforms.sunDirection.value
+      .fromArray(this._look.sunDirection)
       .transformDirection(scratch_inverse);
 
     this.budget(camera);
@@ -671,9 +757,11 @@ export class WingVapor {
 
     this._frame_number = renderer.info.frame;
 
+    this.readSource();
+
     const now = performance.now();
     const delta_s =
-      this._last_ms >= 0 ? ((now - this._last_ms) / 1000) * this.time_scale : 0;
+      this._last_ms >= 0 ? ((now - this._last_ms) / 1000) * this.timeScale : 0;
 
     this._last_ms = now;
     this.uniforms.time.value += Math.min(MAX_DELTA_S, delta_s);
@@ -688,18 +776,34 @@ export class WingVapor {
 
     const field = this._state.field;
 
-    this.measure_roll(scratch_rotation, delta_s);
+    this.measureRoll(scratch_rotation, delta_s);
 
     this._history.advance(
       delta_s,
       scratch_rotation,
-      field.speed_m_s,
-      field.cos_alpha,
-      field.sin_alpha,
-      Math.max(field.tip_reach_m, field.second_reach_m),
-      field.flow_z,
+      field.speedMPerS,
+      field.cosAlpha,
+      field.sinAlpha,
+      Math.max(field.tipReachM, field.secondReachM),
+      field.flowZ,
     );
 
     this._state = this.refresh();
   }
 }
+
+const scratch_color = new Color();
+
+/**
+ * A look's colour as linear RGB.
+ * @param color Three numbers, or anything three's `Color` takes
+ * @returns The three
+ */
+const linear_rgb = (color: VaporColor): readonly [number, number, number] =>
+  Array.isArray(color)
+    ? (color as readonly [number, number, number])
+    : (scratch_color.set(color as ColorRepresentation).toArray() as [
+        number,
+        number,
+        number,
+      ]);

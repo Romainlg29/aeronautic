@@ -1,6 +1,16 @@
+import {
+  check_renderer,
+  type Flight,
+  type FlightValues,
+} from "@aeronautic/core";
+import {
+  shared_context,
+  useFlightStore,
+  useShallowStable,
+  useThrust,
+} from "@aeronautic/core/react";
 import { createPortal, useThree, type ThreeElements } from "@react-three/fiber";
 import {
-  createContext,
   useContext,
   useImperativeHandle,
   useLayoutEffect,
@@ -18,15 +28,15 @@ import {
   type AfterburnerNozzle,
   type AfterburnerOffset,
   write_offset,
-} from "./afterburner-batch";
+} from "../afterburner-batch";
 import type {
   AfterburnerParamsInput,
   AfterburnerPreset,
   AfterburnerPresetName,
-} from "./presets";
-import type { AfterburnerParams } from "./types";
-import type { AfterburnerPass } from "./afterburner-pass";
-import { AFTERBURNER_MAX_THROTTLE } from "./plume-profile";
+} from "../presets";
+import type { AfterburnerParams } from "../types";
+import type { AfterburnerPass } from "../afterburner-pass";
+import { AFTERBURNER_MAX_THROTTLE } from "../plume-profile";
 
 // The friendly API
 //
@@ -36,7 +46,10 @@ import { AFTERBURNER_MAX_THROTTLE } from "./plume-profile";
 // its profile, quality and hooks, or for reaching its stats
 
 // undefined: no batch above, so make one. null: a batch above, not built yet
-const BatchContext = createContext<Batch | null | undefined>(undefined);
+const BatchContext = shared_context<Batch | null | undefined>(
+  "afterburner-batch",
+  undefined,
+);
 
 /**
  * The batch the nearest `<AfterburnerBatch>` provides, if any.
@@ -46,67 +59,25 @@ export const useAfterburnerBatch = (): Batch | null =>
   useContext(BatchContext) ?? null;
 
 /**
- * Whether two flat objects hold the same values.
- * @param a One
- * @param b The other
- * @returns Whether every key matches
+ * What an `<AfterburnerBatch>`'s ref holds: the batch itself, for its stats
+ * or to drive it directly.
  */
-const shallow_equal = (
-  a: object | undefined,
-  b: object | undefined,
-): boolean => {
-  if (a === b) {
-    return true;
-  }
-
-  if (a === undefined || b === undefined) {
-    return false;
-  }
-
-  const a_keys = Object.keys(a);
-
-  if (a_keys.length !== Object.keys(b).length) {
-    return false;
-  }
-
-  return a_keys.every(
-    (key) =>
-      (a as Record<string, unknown>)[key] ===
-      (b as Record<string, unknown>)[key],
-  );
-};
-
-/**
- * Hold on to a value until one arrives that differs field by field, so an
- * object written inline does not count as a change every render.
- * @param value The value as given this render
- * @returns The same object for as long as its fields hold
- */
-const useShallowStable = <T extends object | string | undefined>(
-  value: T,
-): T => {
-  const held = useRef(value);
-
-  const same =
-    held.current === value ||
-    (typeof value === "object" &&
-      typeof held.current === "object" &&
-      shallow_equal(held.current, value));
-
-  if (!same) {
-    held.current = value;
-  }
-
-  return held.current;
-};
+export type AfterburnerBatchHandle = Batch;
 
 /**
  * Props for `<AfterburnerBatch>`.
  */
 export type AfterburnerBatchProps = Omit<
   AfterburnerBatchOptions,
-  "capacity" | "backdrop"
+  "capacity" | "backdrop" | "source"
 > & {
+  /**
+   * A shared flight: its altitude, airspeed and day win over `profile`, and
+   * the nozzles that follow the throttle run at its. By default the nearest
+   * `<FlightProvider>`'s; null flies only the props
+   */
+  source?: Flight | null;
+
   /**
    * Draw the plumes in passes of their own, from `afterburner_pass`: at a
    * lower resolution, composited over the scene. Changing it rebuilds the batch
@@ -114,22 +85,22 @@ export type AfterburnerBatchProps = Omit<
   pass?: AfterburnerPass;
 
   /** Seconds of flame per second, one being real time */
-  time_scale?: number;
+  timeScale?: number;
 
   /** How long, in seconds, a plume takes to follow its throttle. Zero is at once */
-  response_s?: number;
+  responseS?: number;
 
   /** Plumes smaller than this share of the screen height are not drawn */
-  min_screen_fraction?: number;
+  minScreenFraction?: number;
 
   /** Past this, in metres, the eddies are dropped */
-  detail_distance_m?: number;
+  detailDistanceM?: number;
 
   /** Past this, a plume is one sample */
-  cheap_distance_m?: number;
+  cheapDistanceM?: number;
 
   /** The batch, for its stats or to drive it directly */
-  ref?: Ref<Batch | null>;
+  ref?: Ref<AfterburnerBatchHandle | null>;
 
   children?: ReactNode;
 };
@@ -145,16 +116,22 @@ export const AfterburnerBatch: FC<AfterburnerBatchProps> = ({
   quality,
   haze = true,
   hooks,
-  time_scale = 1,
-  response_s = 0.25,
-  min_screen_fraction = 0.001,
-  detail_distance_m = 900,
-  cheap_distance_m = 3000,
+  timeScale: time_scale = 1,
+  responseS: response_s = 0.25,
+  minScreenFraction: min_screen_fraction = 0.001,
+  detailDistanceM: detail_distance_m = 900,
+  cheapDistanceM: cheap_distance_m = 3000,
   pass,
+  source,
   ref,
   children,
 }) => {
   const scene = useThree((state) => state.scene);
+  const gl = useThree((state) => state.gl);
+  const provided = useFlightStore();
+  const flight = source === undefined ? provided : source;
+
+  useLayoutEffect(() => check_renderer(gl, "<AfterburnerBatch>"), [gl]);
 
   const [batch, set_batch] = useState<Batch | null>(null);
 
@@ -183,71 +160,92 @@ export const AfterburnerBatch: FC<AfterburnerBatchProps> = ({
   }, [scene, preset, pass]);
 
   useLayoutEffect(() => {
-    batch?.set_profile(stable_profile);
+    batch?.setProfile(stable_profile);
   }, [batch, stable_profile]);
 
   useLayoutEffect(() => {
-    batch?.set_quality(stable_quality);
+    if (batch) {
+      batch.source = flight;
+    }
+  }, [batch, flight]);
+
+  useLayoutEffect(() => {
+    batch?.setQuality(stable_quality);
   }, [batch, stable_quality]);
 
   useLayoutEffect(() => {
-    batch?.set_haze(haze);
+    batch?.setHaze(haze);
   }, [batch, haze]);
 
   useLayoutEffect(() => {
-    batch?.set_hooks(hooks);
+    batch?.setHooks(hooks);
   }, [batch, hooks]);
 
   if (batch !== null) {
-    batch.time_scale = time_scale;
-    batch.response_s = response_s;
-    batch.min_screen_fraction = min_screen_fraction;
-    batch.detail_distance_m = detail_distance_m;
-    batch.cheap_distance_m = cheap_distance_m;
+    batch.timeScale = time_scale;
+    batch.responseS = response_s;
+    batch.minScreenFraction = min_screen_fraction;
+    batch.detailDistanceM = detail_distance_m;
+    batch.cheapDistanceM = cheap_distance_m;
   }
 
-  useImperativeHandle(ref, () => batch as Batch, [batch]);
+  useImperativeHandle<Batch | null, Batch | null>(ref, () => batch, [batch]);
 
   return <BatchContext value={batch}>{children}</BatchContext>;
 };
 
-// The batches made for nozzles with none above them, one per scene and preset
+// The batches made for nozzles with none above them, one per scene, preset
+// and flight: the profile is the batch's, so two aircraft in two providers
+// fly through their own air
 type SharedBatch = { batch: Batch; users: number };
 
-const shared_batches = new WeakMap<Object3D, Map<unknown, SharedBatch>>();
+const shared_batches = new WeakMap<
+  Object3D,
+  Map<unknown, Map<Flight | null, SharedBatch>>
+>();
 
 /**
  * Take a share of the batch for one scene and preset, making it if need be.
  * @param scene The scene
  * @param preset The preset, by name or as an object
+ * @param source The flight it reads, if any
  * @returns The batch, and how to give the share back
  */
 const acquire_shared = (
   scene: Object3D,
   preset: AfterburnerPresetName | AfterburnerPreset | undefined,
+  source: Flight | null,
 ): [Batch, () => void] => {
-  let batches = shared_batches.get(scene);
+  let presets = shared_batches.get(scene);
+
+  if (presets === undefined) {
+    presets = new Map();
+    shared_batches.set(scene, presets);
+  }
+
+  let batches = presets.get(preset);
 
   if (batches === undefined) {
     batches = new Map();
-    shared_batches.set(scene, batches);
+    presets.set(preset, batches);
   }
 
-  let shared = batches.get(preset);
+  let shared = batches.get(source);
 
   if (shared === undefined) {
-    const batch = new Batch({ preset });
+    const batch = new Batch({ preset, source });
 
     scene.add(batch.mesh);
 
     shared = { batch, users: 0 };
-    batches.set(preset, shared);
+    batches.set(source, shared);
   }
 
   shared.users++;
 
   const held = shared;
-  const map = batches;
+  const by_preset = presets;
+  const by_source = batches;
 
   return [
     held.batch,
@@ -255,7 +253,12 @@ const acquire_shared = (
       held.users--;
 
       if (held.users === 0) {
-        map.delete(preset);
+        by_source.delete(source);
+
+        if (by_source.size === 0) {
+          by_preset.delete(preset);
+        }
+
         held.batch.dispose();
       }
     },
@@ -276,23 +279,23 @@ export type AfterburnerHandle = {
   throttle: number;
 
   /** Retune the nozzle, over its preset and the defaults: replaces them all */
-  set_params: (params: AfterburnerParamsInput) => void;
+  setParams: (params: AfterburnerParamsInput) => void;
 
   /**
-   * Change some params and keep the rest, such as `exit_mach`. The `params`
+   * Change some params and keep the rest, such as `exitMach`. The `params`
    * prop wins again whenever it changes. Altitude, airspeed and the day are
-   * the batch's: `update_profile` on its ref
+   * the batch's: `updateProfile` on its ref
    */
-  update_params: (params: AfterburnerParamsInput) => void;
+  updateParams: (params: AfterburnerParamsInput) => void;
 
   /**
    * Move or turn the nozzle in the frame it sits in: its parent's, or the
    * `target`'s. The same as writing to `object`, the group, directly
    */
-  set_offset: (offset: AfterburnerOffset) => void;
+  setOffset: (offset: AfterburnerOffset) => void;
 
   /** Point the plume, in that same frame */
-  set_direction: (direction: readonly [number, number, number]) => void;
+  setDirection: (direction: readonly [number, number, number]) => void;
 
   /** The params it is drawn with, once it is in a batch */
   readonly params: Readonly<AfterburnerParams> | null;
@@ -320,8 +323,21 @@ export type AfterburnerProps = Omit<ThreeElements["group"], "ref"> & {
   /** How this plume looks, over the preset. Compared field by field */
   params?: AfterburnerParamsInput;
 
-  /** How hard the engine is running: 0 to 1 dry, on to 1.1 at full reheat */
-  throttle?: number;
+  /**
+   * How hard the engine is running: 0 to 1 dry, on to 1.1 at full reheat.
+   * Or a function of the flight's values, read only when the flight changes,
+   * as `(f) => f.throttle * 0.9`. Left out, it runs at its `<Engine>`'s
+   * throttle inside one, else at the flight's inside a `<FlightProvider>`,
+   * else at full reheat
+   */
+  throttle?: number | ((values: Readonly<FlightValues>) => number);
+
+  /**
+   * The flight it flies with, outside an `<AfterburnerBatch>`: its batch
+   * reads the air from it, and the throttle when none is given. By default
+   * the nearest `<FlightProvider>`'s; null flies only the props
+   */
+  source?: Flight | null;
 
   /** Draw it with this batch rather than the nearest one */
   batch?: Batch;
@@ -331,13 +347,14 @@ export type AfterburnerProps = Omit<ThreeElements["group"], "ref"> & {
    * mesh, group or bone from anywhere in the scene, such as a node of a loaded
    * model. `position` and `rotation` are then in its frame, so they place the
    * nozzle on it. For a mesh of your own in JSX, keep it in state from a
-   * callback ref: `ref={set_hull}` then `target={hull}`
+   * callback ref: `ref={set_hull}` then `target={hull}`. Inside an `<Engine>`
+   * it defaults to the engine's exhaust; null sits where it is in the tree
    */
   target?: Object3D | null;
 
   /**
    * Which way the exhaust streams, in the frame the group sits in. Wins over
-   * `rotation`, and saves working out the turn that takes +X there
+   * `rotation`, and saves working out the turn that takes +Z there
    */
   direction?: readonly [number, number, number];
 
@@ -345,23 +362,56 @@ export type AfterburnerProps = Omit<ThreeElements["group"], "ref"> & {
 };
 
 /**
- * A nozzle. The plume streams out along the group's local +X and follows it.
+ * The flight's own throttle, for a nozzle given none.
+ * @param values The flight's values
+ * @returns Its throttle
+ */
+const flight_throttle = (values: Readonly<FlightValues>) => values.throttle;
+
+/**
+ * A nozzle. The plume streams out along the group's local +Z, aft of an aircraft flying along -Z, and follows it.
  * @param props Where the nozzle is, and how its plume looks
  * @returns The group
  */
 export const Afterburner: FC<AfterburnerProps> = ({
   preset,
   params,
-  throttle = AFTERBURNER_MAX_THROTTLE,
+  throttle: throttle_prop,
+  source,
   batch: explicit_batch,
-  target,
+  target: target_prop,
   direction,
   ref,
   children,
   ...group_props
 }) => {
   const scene = useThree((state) => state.scene);
+  const gl = useThree((state) => state.gl);
   const above = useContext(BatchContext);
+
+  useLayoutEffect(() => check_renderer(gl, "<Afterburner>"), [gl]);
+  const provided = useFlightStore();
+  const flight = source === undefined ? provided : source;
+
+  const thrust = useThrust();
+  const target =
+    target_prop === undefined ? (thrust?.anchor ?? undefined) : target_prop;
+
+  // Where the throttle comes from: a number is its own; a function, the
+  // engine's or the flight's are read from the flight where it is drawn
+  const from =
+    typeof throttle_prop === "function"
+      ? throttle_prop
+      : throttle_prop === undefined
+        ? (thrust?.throttle ?? flight_throttle)
+        : null;
+  const follow = from !== null && flight !== null;
+  const throttle =
+    typeof throttle_prop === "number"
+      ? throttle_prop
+      : follow
+        ? from(flight.values)
+        : AFTERBURNER_MAX_THROTTLE;
 
   const group_ref = useRef<Group>(null);
   const nozzle_ref = useRef<AfterburnerNozzle | null>(null);
@@ -369,7 +419,12 @@ export const Afterburner: FC<AfterburnerProps> = ({
   const stable_params = useShallowStable(params);
 
   // What has been asked of the handle, kept so a new nozzle can pick it up
-  const state = useRef({ throttle, params: stable_params, preset });
+  const state = useRef({
+    throttle,
+    from: follow ? from : null,
+    params: stable_params,
+    preset,
+  });
 
   const handle = useMemo<AfterburnerHandle>(
     () => ({
@@ -377,26 +432,29 @@ export const Afterburner: FC<AfterburnerProps> = ({
         return state.current.throttle;
       },
       set throttle(value: number) {
+        // Written by hand, it stops following the flight's
         state.current.throttle = value;
+        state.current.from = null;
 
         if (nozzle_ref.current) {
+          nozzle_ref.current.throttleFrom = null;
           nozzle_ref.current.throttle = value;
         }
       },
-      set_params(next: AfterburnerParamsInput) {
+      setParams(next: AfterburnerParamsInput) {
         state.current.params = next;
-        nozzle_ref.current?.set_params(next, state.current.preset);
+        nozzle_ref.current?.setParams(next, state.current.preset);
       },
-      update_params(next: AfterburnerParamsInput) {
-        handle.set_params({ ...state.current.params, ...next });
+      updateParams(next: AfterburnerParamsInput) {
+        handle.setParams({ ...state.current.params, ...next });
       },
-      set_offset(offset: AfterburnerOffset) {
+      setOffset(offset: AfterburnerOffset) {
         if (group_ref.current) {
           write_offset(group_ref.current, offset);
         }
       },
-      set_direction(direction: readonly [number, number, number]) {
-        handle.set_offset({ direction });
+      setDirection(direction: readonly [number, number, number]) {
+        handle.setOffset({ direction });
       },
       get params() {
         return nozzle_ref.current?.params ?? null;
@@ -443,7 +501,7 @@ export const Afterburner: FC<AfterburnerProps> = ({
     let batch = explicit_batch ?? above ?? undefined;
 
     if (batch === undefined) {
-      [batch, release] = acquire_shared(scene, preset);
+      [batch, release] = acquire_shared(scene, preset, flight);
     }
 
     const nozzle = batch.add({
@@ -451,6 +509,7 @@ export const Afterburner: FC<AfterburnerProps> = ({
       preset,
       params: state.current.params,
       throttle: state.current.throttle,
+      throttleFrom: state.current.from,
     });
 
     nozzle_ref.current = nozzle;
@@ -460,15 +519,21 @@ export const Afterburner: FC<AfterburnerProps> = ({
       nozzle_ref.current = null;
       release?.();
     };
-  }, [scene, above, explicit_batch, preset, waiting, target]);
+  }, [scene, above, explicit_batch, preset, waiting, target, flight]);
+
+  // A new way of reading it, or a new number, is taken up at once rather
+  // than at the flight's next change
+  const reading = follow ? from : null;
 
   useLayoutEffect(() => {
+    state.current.from = reading;
     state.current.throttle = throttle;
 
     if (nozzle_ref.current) {
+      nozzle_ref.current.throttleFrom = reading;
       nozzle_ref.current.throttle = throttle;
     }
-  }, [throttle]);
+  }, [reading, throttle]);
 
   useLayoutEffect(() => {
     if (state.current.params === stable_params) {
@@ -476,7 +541,7 @@ export const Afterburner: FC<AfterburnerProps> = ({
     }
 
     state.current.params = stable_params;
-    nozzle_ref.current?.set_params(stable_params, state.current.preset);
+    nozzle_ref.current?.setParams(stable_params, state.current.preset);
   }, [stable_params]);
 
   state.current.preset = preset;

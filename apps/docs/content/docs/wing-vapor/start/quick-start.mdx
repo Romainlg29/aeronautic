@@ -9,8 +9,8 @@ and the day:
 
 ```tsx
 import { Canvas } from "@react-three/fiber";
-import { WingVapor } from "@aeronautic/wing-vapor";
-import { WebGPURenderer } from "three/webgpu";
+import { WingVapor } from "@aeronautic/wing-vapor/react";
+import { webgpu_gl } from "@aeronautic/core/react";
 
 const Jet = () => (
   <group>
@@ -19,34 +19,28 @@ const Jet = () => (
       // The model flies along its local -Z, with +Y up (the defaults)
       forward={[0, 0, -1]}
       airframe={{
-        span_m: 14,
-        root_chord_m: 9.2,
-        tip_chord_m: 1.6,
-        leading_edge_sweep_rad: (55 * Math.PI) / 180,
-        apex_m: -5.66, // the leading edge meets the centreline 5.66 m ahead
+        spanM: 14,
+        rootChordM: 9.2,
+        tipChordM: 1.6,
+        leadingEdgeSweepRad: (55 * Math.PI) / 180,
+        apexM: -5.66, // the leading edge meets the centreline 5.66 m ahead
       }}
-      flight={{ airspeed_m_s: 170, angle_of_attack_rad: 0.35 }}
-      air={{ altitude_m: 300, relative_humidity: 0.9 }}
-      look={{ sun_direction: [5, 10, 5] }}
+      flight={{ airspeedMPerS: 170, angleOfAttackRad: 0.35 }}
+      air={{ altitudeM: 300, relativeHumidity: 0.9 }}
+      look={{ sunDirection: [5, 10, 5] }}
     />
   </group>
 );
 
 export const App = () => (
-  <Canvas
-    gl={async (props) => {
-      const renderer = new WebGPURenderer({ ...props, antialias: false });
-      await renderer.init();
-      return renderer;
-    }}
-  >
+  <Canvas gl={webgpu_gl()}>
     <Jet />
   </Canvas>
 );
 ```
 
 The vapor reads the scene's depth, so it stops at the wing it sits on. Give
-`look.sun_direction` the same direction as your scene's sun, so the cloud is
+`look.sunDirection` the same direction as your scene's sun, so the cloud is
 lit as the skin is.
 
 ## Rather than typing the planform
@@ -61,7 +55,7 @@ const { scene } = useGLTF("/jet.glb");
   <WingVapor
     capture={scene}
     // Not the shape the air flies round
-    capture_filter={(mesh) => !/Gear|Pylon|Missile/.test(mesh.name)}
+    captureFilter={(mesh) => !/Gear|Pylon|Missile/.test(mesh.name)}
     flight={flight}
     air={air}
   />
@@ -76,10 +70,13 @@ The flight changes every frame in a real scene. Write it through the ref,
 which costs no React render:
 
 ```tsx
-const vapor = useRef<WingVaporCore>(null);
+const vapor = useRef<WingVaporHandle>(null);
 
 useFrame(() => {
-  vapor.current?.update_flight({ airspeed_m_s, angle_of_attack_rad });
+  vapor.current?.updateFlight({
+    airspeedMPerS: airspeed_m_s,
+    angleOfAttackRad: angle_of_attack_rad,
+  });
 });
 
 <WingVapor ref={vapor} airframe={airframe} />;

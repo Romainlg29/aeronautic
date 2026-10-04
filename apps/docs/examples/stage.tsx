@@ -1,4 +1,7 @@
+import type { AfterburnerBatch } from "@aeronautic/afterburner";
+import type { VaporLook, WingVapor } from "@aeronautic/wing-vapor";
 import { OrbitControls } from "@react-three/drei";
+import { Moon, Sun } from "lucide-react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
   type FC,
@@ -11,6 +14,10 @@ import {
 } from "react";
 import {
   AgXToneMapping,
+  Color,
+  type DirectionalLight,
+  type GridHelper,
+  type HemisphereLight,
   type Scene,
   type Texture,
   type Vector3Tuple,
@@ -35,7 +42,7 @@ export const Grade: FC = () => {
 
   const pipeline = useMemo(() => {
     const color = pass(scene, camera).getTextureNode("output");
-    const glow = bloom(color, 0.45, 0.2, 1);
+    const glow = bloom(color, 0.3, 0.2, 1);
     const render_pipeline = new RenderPipeline(renderer);
 
     render_pipeline.outputNode = color.add(glow);
@@ -74,20 +81,197 @@ export const Reflections: FC<{ intensity?: number }> = ({
 }) => {
   const { gl, scene } = useThree();
 
+  // Built once: taking the map away and back recompiles every material that
+  // reflects it, so a new strength only changes the strength
   useEffect(() => {
     const generator = new PMREMGenerator(gl as unknown as WebGPURenderer);
     const target = generator.fromScene(new RoomEnvironment(), 0.04);
 
-    reflect(scene, target.texture, intensity);
+    reflect(scene, target.texture, scene.environmentIntensity);
 
     return () => {
       reflect(scene, null, 0);
       target.dispose();
       generator.dispose();
     };
-  }, [gl, scene, intensity]);
+  }, [gl, scene]);
+
+  useEffect(() => {
+    scene.environmentIntensity = intensity;
+  }, [scene, intensity]);
 
   return null;
+};
+
+// The two skies an example can be under, and how long it takes to go between
+const NIGHT = {
+  background: "#05070b",
+  grid: "#121620",
+  hemisphere: 0.6,
+  sun: 1.2,
+  look: {
+    sunColor: [0.7, 0.78, 1],
+    sunIntensity: 0.6,
+    skyColor: [0.08, 0.1, 0.18],
+    skyIntensity: 0.15,
+  },
+} as const;
+const DAY = {
+  background: "#6f9fd8",
+  grid: "#4f74a3",
+  hemisphere: 1.6,
+  sun: 3,
+  look: {
+    sunColor: [1, 0.96, 0.9],
+    sunIntensity: 3,
+    skyColor: [0.55, 0.68, 0.9],
+    skyIntensity: 1,
+  },
+} as const;
+const FADE_S = 0.6;
+
+// By day the sky sets the camera, and the plume is drawn at what that leaves
+// it. A plume's radiance is in units of a blackbody's at 2000 K, about
+// 4.8e5 cd/m² (the old candela's platinum, at 2042 K, was 6e5). A clear sky
+// away from the sun is about 6000 cd/m², and it is drawn here at the
+// background's linear luminance, so one unit on screen is 6000 over that
+const BLACKBODY_2000K_CD_M2 = 4.8e5;
+const CLEAR_SKY_CD_M2 = 6000;
+const day_sky = new Color(DAY.background);
+export const DAY_EXPOSURE =
+  (BLACKBODY_2000K_CD_M2 *
+    (0.2126 * day_sky.r + 0.7152 * day_sky.g + 0.0722 * day_sky.b)) /
+  CLEAR_SKY_CD_M2;
+
+/**
+ * A plume's exposure under the sky, from its own at night. A camera stopped
+ * down further than the sky needs, for a rocket, stays there; the rest come
+ * down to the sky's. Eased in stops, as an exposure is.
+ * @param night Its exposure at night
+ * @param shade How far to day, 0 to 1
+ * @returns Its exposure now
+ */
+const exposure_under = (night: number, shade: number) =>
+  night * (Math.min(night, DAY_EXPOSURE) / night) ** shade;
+
+const mix_rgb = (
+  from: readonly number[],
+  to: readonly number[],
+  share: number,
+): [number, number, number] => [
+  from[0] + (to[0] - from[0]) * share,
+  from[1] + (to[1] - from[1]) * share,
+  from[2] + (to[2] - from[2]) * share,
+];
+
+/**
+ * Light the scene under a night or a daylit sky, easing from one to the other
+ * rather than rebuilding anything: the sky, the lights, the grid, every
+ * plume's exposure and the vapor's light.
+ * @param props Whether it is day, and where the grid is
+ * @returns The lights and the grid
+ */
+const Sky: FC<{ day: boolean; floor: number | null }> = ({ day, floor }) => {
+  const { scene } = useThree();
+  const hemisphere = useRef<HemisphereLight>(null);
+  const sun = useRef<DirectionalLight>(null);
+  const grid = useRef<GridHelper>(null);
+  const shade = useRef(day ? 1 : 0);
+  const colors = useMemo(
+    () => ({
+      night: new Color(NIGHT.background),
+      day: new Color(DAY.background),
+      now: new Color(),
+      night_grid: new Color(NIGHT.grid),
+      day_grid: new Color(DAY.grid),
+    }),
+    [],
+  );
+
+  // Each plume's exposure at night, its preset's, from when it was first seen
+  const nights = useMemo(() => new WeakMap<AfterburnerBatch, number>(), []);
+
+  // The sky each vapor was last lit for: its colours compare by reference
+  const lit = useMemo(() => new WeakMap<WingVapor, number>(), []);
+
+  useEffect(() => {
+    const previous = scene.background;
+
+    scene.background = colors.now;
+
+    return () => {
+      scene.background = previous;
+    };
+  }, [scene, colors]);
+
+  useFrame((_, delta) => {
+    const goal = day ? 1 : 0;
+    const step = Math.min(delta / FADE_S, 1);
+
+    shade.current += Math.max(-step, Math.min(step, goal - shade.current));
+
+    const t = shade.current;
+    const mix = (a: number, b: number) => a + (b - a) * t;
+
+    colors.now.lerpColors(colors.night, colors.day, t);
+
+    if (hemisphere.current)
+      hemisphere.current.intensity = mix(NIGHT.hemisphere, DAY.hemisphere);
+    if (sun.current) sun.current.intensity = mix(NIGHT.sun, DAY.sun);
+    if (grid.current) {
+      const material = grid.current.material as { color: Color };
+
+      material.color.lerpColors(colors.night_grid, colors.day_grid, t);
+    }
+
+    // Written whenever one is off, so a plume or a vapor that arrives late,
+    // or has its profile set again, comes under the sky too
+    scene.traverse((object) => {
+      const batch = object.userData.afterburnerBatch as
+        | AfterburnerBatch
+        | undefined;
+      const vapor = object.userData.wingVapor as WingVapor | undefined;
+
+      if (batch) {
+        let night = nights.get(batch);
+
+        if (night === undefined) {
+          night = batch.profile.exposure;
+          nights.set(batch, night);
+        }
+
+        const exposure = exposure_under(night, t);
+
+        if (Math.abs(batch.profile.exposure - exposure) > 1e-6 * night)
+          batch.updateProfile({ exposure });
+      }
+
+      if (!vapor || lit.get(vapor) === t) return;
+
+      lit.set(vapor, t);
+      vapor.updateLook({
+        sunColor: mix_rgb(NIGHT.look.sunColor, DAY.look.sunColor, t),
+        sunIntensity: mix(NIGHT.look.sunIntensity, DAY.look.sunIntensity),
+        skyColor: mix_rgb(NIGHT.look.skyColor, DAY.look.skyColor, t),
+        skyIntensity: mix(NIGHT.look.skyIntensity, DAY.look.skyIntensity),
+      } satisfies Partial<VaporLook>);
+    });
+  });
+
+  return (
+    <>
+      <hemisphereLight ref={hemisphere} args={["#8090b0", "#101010"]} />
+      <directionalLight ref={sun} position={[-5, 10, 5]} />
+      {floor !== null && (
+        // White, so the material's colour is the line's, and can fade
+        <gridHelper
+          ref={grid}
+          args={[200, 100, "#ffffff", "#ffffff"]}
+          position={[0, floor, 0]}
+        />
+      )}
+    </>
+  );
 };
 
 type StageProps = {
@@ -101,7 +285,7 @@ type StageProps = {
   overlay?: ReactNode;
   // An environment map, for a loaded model's metal
   reflections?: boolean;
-  // A daylit sky rather than the night the plumes are graded for
+  // Start under a daylit sky rather than the night the plumes are graded for
   daylight?: boolean;
 };
 
@@ -112,8 +296,8 @@ type StageProps = {
  */
 export const Stage: FC<StageProps> = ({
   children,
-  camera = [10, 4, 16],
-  target = [8, 0, 0],
+  camera = [-16, 4, 10],
+  target = [0, 0, 8],
   fov = 40,
   floor = -3,
   overlay,
@@ -122,6 +306,7 @@ export const Stage: FC<StageProps> = ({
 }) => {
   const frame = useRef<HTMLDivElement>(null);
   const [visible, set_visible] = useState(false);
+  const [day, set_day] = useState(daylight);
 
   useEffect(() => {
     const element = frame.current;
@@ -155,18 +340,7 @@ export const Stage: FC<StageProps> = ({
           return renderer;
         }}
       >
-        <color attach="background" args={[daylight ? "#6f9fd8" : "#05070b"]} />
-        <hemisphereLight args={["#8090b0", "#101010", daylight ? 1.6 : 0.6]} />
-        <directionalLight
-          position={[5, 10, 5]}
-          intensity={daylight ? 3 : 1.2}
-        />
-        {floor !== null && (
-          <gridHelper
-            args={[200, 100, "#1c2230", "#121620"]}
-            position={[0, floor, 0]}
-          />
-        )}
+        <Sky day={day} floor={floor} />
         {reflections && <Reflections />}
         {/* A loaded model streams in, the plumes around it waiting for it */}
         <Suspense fallback={null}>{children}</Suspense>
@@ -174,17 +348,26 @@ export const Stage: FC<StageProps> = ({
         <Grade />
       </Canvas>
       {overlay}
+      <button
+        type="button"
+        className="example-sky"
+        onClick={() => set_day(!day)}
+        aria-label={`Switch to ${day ? "night" : "day"}`}
+      >
+        {day ? <Moon size={14} /> : <Sun size={14} />}
+        {day ? "Night" : "Day"}
+      </button>
     </div>
   );
 };
 
 /**
- * A bare engine can, its exit at the origin, facing +X.
+ * A bare engine can, its exit at the origin, facing +Z.
  * @param props Its exit radius in metres
  * @returns The mesh
  */
 export const Nozzle: FC<{ radius_m?: number }> = ({ radius_m = 0.5 }) => (
-  <mesh position={[-radius_m * 2, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+  <mesh position={[0, 0, -radius_m * 2]} rotation={[-Math.PI / 2, 0, 0]}>
     <cylinderGeometry
       args={[radius_m * 1.08, radius_m * 1.2, radius_m * 4, 32, 1, true]}
     />

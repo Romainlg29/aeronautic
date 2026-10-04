@@ -1,3 +1,5 @@
+import { check_renderer, dev_warn, type Flight } from "@aeronautic/core";
+import { useFlightStore, useShallowStable } from "@aeronautic/core/react";
 import { createPortal, useThree, type ThreeElements } from "@react-three/fiber";
 import {
   useEffect,
@@ -9,15 +11,17 @@ import {
   type Ref,
 } from "react";
 import type { Group, Mesh, Object3D } from "three";
-import { capture_airframe_async, type MeasuredAirframe } from "./measure";
+import { capture_airframe_async, type MeasuredAirframe } from "../measure";
 import type {
   VaporAir,
   VaporAirframe,
   VaporEffects,
   VaporFlight,
   VaporLook,
-} from "./types";
-import { WingVapor as Core } from "./wing-vapor-core";
+  VaporQuality,
+  VaporQualityName,
+} from "../types";
+import { WingVapor as Core } from "../wing-vapor-core";
 
 // The friendly API
 //
@@ -28,47 +32,10 @@ import { WingVapor as Core } from "./wing-vapor-core";
 // costs no React render
 
 /**
- * Whether two flat objects hold the same values.
- * @param a One
- * @param b The other
- * @returns Whether every key matches
+ * What a `<WingVapor>`'s ref holds: the vapour itself, to drive every frame
+ * or read its state.
  */
-const shallow_equal = (a: object | undefined, b: object | undefined) => {
-  if (a === b) {
-    return true;
-  }
-
-  if (a === undefined || b === undefined) {
-    return false;
-  }
-
-  const a_keys = Object.keys(a);
-
-  return (
-    a_keys.length === Object.keys(b).length &&
-    a_keys.every(
-      (key) =>
-        (a as Record<string, unknown>)[key] ===
-        (b as Record<string, unknown>)[key],
-    )
-  );
-};
-
-/**
- * Hold on to a value until one arrives that differs field by field, so an
- * object written inline does not count as a change every render.
- * @param value The value as given this render
- * @returns The same object for as long as its fields hold
- */
-const useShallowStable = <T extends object | undefined>(value: T): T => {
-  const held = useRef(value);
-
-  if (!shallow_equal(held.current, value)) {
-    held.current = value;
-  }
-
-  return held.current;
-};
+export type WingVaporHandle = Core;
 
 /**
  * Props for `<WingVapor>`: every `<group>` prop, and these.
@@ -115,7 +82,7 @@ export type WingVaporProps = Omit<ThreeElements["group"], "ref"> & {
    * the landing gear and the stores, which are not the shape the air flies
    * round
    */
-  capture_filter?: (mesh: Mesh) => boolean;
+  captureFilter?: (mesh: Mesh) => boolean;
 
   /**
    * A capture done ahead of time, in place of `capture`: from
@@ -124,11 +91,30 @@ export type WingVaporProps = Omit<ThreeElements["group"], "ref"> & {
    */
   measured?: MeasuredAirframe | null;
 
-  /** The most iterations one pixel's march may take */
-  max_steps?: number;
+  /**
+   * What a frame may spend: `"low"`, `"medium"`, `"high"` (the default) or
+   * `"ultra"`, or `{ maxSteps }`, the most iterations one pixel's march may take
+   */
+  quality?: VaporQualityName | Partial<VaporQuality>;
+
+  /** Called with the measurement once `capture` is measured */
+  onCaptured?: (measured: MeasuredAirframe) => void;
+
+  /**
+   * Called if measuring `capture` fails; the vapour keeps flying `airframe`.
+   * Left out, the error is logged
+   */
+  onCaptureError?: (error: unknown) => void;
+
+  /**
+   * A shared flight to fly: its airspeed, angles, altitude and day win over
+   * `flight` and `air`, read every frame without rendering. By default the
+   * nearest `<FlightProvider>`'s; null flies only the props
+   */
+  source?: Flight | null;
 
   /** The vapour itself, to drive every frame or read its state */
-  ref?: Ref<Core | null>;
+  ref?: Ref<WingVaporHandle | null>;
 };
 
 /**
@@ -146,14 +132,30 @@ export const WingVapor: FC<WingVaporProps> = ({
   forward,
   up,
   capture,
-  capture_filter,
+  captureFilter: capture_filter,
   measured,
-  max_steps,
+  quality,
+  onCaptured: on_captured,
+  onCaptureError: on_capture_error,
+  source,
   ref,
   children,
   ...group_props
 }) => {
   const scene = useThree((state) => state.scene);
+  const gl = useThree((state) => state.gl);
+  const provided = useFlightStore();
+
+  useLayoutEffect(() => check_renderer(gl, "<WingVapor>"), [gl]);
+
+  if (airframe === undefined && !capture && !measured) {
+    dev_warn(
+      "vapor:airframe",
+      "<WingVapor> has no airframe, capture or measured, so it flies the default delta fighter's wing. " +
+        "Give it capture={model} to measure yours.",
+    );
+  }
+  const flight_source = source === undefined ? provided : source;
   const group = useRef<Group>(null);
 
   const [vapor, set_vapor] = useState<Core | null>(null);
@@ -163,11 +165,12 @@ export const WingVapor: FC<WingVaporProps> = ({
   const stable_air = useShallowStable(air);
   const stable_look = useShallowStable(look);
   const stable_effects = useShallowStable(effects);
+  const stable_quality = useShallowStable(quality);
 
   // Read at creation, then applied by the effects below
-  const initial = useRef({ airframe, flight, air, look, effects, max_steps });
+  const initial = useRef({ airframe, flight, air, look, effects, quality });
 
-  initial.current = { airframe, flight, air, look, effects, max_steps };
+  initial.current = { airframe, flight, air, look, effects, quality };
 
   useLayoutEffect(() => {
     const created = new Core({ ...initial.current, object: group.current });
@@ -190,8 +193,10 @@ export const WingVapor: FC<WingVaporProps> = ({
   // Kept in a ref: a filter written inline is a new function every render,
   // and the capture should not run again for it
   const filter = useRef(capture_filter);
+  const callbacks = useRef({ on_captured, on_capture_error });
 
   filter.current = capture_filter;
+  callbacks.current = { on_captured, on_capture_error };
 
   // Measured a few milliseconds a frame, so a big model doesn't stall the
   // page; the vapour flies the airframe as given until it is done
@@ -208,13 +213,27 @@ export const WingVapor: FC<WingVaporProps> = ({
     const abort = new AbortController();
 
     capture_airframe_async(capture, {
-      ...vapor.frame_options,
+      ...vapor.frameOptions,
       filter: filter.current,
       signal: abort.signal,
     }).then(
-      (measured) => set_result({ object: capture, measured }),
+      (measured) => {
+        set_result({ object: capture, measured });
+        callbacks.current.on_captured?.(measured);
+      },
       (error: unknown) => {
-        if (!abort.signal.aborted) console.error(error);
+        if (abort.signal.aborted) return;
+
+        const report = callbacks.current.on_capture_error;
+
+        if (report) {
+          report(error);
+        } else {
+          console.error(
+            "[aeronautic] <WingVapor> could not measure its capture:",
+            error,
+          );
+        }
       },
     );
 
@@ -231,44 +250,48 @@ export const WingVapor: FC<WingVaporProps> = ({
     if (!vapor) return;
 
     if (shape_from) {
-      vapor.apply_capture(shape_from);
+      vapor.applyCapture(shape_from);
     } else {
-      vapor.set_shape(null);
+      vapor.setShape(null);
     }
 
-    if (stable_airframe) vapor.update_airframe(stable_airframe);
+    if (stable_airframe) vapor.updateAirframe(stable_airframe);
   }, [vapor, shape_from, stable_airframe]);
 
   useLayoutEffect(() => {
-    if (stable_flight) vapor?.update_flight(stable_flight);
+    if (stable_flight) vapor?.updateFlight(stable_flight);
   }, [vapor, stable_flight]);
 
   useLayoutEffect(() => {
-    if (stable_air) vapor?.update_air(stable_air);
+    if (stable_air) vapor?.updateAir(stable_air);
   }, [vapor, stable_air]);
 
   useLayoutEffect(() => {
-    if (stable_look) vapor?.update_look(stable_look);
+    if (stable_look) vapor?.updateLook(stable_look);
   }, [vapor, stable_look]);
 
   useLayoutEffect(() => {
-    vapor?.set_effects(stable_effects ?? {});
+    vapor?.setEffects(stable_effects ?? {});
   }, [vapor, stable_effects]);
 
   const [fx, fy, fz] = forward ?? [0, 0, -1];
   const [ux, uy, uz] = up ?? [0, 1, 0];
 
   useLayoutEffect(() => {
-    vapor?.set_frame({ forward: [fx, fy, fz], up: [ux, uy, uz] });
+    vapor?.setFrame({ forward: [fx, fy, fz], up: [ux, uy, uz] });
   }, [vapor, fx, fy, fz, ux, uy, uz]);
 
   useLayoutEffect(() => {
-    if (vapor && max_steps !== undefined) {
-      vapor.uniforms.max_steps.value = max_steps;
+    if (vapor) {
+      vapor.source = flight_source;
     }
-  }, [vapor, max_steps]);
+  }, [vapor, flight_source]);
 
-  useImperativeHandle(ref, () => vapor as Core, [vapor]);
+  useLayoutEffect(() => {
+    vapor?.setQuality(stable_quality);
+  }, [vapor, stable_quality]);
+
+  useImperativeHandle<Core | null, Core | null>(ref, () => vapor, [vapor]);
 
   const node = (
     <group ref={group} {...group_props}>

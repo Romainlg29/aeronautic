@@ -50,7 +50,7 @@ Two further traps, both of which cost a debugging pass:
   postprocessing version: `CopyPass` renders into a buffer of its own, and
   rendering into a target nobody reads is silent. The shared viewport texture
   has no such trap, but the haze is a separate material variant, compiled in
-  only when some nozzle in the batch has `refraction_m > 0`, so a batch with no
+  only when some nozzle in the batch has `refractionM > 0`, so a batch with no
   haze never pays for the copy.
 - **The haze follows the gas, not the fire.** `haze_depth` is accumulated
   separately from the flame, before the burn decay and the soot. Tied to the

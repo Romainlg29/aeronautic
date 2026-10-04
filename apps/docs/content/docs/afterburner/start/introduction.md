@@ -54,4 +54,7 @@ engine glows orange at the ground and blue-violet up high: see
 Every distance in the API is in **metres**.
 
 For the vapor a wing pulls out of humid air, on the same aircraft, see
-[`@aeronautic/wing-vapor`](../../../wing-vapor/start/introduction/).
+[`@aeronautic/wing-vapor`](../../../wing-vapor/start/introduction/). To fly
+the plumes, the vapor and the model's moving parts from one flight, see
+[`@aeronautic/core`](../../../core/start/introduction/) and
+[`@aeronautic/controls`](../../../controls/start/introduction/).

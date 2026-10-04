@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AIR_CP, AIR_GAS_CONSTANT, moist_air } from "./atmosphere";
+import { AIR_CP, AIR_GAS_CONSTANT, moist_air } from "@aeronautic/core";
 import {
   CONDENSATION_TEXELS,
   cloud_extinction,
@@ -16,15 +16,15 @@ describe("condensate", () => {
     const parcel = condensate(1, humid);
 
     expect(parcel.liquid).toBe(0);
-    expect(parcel.temperature_k).toBeCloseTo(humid.temperature_k);
+    expect(parcel.temperatureK).toBeCloseTo(humid.temperatureK);
   });
 
   it("condenses nothing until the expansion reaches the dew point", () => {
     // About 1.2 % of pressure per kelvin, near the ground
     const short_of_it =
       1 -
-      ((humid.temperature_k - humid.dew_point_k) * AIR_CP) /
-        (AIR_GAS_CONSTANT * humid.temperature_k) /
+      ((humid.temperatureK - humid.dewPointK) * AIR_CP) /
+        (AIR_GAS_CONSTANT * humid.temperatureK) /
         2;
 
     expect(condensate(short_of_it, humid).liquid).toBe(0);
@@ -32,14 +32,14 @@ describe("condensate", () => {
   });
 
   it("is warmer than the dry adiabat, for the latent heat", () => {
-    const dry = humid.temperature_k * Math.pow(0.85, AIR_GAS_CONSTANT / AIR_CP);
+    const dry = humid.temperatureK * Math.pow(0.85, AIR_GAS_CONSTANT / AIR_CP);
 
-    expect(condensate(0.85, humid).temperature_k).toBeGreaterThan(dry + 1);
+    expect(condensate(0.85, humid).temperatureK).toBeGreaterThan(dry + 1);
   });
 
   it("makes cloud of a real cloud's water content", () => {
     // A tenth off the pressure of warm, humid air: grams per cubic metre
-    const grams = condensate(0.9, humid).water_kg_m3 * 1000;
+    const grams = condensate(0.9, humid).waterKgPerM3 * 1000;
 
     expect(grams).toBeGreaterThan(0.3);
     expect(grams).toBeLessThan(5);
@@ -86,7 +86,7 @@ describe("moistest", () => {
   it("keeps the moistest patches short of saturation", () => {
     const air = moist_air(0, 0.97, 10);
 
-    expect(air.relative_humidity * moistest(air, 0.06)).toBeLessThan(1);
+    expect(air.relativeHumidity * moistest(air, 0.06)).toBeLessThan(1);
     expect(moistest(moist_air(0, 0.5, 10), 0.06)).toBeCloseTo(1.06);
   });
 

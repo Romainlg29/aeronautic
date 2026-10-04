@@ -49,6 +49,21 @@ export const PLUME_QUENCH_DENSITY = 0.03;
 // yellow soot glow fades and the blue of the burning gas shows through it
 export const PLUME_SOOT_PRESSURE_EXPONENT = 1.5;
 
+// Where an air-breathing engine's exhaust is hot enough to carry soot, in
+// kelvin: none at the first, all of it by the second. A jet's soot is its
+// burner's flame's, made in the rich spray and glowing yellow because it is
+// in a flame. A dry turbine runs lean and burns its soot out long before the
+// nozzle, and a burner barely lit has not got hot enough to make any. Soot
+// drawn in gas that cool could not glow, and would only darken the sky behind
+// it: smoke a jet does not leave
+export const PLUME_SOOT_FLAME_K: [number, number] = [1200, 1500];
+
+// The fastest an air-breathing engine's nozzle lets its exhaust leave, as a
+// Mach number. A fighter's nozzle opens up as the ram raises the pressure in
+// its pipe, keeping the exit near the pressure it was designed for, until its
+// petals are as wide as they go
+export const PLUME_NOZZLE_MAX_MACH = 2.2;
+
 // The fastest the air may run with the jet, as a share of its speed
 // Past this the mixing layer all but stops growing, and the plume never ends
 export const PLUME_MAX_COFLOW = 0.85;
@@ -56,6 +71,45 @@ export const PLUME_MAX_COFLOW = 0.85;
 // The far field's half-width spread rate, dr½/dx, for a round jet's temperature
 // profile, which is a little wider than its velocity profile's 0.094
 export const PLUME_FAR_SPREAD = 0.11;
+
+// How many e-foldings the shock train has weakened by where the axis goes
+// subsonic, past which there can be no shocks: a twentieth of its swing left
+export const PLUME_SHOCK_DECAYS = 3;
+
+/**
+ * Where a jet's axis stops being supersonic, against its potential core.
+ *
+ * Shocks only stand in supersonic flow. Past the core the axis' velocity
+ * excess over the air falls as `plume_centreline` has it, and its temperature
+ * excess with it, and the cell train ends where what is left of the jet's
+ * speed over the air no longer outruns the sound in the gas there:
+ * `(Δu·c)² = γR(T_air + ΔT·c)`, solved for the share c left.
+ * @param excess_m_s The jet's speed over the air's
+ * @param jet_k The jet's static temperature, once expanded
+ * @param ambient_k The air's
+ * @param gamma_r The gas' γ times its gas constant
+ * @returns How many potential cores down the axis goes sonic; 0 for a jet
+ * that never was supersonic over the air
+ */
+export const sonic_distance = (
+  excess_m_s: number,
+  jet_k: number,
+  ambient_k: number,
+  gamma_r: number,
+): number => {
+  const heat = gamma_r * (jet_k - ambient_k);
+  const speed = Math.max(excess_m_s * excess_m_s, 1);
+
+  const share = clamp(
+    (heat + Math.sqrt(heat * heat + 4 * speed * gamma_r * ambient_k)) /
+      (2 * speed),
+    0.05,
+    1,
+  );
+
+  // The share left at x past the core is (1 + (x/x_c)⁴)^-¼
+  return Math.pow(Math.max(Math.pow(share, -4) - 1, 0), 0.25);
+};
 
 /**
  * Hold a value inside a range.
@@ -116,7 +170,7 @@ export const burner_lit = (
   throttle: number,
   profile: AfterburnerProfile,
 ): number => {
-  const threshold = profile.burner_threshold;
+  const threshold = profile.burnerThreshold;
 
   if (threshold <= 0) {
     return 1;
@@ -183,7 +237,7 @@ export const plume_adaptation = (
  * How hot the dry engine's exhaust is at one throttle setting.
  *
  * A turbine runs hotter the harder it is pushed: at idle the exhaust is little
- * over the air, at military power it is `dry_temperature_k`. Reheat does not
+ * over the air, at military power it is `dryTemperatureK`. Reheat does not
  * change it, being added on top.
  * @param params The engine
  * @param setting The dry throttle, 0 to 1
@@ -198,80 +252,115 @@ export const dry_temperature = (
   ambient_k: number,
 ): number => {
   const share =
-    profile.idle_temperature + (1 - profile.idle_temperature) * setting;
+    profile.idleTemperature + (1 - profile.idleTemperature) * setting;
 
-  return ambient_k + (params.dry_temperature_k - ambient_k) * share;
+  return ambient_k + (params.dryTemperatureK - ambient_k) * share;
 };
 
 /**
  * Everything about one jet that is constant along it.
  */
 export type JetState = {
-  // How much reheat is lit, 0 to 1
+  /** How much reheat is lit, 0 to 1 */
   burner: number;
 
-  // Whether the engine breathes air, 0 for a rocket and 1 for a jet
+  /** Whether the engine breathes air, 0 for a rocket and 1 for a jet */
   breathes: number;
 
-  // The exit pressure over the ambient, once altitude and flight have moved it
-  pressure_ratio: number;
+  /** The exit pressure over the ambient, once altitude and flight have moved it */
+  pressureRatio: number;
 
-  // The fully expanded jet: once the exhaust has reached ambient pressure
+  /** The fully expanded jet: once the exhaust has reached ambient pressure */
   mach: number;
-  temperature_k: number;
-  velocity_m_s: number;
-  radius_m: number;
+  temperatureK: number;
+  velocityMPerS: number;
+  radiusM: number;
 
-  // How far the potential core lasts, inside which the axis is still exhaust
-  core_length_m: number;
+  /** How far the potential core lasts, inside which the axis is still exhaust */
+  coreLengthM: number;
 
-  // dr½/dx of the mixing layer before the core closes, and after
-  spread_near: number;
-  spread_far: number;
+  /** dr½/dx of the mixing layer before the core closes, and after */
+  spreadNear: number;
+  spreadFar: number;
 
-  // The shock train: how far apart the cells are, how far the gas swings
-  // either side of the jet's temperature through one, as a share of it, how far down the train
-  // lasts, and where the first disk stands, in cells
-  shock_spacing_m: number;
-  shock_heat: number;
-  shock_length_m: number;
-  first_disk: number;
+  /**
+   * The shock train: how far apart the cells are, how far the gas swings
+   * either side of the jet's temperature through one, as a share of it, how far down the train
+   * lasts, and where the first disk stands, in cells
+   */
+  shockSpacingM: number;
+  shockHeat: number;
+  shockLengthM: number;
+  firstDisk: number;
 
-  // What the fuel left in the exhaust adds where it burns, in kelvin
-  afterburning_k: number;
+  /** What the fuel left in the exhaust adds where it burns, in kelvin */
+  afterburningK: number;
 
-  // How much thinner the gas is once expanded than at the exit plane
-  // What it carries, its soot and its radicals, is diluted by the same
+  /**
+   * What the friction slowing the jet adds, in kelvin: a quarter of its
+   * kinetic energy over the air as heat, where jet and air are evenly mixed
+   */
+  kineticK: number;
+
+  /**
+   * How much thinner the gas is once expanded than at the exit plane
+   * What it carries, its soot and its radicals, is diluted by the same
+   */
   thinning: number;
 
-  // The static temperature at the exit plane, before the jet has expanded
-  exit_temperature_k: number;
+  /**
+   * The static temperature at the exit plane, before the jet has expanded, as
+   * the nozzle is built: what its burner and turbine are rated by
+   */
+  exitTemperatureK: number;
 
-  // How much denser the gas is behind a Mach disk than in the jet
+  /**
+   * And as the nozzle is flown: opened up by the ram, the gas leaves it
+   * faster and cooler, nearer the jet it expands into
+   */
+  lipTemperatureK: number;
+
+  /** How much denser the gas is behind a Mach disk than in the jet */
   compression: number;
 
-  // How much of the soot survives into the far plume, once thin air has
-  // left the mixing layer too little oxygen to burn it
-  soot_survival: number;
+  /**
+   * How much of the soot survives into the far plume, once thin air has
+   * left the mixing layer too little oxygen to burn it
+   */
+  sootSurvival: number;
 
-  // How much soot the engine makes against what it makes at sea level,
-  // standing: a jet's falls with the pressure it burns at, a rocket's is its
-  // chamber's and stays
-  soot_formed: number;
+  /**
+   * How much soot the engine makes against what it makes at sea level,
+   * standing: a jet's falls with the pressure it burns at, a rocket's is its
+   * chamber's and stays
+   */
+  sootFormed: number;
 
-  // How far the camera opens up for the plume, against full power
+  /** How far the camera opens up for the plume, against full power */
   adaptation: number;
 
-  // How bright the dry engine's turbine and jet pipe glow, seen up the nozzle,
-  // the exposure divided out. Zero for a rocket, and once the burner lights
-  // it is drowned out
+  /**
+   * How bright the dry engine's turbine and jet pipe glow, seen up the nozzle,
+   * the exposure divided out. Zero for a rocket, and once the burner lights
+   * it is drowned out
+   */
   glow: number;
 
-  // How far the plume is drawn, and how wide the field is at each end of it,
-  // its outline's reach and all
-  reach_m: number;
-  outer_near_m: number;
-  outer_far_m: number;
+  /**
+   * The reheat flame burning in the jet pipe, as its soot's absorption per
+   * metre: how nearly black it looks up the nozzle depends on how far a ray
+   * runs through it before it meets the wall. Zero dry, and for a rocket,
+   * whose chamber is far up its throat
+   */
+  pipeFlame: number;
+
+  /**
+   * How far the plume is drawn, and how wide the field is at each end of it,
+   * its outline's reach and all
+   */
+  reachM: number;
+  outerNearM: number;
+  outerFarM: number;
 };
 
 /**
@@ -279,17 +368,27 @@ export type JetState = {
  * @param pressure The ambient pressure, as a share of sea level's
  * @param ram How much the inlet raises it
  * @param breathes Whether it breathes air, 0 for a rocket
+ * @param exit_temperature_k How hot its exhaust leaves, in kelvin: a jet's
+ * soot is its burner flame's, so needs the flame. Left out, it is lit
  * @returns The share
  */
 export const soot_formation = (
   pressure: number,
   ram: number,
   breathes: number,
-): number =>
-  1 +
-  (Math.min(Math.max(pressure * ram, 0) ** PLUME_SOOT_PRESSURE_EXPONENT, 3) -
-    1) *
-    breathes;
+  exit_temperature_k = Infinity,
+): number => {
+  const pressed = Math.min(
+    Math.max(pressure * ram, 0) ** PLUME_SOOT_PRESSURE_EXPONENT,
+    3,
+  );
+
+  const flame = smoothstep(...PLUME_SOOT_FLAME_K, exit_temperature_k);
+
+  // A jet's soot follows its burner and the pressure it burns at, a rocket's
+  // is its chamber's
+  return 1 + (pressed * flame - 1) * breathes;
+};
 
 /**
  * The jet one nozzle makes at one throttle setting.
@@ -312,25 +411,24 @@ export const jet_state = (
   const burner = burner_lit(travel, profile);
   const air = atmosphere(profile);
 
-  const dry_k = dry_temperature(params, setting, profile, air.temperature_k);
+  const dry_k = dry_temperature(params, setting, profile, air.temperatureK);
 
-  const exit_temperature_k =
-    dry_k + (params.exit_temperature_k - dry_k) * burner;
+  const exit_temperature_k = dry_k + (params.exitTemperatureK - dry_k) * burner;
 
   // Only an engine with a dry state breathes air
   const breathes = smoothstep(
     0,
     0.2,
-    1 - params.dry_temperature_k / Math.max(params.exit_temperature_k, 1),
+    1 - params.dryTemperatureK / Math.max(params.exitTemperatureK, 1),
   );
 
   // A rocket's exit pressure is its chamber's, so its ratio climbs as the air
   // thins. A jet's follows its inlet, which sees the ambient times the ram
   const ambient_scale = breathes * air.ram + (1 - breathes) / air.pressure;
 
-  const pressure_ratio = Math.max(
-    params.pressure_ratio *
-      (profile.idle_pressure + (1 - profile.idle_pressure) * setting) *
+  const built_ratio = Math.max(
+    params.pressureRatio *
+      (profile.idlePressure + (1 - profile.idlePressure) * setting) *
       ambient_scale,
     0.05,
   );
@@ -341,11 +439,33 @@ export const jet_state = (
 
   // Isentropic from the exit plane to ambient pressure: the stagnation
   // pressure is conserved, so the fully expanded Mach number follows from it
-  const exit_mach = Math.max(params.exit_mach, 0.2);
+  const exit_mach = Math.max(params.exitMach, 0.2);
   const exit_stagnation = 1 + k * exit_mach * exit_mach;
 
-  const total_over_ambient =
-    Math.pow(exit_stagnation, exponent) * pressure_ratio;
+  const total_over_ambient = Math.pow(exit_stagnation, exponent) * built_ratio;
+
+  // A jet's nozzle opens up as the ram raises the pressure in its pipe, so the
+  // gas leaves faster, cooler and nearer the pressure the nozzle was designed
+  // for, until it is as wide as it goes. Standing, or a rocket's fixed bell,
+  // it is as built
+  const widest = 1 + k * PLUME_NOZZLE_MAX_MACH * PLUME_NOZZLE_MAX_MACH;
+
+  const lip_stagnation = Math.max(
+    Math.min(
+      exit_stagnation * Math.pow(Math.max(air.ram, 1), breathes / exponent),
+      widest,
+    ),
+    exit_stagnation,
+  );
+
+  const lip_temperature_k =
+    (exit_temperature_k * exit_stagnation) / lip_stagnation;
+
+  // What the gas still has to expand by once it is out
+  const pressure_ratio = Math.max(
+    total_over_ambient / Math.pow(lip_stagnation, exponent),
+    0.05,
+  );
 
   const mach = Math.max(
     Math.sqrt(Math.max(Math.pow(total_over_ambient, 1 / exponent) - 1, 0) / k),
@@ -364,10 +484,10 @@ export const jet_state = (
   // A rocket high up balloons to many times its bell, so the bound is wide
   const expanded = clamp(area, 0.25, 36);
 
-  const radius_m = params.nozzle_radius_m * scale * Math.sqrt(expanded);
+  const radius_m = params.nozzleRadiusM * scale * Math.sqrt(expanded);
 
   const gas_constant =
-    UNIVERSAL_GAS_CONSTANT / Math.max(params.molar_mass_g_mol, 1);
+    UNIVERSAL_GAS_CONSTANT / Math.max(params.molarMassGPerMol, 1);
 
   const sound = Math.sqrt(gamma * gas_constant * temperature_k);
   const velocity_m_s = mach * sound;
@@ -379,13 +499,13 @@ export const jet_state = (
 
   const thinning = exit_velocity / Math.max(expanded * velocity_m_s, 1e-3);
 
-  const ambient_k = air.temperature_k;
-  const airspeed = Math.max(profile.airspeed_m_s, 0);
+  const ambient_k = air.temperatureK;
+  const airspeed = Math.max(profile.airspeedMPerS, 0);
 
   // The convective Mach number of the shear layer: past about a half, the
   // layer's growth is strangled by compressibility (Papamoschou and Roshko)
   const convective =
-    Math.max(velocity_m_s - airspeed, 0) / (sound + air.sound_m_s);
+    Math.max(velocity_m_s - airspeed, 0) / (sound + air.soundMPerS);
 
   // And air moving with the jet shears it less: a mixing layer grows as the
   // velocity difference over the sum
@@ -399,20 +519,20 @@ export const jet_state = (
   // faster, so its core is shorter (Witze)
   const density =
     (ambient_k / Math.max(temperature_k, 1)) *
-    (params.molar_mass_g_mol / AIR_MOLAR_MASS);
+    (params.molarMassGPerMol / AIR_MOLAR_MASS);
 
   const diameter_m = radius_m * 2;
 
   // Lau's supersonic core correlation, shortened for density
   // Lengthened as much as the mixing layer is slowed by the coflow
   const core_length_m =
-    (profile.core_scale *
+    (profile.coreScale *
       diameter_m *
       (4.2 + 1.1 * mach * mach) *
       Math.pow(clamp(density, 0.01, 10), 0.28)) /
     shear;
 
-  const spread_far = profile.spread_scale * PLUME_FAR_SPREAD * shear;
+  const spread_far = profile.spreadScale * PLUME_FAR_SPREAD * shear;
   const spread_near = spread_far * compressibility;
 
   // Pack's shock cell spacing, from Prandtl's vortex sheet model
@@ -430,7 +550,7 @@ export const jet_state = (
   const diamonds = 1 + (burner - 1) * breathes;
 
   const strength =
-    (profile.shock_floor + (1 - profile.shock_floor) * mismatch) *
+    (profile.shockFloor + (1 - profile.shockFloor) * mismatch) *
     supersonic *
     diamonds;
 
@@ -443,8 +563,20 @@ export const jet_state = (
   // all, so the swing is the mismatch's share of the way up to it
   const shock_heat = strength * (jet_stagnation - 1);
 
-  // The train lasts about as long as the supersonic core does
-  const shock_length_m = profile.shock_persistence * core_length_m;
+  // The train lasts as long as the supersonic core does, and is all but gone
+  // by its end. With no air moving the same way, its speed over the air is
+  // all of it
+  const sonic_m =
+    core_length_m *
+    sonic_distance(
+      velocity_m_s - airspeed,
+      temperature_k,
+      ambient_k,
+      gamma * gas_constant,
+    );
+
+  const shock_length_m =
+    (profile.shockPersistence * sonic_m) / PLUME_SHOCK_DECAYS;
 
   // A normal shock's density ratio, as much of it as the train is strong
   const normal = ((gamma + 1) * mach * mach) / ((gamma - 1) * mach * mach + 2);
@@ -457,22 +589,36 @@ export const jet_state = (
 
   // How far it is worth drawing: where the axis has cooled below what glows,
   // the centreline excess temperature falling as x_c / x past the core...
-  const visible_excess = Math.max(profile.visible_temperature_k - ambient_k, 1);
+  const visible_excess = Math.max(profile.visibleTemperatureK - ambient_k, 1);
 
   // The fuel left over burns only where there is air enough to burn it in
   const quench =
     (air.density * (1 + PLUME_QUENCH_DENSITY)) /
     (air.density + PLUME_QUENCH_DENSITY);
 
-  const afterburning_k = Math.max(params.afterburning_k * burner, 0) * quench;
+  const afterburning_k = Math.max(params.afterburningK * burner, 0) * quench;
 
   // And soot only burns out where there is oxygen to burn it
-  const soot_survival = 1 + (clamp(params.soot_survival, 0, 1) - 1) * quench;
+  const soot_survival = 1 + (clamp(params.sootSurvival, 0, 1) - 1) * quench;
 
-  const soot_formed = soot_formation(air.pressure, air.ram, breathes);
+  const soot_formed = soot_formation(
+    air.pressure,
+    air.ram,
+    breathes,
+    exit_temperature_k,
+  );
+
+  // What the friction slowing the jet gives back as heat, at an even mix. Its
+  // total enthalpy mixes as its speed does (Crocco and Busemann), so a share f
+  // of jet keeps f of its kinetic energy but moves at f of its speed, and the
+  // rest, f(1 - f) of it, is heat
+  const excess_speed = Math.max(velocity_m_s - airspeed, 0);
+
+  const kinetic_k =
+    (excess_speed * excess_speed * (gamma - 1)) / (8 * gamma * gas_constant);
 
   const hottest_excess =
-    Math.max(temperature_k - ambient_k, 0) + 4 * afterburning_k;
+    Math.max(temperature_k - ambient_k, 0) + 4 * (afterburning_k + kinetic_k);
 
   const thermal_m =
     core_length_m /
@@ -482,8 +628,8 @@ export const jet_state = (
   // the same at every station, the smoke spreading exactly as it dilutes
   // Only the soot that survives burning out in the mixing layer gets that far
   const extinction =
-    (Math.max(params.soot_per_m, 0) * soot_formed * soot_survival +
-      Math.max(params.particles_per_m, 0)) *
+    (Math.max(params.sootPerM, 0) * soot_formed * soot_survival +
+      Math.max(params.particlesPerM, 0)) *
     thinning;
 
   const smoke_depth = extinction * core_length_m * spread_far * 2.13;
@@ -496,7 +642,7 @@ export const jet_state = (
   );
 
   const longest_m = Math.max(
-    profile.max_length_d * 2 * params.nozzle_radius_m * scale,
+    profile.maxLengthD * 2 * params.nozzleRadiusM * scale,
     shortest_m,
   );
 
@@ -514,50 +660,58 @@ export const jet_state = (
     (breathes *
       (1 - lighting) *
       (PLUME_IDLE_GLOW + (1 - PLUME_IDLE_GLOW) * setting) *
-      Math.max(profile.dry_glow, 0)) /
+      Math.max(profile.dryGlow, 0)) /
     Math.max(profile.exposure, 1e-6);
+
+  // And once the burner lights, the pipe is full of its flame: the soot it
+  // makes, still at the exit plane's density
+  const pipe_flame =
+    breathes * lighting * Math.max(params.sootPerM, 0) * soot_formed;
 
   const state: JetState = {
     burner,
     breathes,
-    pressure_ratio,
+    pressureRatio: pressure_ratio,
     mach,
-    temperature_k,
-    velocity_m_s,
-    radius_m,
-    core_length_m,
-    spread_near,
-    spread_far,
-    shock_spacing_m,
-    shock_heat,
-    shock_length_m,
-    first_disk,
-    afterburning_k,
+    temperatureK: temperature_k,
+    velocityMPerS: velocity_m_s,
+    radiusM: radius_m,
+    coreLengthM: core_length_m,
+    spreadNear: spread_near,
+    spreadFar: spread_far,
+    shockSpacingM: shock_spacing_m,
+    shockHeat: shock_heat,
+    shockLengthM: shock_length_m,
+    firstDisk: first_disk,
+    afterburningK: afterburning_k,
+    kineticK: kinetic_k,
     thinning,
-    exit_temperature_k,
+    exitTemperatureK: exit_temperature_k,
+    lipTemperatureK: lip_temperature_k,
     compression,
-    soot_survival,
-    soot_formed,
+    sootSurvival: soot_survival,
+    sootFormed: soot_formed,
     adaptation: plume_adaptation(
       exit_temperature_k,
-      params.exit_temperature_k,
+      params.exitTemperatureK,
       profile.adaptation * lighting,
     ),
     glow,
-    reach_m,
-    outer_near_m: 0,
-    outer_far_m: 0,
+    pipeFlame: pipe_flame,
+    reachM: reach_m,
+    outerNearM: 0,
+    outerFarM: 0,
   };
 
   // A shaped exit reaches further from the axis than its round equivalent
   const { reach } = nozzle_outline_fit(
-    params.nozzle_aspect,
-    params.nozzle_squareness,
+    params.nozzleAspect,
+    params.nozzleSquareness,
   );
   const extent = plume_extent(params) * Math.max(reach, 1);
 
-  state.outer_near_m = radius_m * extent;
-  state.outer_far_m = jet_half_width(reach_m, state) * extent;
+  state.outerNearM = radius_m * extent;
+  state.outerFarM = jet_half_width(reach_m, state) * extent;
 
   return state;
 };
@@ -588,9 +742,9 @@ export const jet_half_width = (x_m: number, state: JetState): number => {
   const x = Math.max(x_m, 0);
 
   return (
-    state.radius_m +
-    state.spread_near * Math.min(x, state.core_length_m) +
-    state.spread_far * Math.max(x - state.core_length_m, 0)
+    state.radiusM +
+    state.spreadNear * Math.min(x, state.coreLengthM) +
+    state.spreadFar * Math.max(x - state.coreLengthM, 0)
   );
 };
 
@@ -603,7 +757,7 @@ export const jet_half_width = (x_m: number, state: JetState): number => {
  * @returns 0 to 1
  */
 export const jet_centreline = (x_m: number, state: JetState): number => {
-  const ratio = Math.max(x_m, 0) / Math.max(state.core_length_m, 1e-6);
+  const ratio = Math.max(x_m, 0) / Math.max(state.coreLengthM, 1e-6);
 
   return Math.pow(1 + Math.pow(ratio, 4), -0.25);
 };

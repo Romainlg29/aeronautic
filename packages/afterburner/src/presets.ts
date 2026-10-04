@@ -16,7 +16,7 @@ import {
 // size and scales to any other — the length, the shock spacing and the eddies
 // are not params at all, they come out of the jet's diameter
 
-const COLOR_KEYS = ["band_color"] as const;
+const COLOR_KEYS = ["bandColor"] as const;
 
 type ColorKey = (typeof COLOR_KEYS)[number];
 
@@ -26,9 +26,11 @@ type ColorKey = (typeof COLOR_KEYS)[number];
 export type AfterburnerParamsInput = Partial<
   Omit<AfterburnerParams, ColorKey> & Record<ColorKey, ColorRepresentation>
 > & {
-  // What a rocket burns, and how rich: sets its soot, what burns in the air
-  // and, against the preset's own mix, its temperatures. Any of those given
-  // here as well wins over what the mix would make of it
+  /**
+   * What a rocket burns, and how rich: sets its soot, what burns in the air
+   * and, against the preset's own mix, its temperatures. Any of those given
+   * here as well wins over what the mix would make of it
+   */
   propellant?: Propellant;
 };
 
@@ -36,7 +38,7 @@ export type AfterburnerParamsInput = Partial<
  * A named engine: what it burns, and the camera it is best seen through.
  */
 export type AfterburnerPreset = {
-  // What the engine burns at the params given, for a new mix to scale from
+  /** What the engine burns at the params given, for a new mix to scale from */
   propellant?: Propellant;
 
   params: AfterburnerParamsInput;
@@ -47,14 +49,7 @@ export type AfterburnerPreset = {
 // yellow-orange, not to where the gas stops glowing at all, which is the cone
 // a pilot or a camera sees and not the long dull tail behind it
 const JET_PROFILE: Partial<AfterburnerProfile> = {
-  visible_temperature_k: 900,
-
-  // A countable train of eight or so cells, as long exposures of a burner show
-  shock_persistence: 3.5,
-
-  // A reheat's core is longer than a cold jet's correlation gives it, the
-  // flame in the shear layer holding the air off it
-  core_scale: 1.5,
+  visibleTemperatureK: 900,
 };
 
 // What a rocket shares, against a jet
@@ -63,9 +58,9 @@ const JET_PROFILE: Partial<AfterburnerProfile> = {
 // engine is a lower chamber pressure: a more overexpanded bell and a tighter
 // shock train. And a plume seen by day, through a camera stopped well down
 const ROCKET_PROFILE: Partial<AfterburnerProfile> = {
-  burner_threshold: 0,
-  idle_pressure: 0.45,
-  max_length_d: 45,
+  burnerThreshold: 0,
+  idlePressure: 0.45,
+  maxLengthD: 45,
 };
 
 // Every value below is a real engine's, or as near as the open literature has
@@ -86,7 +81,7 @@ export const AFTERBURNER_PRESETS = {
       turbulence: 0.12,
       meander: 0.02,
     },
-    profile: { ...JET_PROFILE, shock_relaxation: 3.2 },
+    profile: { ...JET_PROFILE, shockRelaxation: 3.2 },
   },
 
   // The same burner as it really is: the mixing layer fully turbulent, the
@@ -103,25 +98,25 @@ export const AFTERBURNER_PRESETS = {
   // in the air and goes to dark smoke where it has cooled. Expansion ratio 16,
   // so Mach 3.3 at the exit, a little overexpanded at sea level
   rocket_kerolox: {
-    propellant: { fuel: "kerosene", mixture_ratio: 2.36 },
+    propellant: { fuel: "kerosene", mixtureRatio: 2.36 },
     params: {
-      nozzle_radius_m: 0.46,
-      exit_mach: 3.3,
-      pressure_ratio: 0.75,
-      exit_temperature_k: 1750,
-      dry_temperature_k: 1750,
+      nozzleRadiusM: 0.46,
+      exitMach: 3.3,
+      pressureRatio: 0.75,
+      exitTemperatureK: 1750,
+      dryTemperatureK: 1750,
       gamma: 1.22,
-      molar_mass_g_mol: 22.5,
-      soot_per_m: 2.2,
-      soot_survival: 0.6,
-      particles_per_m: 0,
-      particle_albedo: 0,
-      afterburning_k: 950,
-      band_color: "#6d78ff",
-      band_strength: 0.04,
+      molarMassGPerMol: 22.5,
+      sootPerM: 2.2,
+      sootSurvival: 0.6,
+      particlesPerM: 0,
+      particleAlbedo: 0,
+      afterburningK: 950,
+      bandColor: "#6d78ff",
+      bandStrength: 0.04,
       turbulence: 1,
       meander: 0.18,
-      refraction_m: 0.08,
+      refractionM: 0.08,
     },
     profile: { ...ROCKET_PROFILE, exposure: 1.2 },
   },
@@ -134,25 +129,25 @@ export const AFTERBURNER_PRESETS = {
   // white-hot standing shock just aft of the bell, the gas behind it heated
   // almost back to chamber temperature
   rocket_hydrolox: {
-    propellant: { fuel: "hydrogen", mixture_ratio: 6 },
+    propellant: { fuel: "hydrogen", mixtureRatio: 6 },
     params: {
-      nozzle_radius_m: 1.15,
-      exit_mach: 4.4,
-      pressure_ratio: 0.35,
-      exit_temperature_k: 1350,
-      dry_temperature_k: 1350,
+      nozzleRadiusM: 1.15,
+      exitMach: 4.4,
+      pressureRatio: 0.35,
+      exitTemperatureK: 1350,
+      dryTemperatureK: 1350,
       gamma: 1.2,
-      molar_mass_g_mol: 13.5,
-      soot_per_m: 0,
-      soot_survival: 0,
-      particles_per_m: 0,
-      particle_albedo: 0,
-      afterburning_k: 700,
-      band_color: "#b89cff",
-      band_strength: 0.9,
+      molarMassGPerMol: 13.5,
+      sootPerM: 0,
+      sootSurvival: 0,
+      particlesPerM: 0,
+      particleAlbedo: 0,
+      afterburningK: 700,
+      bandColor: "#b89cff",
+      bandStrength: 0.9,
       turbulence: 0.5,
       meander: 0.04,
-      refraction_m: 0.3,
+      refractionM: 0.3,
     },
     profile: { ...ROCKET_PROFILE, exposure: 8 },
   },
@@ -163,25 +158,25 @@ export const AFTERBURNER_PRESETS = {
   // radicals in the core, a bright and sharply cut train of diamonds, and a
   // thin orange where a trace of soot burns out in the air
   rocket_methalox: {
-    propellant: { fuel: "methane", mixture_ratio: 3.6 },
+    propellant: { fuel: "methane", mixtureRatio: 3.6 },
     params: {
-      nozzle_radius_m: 0.65,
-      exit_mach: 3.6,
-      pressure_ratio: 0.85,
-      exit_temperature_k: 1700,
-      dry_temperature_k: 1700,
+      nozzleRadiusM: 0.65,
+      exitMach: 3.6,
+      pressureRatio: 0.85,
+      exitTemperatureK: 1700,
+      dryTemperatureK: 1700,
       gamma: 1.2,
-      molar_mass_g_mol: 21,
-      soot_per_m: 0.12,
-      soot_survival: 0.15,
-      particles_per_m: 0,
-      particle_albedo: 0,
-      afterburning_k: 500,
-      band_color: "#7a5cff",
-      band_strength: 1.6,
+      molarMassGPerMol: 21,
+      sootPerM: 0.12,
+      sootSurvival: 0.15,
+      particlesPerM: 0,
+      particleAlbedo: 0,
+      afterburningK: 500,
+      bandColor: "#7a5cff",
+      bandStrength: 1.6,
       turbulence: 0.6,
       meander: 0.06,
-      refraction_m: 0.12,
+      refractionM: 0.12,
     },
     profile: { ...ROCKET_PROFILE, exposure: 1.5 },
   },
@@ -193,29 +188,29 @@ export const AFTERBURNER_PRESETS = {
   // too dense to see into, and the smoke it leaves scatters the sky
   solid_booster: {
     params: {
-      nozzle_radius_m: 1.9,
-      exit_mach: 3,
-      pressure_ratio: 0.9,
-      exit_temperature_k: 2300,
-      dry_temperature_k: 2300,
+      nozzleRadiusM: 1.9,
+      exitMach: 3,
+      pressureRatio: 0.9,
+      exitTemperatureK: 2300,
+      dryTemperatureK: 2300,
       gamma: 1.18,
-      molar_mass_g_mol: 28,
-      soot_per_m: 0,
-      soot_survival: 0,
-      particles_per_m: 2.5,
-      particle_albedo: 0.92,
-      afterburning_k: 350,
-      band_color: "#ffcf8a",
-      band_strength: 0.1,
+      molarMassGPerMol: 28,
+      sootPerM: 0,
+      sootSurvival: 0,
+      particlesPerM: 2.5,
+      particleAlbedo: 0.92,
+      afterburningK: 350,
+      bandColor: "#ffcf8a",
+      bandStrength: 0.1,
       turbulence: 1.15,
       meander: 0.22,
-      refraction_m: 0.12,
+      refractionM: 0.12,
     },
     profile: {
       ...ROCKET_PROFILE,
       exposure: 0.35,
-      sky_light: 0.02,
-      sun_light: 1.5,
+      skyLight: 0.02,
+      sunLight: 1.5,
     },
   },
 
@@ -224,24 +219,24 @@ export const AFTERBURNER_PRESETS = {
   // crisp and long, and laminar all the way
   plasma: {
     params: {
-      exit_mach: 2,
-      pressure_ratio: 1.8,
-      exit_temperature_k: 3200,
-      dry_temperature_k: 1400,
+      exitMach: 2,
+      pressureRatio: 1.8,
+      exitTemperatureK: 3200,
+      dryTemperatureK: 1400,
       gamma: 1.67,
-      molar_mass_g_mol: 39.9,
-      soot_per_m: 0,
-      soot_survival: 0,
-      particles_per_m: 0,
-      particle_albedo: 0,
-      afterburning_k: 0,
-      band_color: "#4ee2ff",
-      band_strength: 2.5,
+      molarMassGPerMol: 39.9,
+      sootPerM: 0,
+      sootSurvival: 0,
+      particlesPerM: 0,
+      particleAlbedo: 0,
+      afterburningK: 0,
+      bandColor: "#4ee2ff",
+      bandStrength: 2.5,
       turbulence: 0.05,
       meander: 0.01,
-      refraction_m: 0.03,
+      refractionM: 0.03,
     },
-    profile: { burner_threshold: 0.2, exposure: 2, activation_k: 9000 },
+    profile: { burnerThreshold: 0.2, exposure: 2, activationK: 9000 },
   },
 } satisfies Record<string, AfterburnerPreset>;
 
@@ -252,7 +247,7 @@ export type AfterburnerPresetName = keyof typeof AFTERBURNER_PRESETS;
 
 // The params set by the size of the engine, which scale with its nozzle
 // Everything else is the gas, which is no different in a bigger engine
-const METRIC_KEYS = ["refraction_m"] as const;
+const METRIC_KEYS = ["refractionM"] as const;
 
 /**
  * Look a preset up, by name or as given.
@@ -271,7 +266,7 @@ export const get_afterburner_preset = (
 /**
  * Fill a partial set of params in, over a preset and the defaults.
  *
- * A `nozzle_radius_m` different from the preset's scales every length the
+ * A `nozzleRadiusM` different from the preset's scales every length the
  * preset set with it, unless that length is given explicitly too.
  * @param input What to override
  * @param preset Which look to start from
@@ -287,7 +282,7 @@ export const resolve_afterburner_params = (
 
   assign_params(params, look.params);
 
-  const base_radius = params.nozzle_radius_m;
+  const base_radius = params.nozzleRadiusM;
 
   if (input === undefined) {
     return params;
@@ -312,11 +307,11 @@ export const resolve_afterburner_params = (
   assign_params(params, rest);
 
   if (
-    input.nozzle_radius_m !== undefined &&
+    input.nozzleRadiusM !== undefined &&
     base_radius > 0 &&
-    input.nozzle_radius_m !== base_radius
+    input.nozzleRadiusM !== base_radius
   ) {
-    const scale = input.nozzle_radius_m / base_radius;
+    const scale = input.nozzleRadiusM / base_radius;
 
     for (const key of METRIC_KEYS) {
       if (input[key] === undefined) {
@@ -372,7 +367,7 @@ export const resolve_afterburner_profile = (
       const value = input[key];
 
       if (value !== undefined) {
-        profile[key] = value;
+        (profile as Record<string, unknown>)[key] = value;
       }
     }
   }
@@ -385,12 +380,12 @@ export const resolve_afterburner_profile = (
  */
 export const AFTERBURNER_QUALITY = {
   // A phone, or a sky full of distant plumes
-  low: { near_steps: 32, mid_steps: 12, turbulence_octaves: 1 },
-  medium: { near_steps: 48, mid_steps: 16, turbulence_octaves: 2 },
+  low: { nearSteps: 32, midSteps: 12, turbulenceOctaves: 1 },
+  medium: { nearSteps: 48, midSteps: 16, turbulenceOctaves: 2 },
   high: default_afterburner_quality(),
 
   // For a still frame
-  ultra: { near_steps: 112, mid_steps: 40, turbulence_octaves: 3 },
+  ultra: { nearSteps: 112, midSteps: 40, turbulenceOctaves: 3 },
 } satisfies Record<string, AfterburnerQuality>;
 
 /**
@@ -413,14 +408,14 @@ export const resolve_afterburner_quality = (
       ? { ...AFTERBURNER_QUALITY[input] }
       : { ...default_afterburner_quality(), ...input };
 
-  const near = Math.max(1, Math.round(quality.near_steps));
+  const near = Math.max(1, Math.round(quality.nearSteps));
 
   return {
-    near_steps: near,
-    mid_steps: Math.max(1, Math.min(near, Math.round(quality.mid_steps))),
-    turbulence_octaves: Math.max(
+    nearSteps: near,
+    midSteps: Math.max(1, Math.min(near, Math.round(quality.midSteps))),
+    turbulenceOctaves: Math.max(
       1,
-      Math.min(3, Math.round(quality.turbulence_octaves)),
+      Math.min(3, Math.round(quality.turbulenceOctaves)),
     ),
   };
 };

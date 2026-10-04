@@ -1,5 +1,8 @@
 import { useFrame } from "@react-three/fiber";
-import { Afterburner, type AfterburnerHandle } from "@aeronautic/afterburner";
+import {
+  Afterburner,
+  type AfterburnerHandle,
+} from "@aeronautic/afterburner/react";
 import { type FC, type RefObject, useRef } from "react";
 import { Nozzle, Stage } from "./stage";
 
@@ -13,12 +16,13 @@ const Spool: FC<{ engine: RefObject<AfterburnerHandle | null> }> = ({
   useFrame(({ clock }) => {
     if (!engine.current) return;
 
-    // From idle through military power to full reheat and back, every few seconds
-    engine.current.throttle = 0.55 + 0.55 * Math.sin(clock.elapsedTime * 0.9);
+    // From most of military power through the burner's light-off to full
+    // reheat and back, every few seconds: in reheat about two fifths of it
+    engine.current.throttle = 0.95 + 0.15 * Math.sin(clock.elapsedTime * 0.9);
 
     // A wobble of the nozzle's aim, as a vectoring nozzle would
     const pitch = 0.08 * Math.sin(clock.elapsedTime * 0.6);
-    engine.current.set_direction([1, pitch, 0]);
+    engine.current.setDirection([0, pitch, 1]);
   });
 
   return null;

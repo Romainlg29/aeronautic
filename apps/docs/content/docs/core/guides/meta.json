@@ -1,0 +1,12 @@
+{
+  "title": "Guides",
+  "icon": "BookOpen",
+  "pages": [
+    "one-flight",
+    "writing-it",
+    "tracking",
+    "reading-it",
+    "engines",
+    "without-react"
+  ]
+}

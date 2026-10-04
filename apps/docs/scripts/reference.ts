@@ -1,4 +1,4 @@
-// Writes the params, profile and quality reference pages from the comments
+// Writes the params, profile and quality reference pages from the JSDoc
 // and defaults in the library's types.ts, so the reference cannot drift from
 // the code. Runs before every docs build and dev server
 
@@ -136,8 +136,14 @@ const fields = (type: string, defaults: string): Field[] => {
   for (const raw of type_body(type).split("\n")) {
     const line = raw.trim();
 
-    if (line.startsWith("//")) {
-      comments.push(line.slice(2).trim());
+    const single = line.match(/^\/\*\*(.*)\*\/$/);
+
+    if (single) {
+      comments.push((single[1] ?? "").trim());
+    } else if (line === "/**" || line === "*/") {
+      continue;
+    } else if (line.startsWith("*")) {
+      comments.push(line.slice(1).trim());
     } else if (/^\w+: /.test(line)) {
       const [key = "", field_type = ""] = line
         .replace(/;$/, "")
@@ -180,7 +186,7 @@ const write = ({ file, title, description, intro, type, defaults }: Page) => {
     "| --- | --- | --- |",
     ...rows.map(
       ({ key, value, short }) =>
-        `| [\`${key}\`](#${key}) | \`${value}\` | ${short} |`,
+        `| [\`${key}\`](#${key.toLowerCase()}) | \`${value}\` | ${short} |`,
     ),
     "",
     ...rows.map(({ key, type: field_type, value, paragraphs }) =>
@@ -206,7 +212,7 @@ write({
   defaults: "default_afterburner_params",
   intro: `Params describe **one engine**: its nozzle, the gas leaving it, and what that gas carries. They ride on the instance, so two engines in one batch may burn differently. Every one is a physical quantity in SI units.
 
-Pass any subset as \`params\`. The rest come from the preset, then from the defaults below (\`default_afterburner_params()\`, a fighter engine at full reheat). \`params\` also takes \`propellant: { fuel, mixture_ratio }\`: see [Presets and propellants](../../guides/presets-and-propellants/#rockets-by-propellant). \`band_color\` takes any three.js \`ColorRepresentation\`.`,
+Pass any subset as \`params\`. The rest come from the preset, then from the defaults below (\`default_afterburner_params()\`, a fighter engine at full reheat). \`params\` also takes \`propellant: { fuel, mixtureRatio }\`: see [Presets and propellants](../../guides/presets-and-propellants/#rockets-by-propellant). \`bandColor\` takes any three.js \`ColorRepresentation\`.`,
 });
 
 write({
@@ -216,7 +222,7 @@ write({
     "Every per-batch profile field: the air, the camera and the shape constants.",
   type: "AfterburnerProfile",
   defaults: "default_afterburner_profile",
-  intro: `The profile is **the world the engines run in and the camera seeing them**. It rides on the material as uniforms, shared by every nozzle in one batch, and it can change while it runs: calling \`update_profile\` every frame is fine.
+  intro: `The profile is **the world the engines run in and the camera seeing them**. It rides on the material as uniforms, shared by every nozzle in one batch, and it can change while it runs: calling \`updateProfile\` every frame is fine.
 
 Pass any subset as the batch's \`profile\`. The rest come from the batch's preset, then from these defaults (\`default_afterburner_profile()\`).`,
 });
@@ -227,9 +233,9 @@ write({
   description: "What a frame may spend on the plumes, and the quality presets.",
   type: "AfterburnerQuality",
   defaults: "default_afterburner_quality",
-  intro: `Quality caps what a frame may spend. Pass \`"low"\`, \`"medium"\`, \`"high"\` or \`"ultra"\`, or any subset of the fields below. The step counts are uniforms and change live; only \`turbulence_octaves\` recompiles the material.
+  intro: `Quality caps what a frame may spend. Pass \`"low"\`, \`"medium"\`, \`"high"\` or \`"ultra"\`, or any subset of the fields below. The step counts are uniforms and change live; only \`turbulenceOctaves\` recompiles the material.
 
-| preset | near_steps | mid_steps | turbulence_octaves |
+| preset | nearSteps | midSteps | turbulenceOctaves |
 | --- | --- | --- | --- |
 | \`low\` | 32 | 12 | 1 |
 | \`medium\` | 48 | 16 | 2 |

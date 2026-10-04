@@ -46,7 +46,10 @@ quantity in SI units:
   missing. The classic `WebGLRenderer` is **not** supported.
 
 It pairs with [`@aeronautic/afterburner`](../../../afterburner/start/introduction/)
-on the same aircraft, but needs nothing from it.
+on the same aircraft, but needs nothing from it. Inside a
+[`<FlightProvider>`](../../../core/guides/one-flight/) from `@aeronautic/core`,
+it flies the same flight as the plumes and the
+[control surfaces](../../../controls/start/introduction/), with no wiring.
 
 ## How these docs are laid out
 

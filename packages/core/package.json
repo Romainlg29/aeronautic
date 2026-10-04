@@ -1,0 +1,85 @@
+{
+  "name": "@aeronautic/core",
+  "version": "0.1.0",
+  "description": "The shared ground of the @aeronautic effects: the International Standard Atmosphere and moist air, an aircraft's flight as one mutable store read for free every frame, and six-view depth capture of a model, for three.js and React Three Fiber",
+  "keywords": [
+    "aircraft",
+    "atmosphere",
+    "flight",
+    "flight-model",
+    "isa",
+    "r3f",
+    "react-three-fiber",
+    "standard-atmosphere",
+    "three",
+    "three.js",
+    "threejs",
+    "webgpu"
+  ],
+  "homepage": "https://romainlg29.github.io/aeronautic/docs/core/start/introduction/",
+  "bugs": {
+    "url": "https://github.com/Romainlg29/aeronautic/issues"
+  },
+  "license": "MIT",
+  "author": "Romain Le Gall (https://github.com/Romainlg29)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Romainlg29/aeronautic.git",
+    "directory": "packages/core"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "pnpm build"
+  },
+  "devDependencies": {
+    "@react-three/fiber": "^9.8.1",
+    "@types/react": "^19.3.0",
+    "@types/three": "~0.186.0",
+    "react": "^19.3.0",
+    "three": "~0.186.1",
+    "tsdown": "^0.23.0",
+    "typescript": "~6.0.2",
+    "vitest": "^4.1.4"
+  },
+  "peerDependencies": {
+    "@react-three/fiber": "^9.0.0 || ^10.0.0-alpha.0",
+    "react": "^19.0.0",
+    "three": ">=0.186.0 <0.187.0"
+  },
+  "peerDependenciesMeta": {
+    "@react-three/fiber": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
+  }
+}

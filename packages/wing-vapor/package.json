@@ -1,6 +1,6 @@
 {
   "name": "@aeronautic/wing-vapor",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Physically based wing vapor for three.js and React Three Fiber: wingtip and leading-edge vortex trails, shock vapor over the wing and the transonic vapor cone, raymarched in TSL for WebGPU",
   "keywords": [
     "aircraft",
@@ -50,6 +50,14 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    },
+    "./physics": {
+      "types": "./dist/physics.d.ts",
+      "default": "./dist/physics.js"
+    },
     "./tsl": {
       "types": "./dist/tsl.d.ts",
       "default": "./dist/tsl.js"
@@ -68,6 +76,7 @@
     "prepublishOnly": "pnpm build"
   },
   "devDependencies": {
+    "@aeronautic/core": "workspace:^",
     "@react-three/fiber": "^9.8.1",
     "@types/node": "^24.0.0",
     "@types/react": "^19.3.0",
@@ -79,8 +88,17 @@
     "vitest": "^4.1.4"
   },
   "peerDependencies": {
+    "@aeronautic/core": "workspace:^",
     "@react-three/fiber": "^9.0.0 || ^10.0.0-alpha.0",
     "react": "^19.0.0",
     "three": ">=0.186.0 <0.187.0"
+  },
+  "peerDependenciesMeta": {
+    "@react-three/fiber": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
   }
 }

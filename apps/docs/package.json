@@ -11,9 +11,12 @@
   },
   "dependencies": {
     "@aeronautic/afterburner": "workspace:*",
+    "@aeronautic/controls": "workspace:*",
+    "@aeronautic/core": "workspace:*",
     "@aeronautic/wing-vapor": "workspace:*",
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.1",
+    "@tanstack/react-hotkeys": "^0.12.1",
     "fumadocs-core": "16.15.17",
     "fumadocs-mdx": "15.4.5",
     "fumadocs-ui": "npm:@fumadocs/base-ui@16.15.17",

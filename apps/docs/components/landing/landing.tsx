@@ -1,11 +1,16 @@
 "use client";
 
+import { Flight } from "@aeronautic/core";
+import { FlightProvider, useFlight } from "@aeronautic/core/react";
+import { HotkeysProvider } from "@tanstack/react-hotkeys";
 import { BookOpen, Moon, Play, Sun } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { type FC, type ReactNode, useRef, useState } from "react";
+import { type FC, type ReactNode, useState } from "react";
 import { app_name, repository, tagline } from "@/lib/shared";
+import { AIR, START_THROTTLE } from "./flight-plan";
 import type { Sky } from "./flight-scene";
+import { Legend, usePilot } from "./pilot";
 
 const FlightScene = dynamic(() => import("./flight-scene"), { ssr: false });
 
@@ -58,61 +63,112 @@ const Button: FC<{
   );
 };
 
+// The flight the keyboard writes: just over the sea on a humid summer day,
+// gear up, well into reheat. The same air and throttle the scene's fake
+// starts with
+const START = { ...AIR, throttle: START_THROTTLE, gear: 0 };
+
 /**
- * The landing page: the fighter flying fullscreen, with both libraries on it,
- * and the way into the docs over it.
- * @returns The page
+ * What the HUD shows, rendered ten times a second at most.
+ * @returns The readout
  */
-export const Landing: FC = () => {
-  const [sky, set_sky] = useState<Sky>("day");
-  const readout = useRef<HTMLSpanElement>(null);
+const Readout: FC = () => {
+  const mach = useFlight((f) => f.mach.toFixed(2), { hz: 10 });
+  const load = useFlight((f) => f.loadFactor.toFixed(1), { hz: 10 });
+  const throttle = useFlight((f) => Math.round(f.throttle * 100), { hz: 10 });
+  const gear = useFlight((f) => f.gear > 0.5);
+  const flaps = useFlight((f) => f.flaps);
+  const airbrake = useFlight((f) => f.airbrake > 0.5);
 
   return (
-    <main
-      className="fixed inset-0 overflow-hidden"
-      style={{ background: sky === "day" ? "#6f9fd8" : "#05070b" }}
-    >
-      <div className="absolute inset-0">
-        <FlightScene sky={sky} readout={readout} />
-      </div>
-
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
-
-      <div className="absolute inset-x-0 bottom-0 flex flex-col gap-5 p-4 text-white md:p-10">
-        <div>
-          <h1 className="text-4xl font-semibold tracking-tight md:text-6xl">
-            {app_name}
-          </h1>
-          <p className="mt-2 max-w-xl text-sm text-white/80 md:text-base">
-            {tagline} An afterburner and the vapor a wing pulls out of humid
-            air, both from the physics.
-          </p>
-        </div>
-        <nav className="flex flex-wrap items-center gap-2">
-          <Button href="/docs/afterburner/start/introduction/">
-            <BookOpen /> Docs
-          </Button>
-          <Button href="/docs/afterburner/examples/basic-jet/">
-            <Play /> Examples
-          </Button>
-          <Button href={repository} external>
-            <GitHubMark /> GitHub
-          </Button>
-          <Button
-            onClick={() => set_sky(sky === "day" ? "night" : "day")}
-            label={`Switch to ${sky === "day" ? "night" : "day"}`}
-          >
-            {sky === "day" ? <Moon /> : <Sun />}
-            {sky === "day" ? "Night" : "Day"}
-          </Button>
-          <span
-            ref={readout}
-            className="ml-auto hidden font-mono text-xs text-white/70 sm:block"
-          >
-            Loading the fighter…
-          </span>
-        </nav>
-      </div>
-    </main>
+    <span className="font-mono text-xs text-white/70">
+      Mach {mach} · {load} g · thr {throttle} %{throttle > 100 && " WEP"}
+      {gear && " · gear"}
+      {flaps > 0 && ` · flaps ${flaps < 1 ? "combat" : "landing"}`}
+      {airbrake && " · brake"}
+    </span>
   );
 };
+
+/**
+ * The page, inside the hotkeys' provider.
+ * @returns The page
+ */
+const Page: FC = () => {
+  const [sky, set_sky] = useState<Sky>("day");
+  const [flight] = useState(() => new Flight(START));
+  const { keys, levers } = usePilot();
+
+  return (
+    <FlightProvider flight={flight}>
+      <main
+        className="landing fixed inset-0 overflow-hidden"
+        style={{
+          background: sky === "day" ? "#6f9fd8" : "#05070b",
+          transition: "background-color 0.6s ease-in-out",
+        }}
+      >
+        <div className="absolute inset-0">
+          <FlightScene sky={sky} flight={flight} keys={keys} levers={levers} />
+        </div>
+
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+
+        <aside className="absolute top-4 right-4 hidden rounded-xl border border-white/15 bg-black/30 p-3 text-white backdrop-blur-md sm:block md:top-10 md:right-10">
+          <p className="mb-2 text-xs font-medium text-white/90">
+            Fly it from the keyboard
+          </p>
+          <Legend />
+          <p className="mt-2 text-[11px] text-white/60">
+            Drag to look round, scroll to zoom
+          </p>
+        </aside>
+
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-5 p-4 text-white md:p-10">
+          <div>
+            <h1 className="text-4xl font-semibold tracking-tight md:text-6xl">
+              {app_name}
+            </h1>
+            <p className="mt-2 max-w-xl text-sm text-white/80 md:text-base">
+              {tagline} An afterburner and the vapor a wing pulls out of humid
+              air, both from the physics.
+            </p>
+          </div>
+          <nav className="pointer-events-auto flex flex-wrap items-center gap-2">
+            <Button href="/docs/afterburner/start/introduction/">
+              <BookOpen /> Docs
+            </Button>
+            <Button href="/docs/afterburner/examples/basic-jet/">
+              <Play /> Examples
+            </Button>
+            <Button href={repository} external>
+              <GitHubMark /> GitHub
+            </Button>
+            <Button
+              onClick={() => set_sky(sky === "day" ? "night" : "day")}
+              label={`Switch to ${sky === "day" ? "night" : "day"}`}
+            >
+              {sky === "day" ? <Moon /> : <Sun />}
+              {sky === "day" ? "Night" : "Day"}
+            </Button>
+            <span className="ml-auto hidden sm:block">
+              <Readout />
+            </span>
+          </nav>
+        </div>
+      </main>
+    </FlightProvider>
+  );
+};
+
+/**
+ * The landing page: the fighter fullscreen, with the libraries on it, flown
+ * from the keyboard, and the way into the docs over it.
+ * @returns The page
+ */
+export const Landing: FC = () => (
+  // Keys the page takes don't scroll it or reach the browser
+  <HotkeysProvider defaultOptions={{ hotkey: { preventDefault: true } }}>
+    <Page />
+  </HotkeysProvider>
+);

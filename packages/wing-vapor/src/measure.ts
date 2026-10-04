@@ -6,7 +6,7 @@ import {
   type AirframeViews,
   type CaptureOptions,
   type DepthView,
-} from "./capture";
+} from "@aeronautic/core";
 import type { VaporAirframe } from "./types";
 import {
   lattice_loading,
@@ -35,27 +35,29 @@ import {
  * What six views say about an aircraft.
  */
 export type MeasuredAirframe = {
-  // The planform and body fitted to it, as the analytic dials. The aircraft's
-  // mass and what cannot be seen, such as how sharp its leading edge is, are
-  // left out
+  /**
+   * The planform and body fitted to it, as the analytic dials. The aircraft's
+   * mass and what cannot be seen, such as how sharp its leading edge is, are
+   * left out
+   */
   airframe: Pick<
     VaporAirframe,
-    | "span_m"
-    | "root_chord_m"
-    | "tip_chord_m"
-    | "leading_edge_sweep_rad"
-    | "apex_m"
-    | "wing_height_m"
-    | "dihedral_rad"
+    | "spanM"
+    | "rootChordM"
+    | "tipChordM"
+    | "leadingEdgeSweepRad"
+    | "apexM"
+    | "wingHeightM"
+    | "dihedralRad"
     | "thickness"
-    | "root_span_m"
-    | "nose_m"
-    | "fuselage_length_m"
-    | "fuselage_radius_m"
-    | "fuselage_height_m"
+    | "rootSpanM"
+    | "noseM"
+    | "fuselageLengthM"
+    | "fuselageRadiusM"
+    | "fuselageHeightM"
   >;
 
-  // The wing as it is, station by station
+  /** The wing as it is, station by station */
   shape: WingShape;
 };
 
@@ -80,6 +82,18 @@ const RESUME_CHORD = 0.4;
 // clear of the body inboard, and of whatever the tip carries outboard
 const OUTER_FROM = 0.5;
 const OUTER_TO = 0.92;
+
+// The thickest a section is taken to be for its chord, against the wing's
+// median: a wing's root is a little thicker than its tip, while the root of
+// a fin or the side of a body read as section is far thicker
+const ROOT_THICKNESS = 1.5;
+
+// How far along the span the table is smoothed over, as a share of the
+// semispan. The pressure field over a wing cannot jump from one station to
+// the next: the flow evens a step in the planform out over a span of the
+// order of its chord. A table that kept one, a body's aft end or a fin's root
+// ending at one station, would draw a wall of vapour standing on the span
+const SPAN_SMOOTHING = 0.06;
 
 // Pixels deeper than this many times their column's median are something
 // standing on the section, a fin or a store, and not the section
@@ -112,8 +126,10 @@ type Column = {
   thickness: number;
   mid: number;
 
-  // The next longest run along the chord, if any: a canard's or a
-  // tailplane's section at the same station
+  /**
+   * The next longest run along the chord, if any: a canard's or a
+   * tailplane's section at the same station
+   */
   second: { leading: number; trailing: number; mid: number } | null;
 };
 
@@ -124,7 +140,7 @@ type Column = {
  * @returns The column, or null if nothing is there
  */
 const read_column = (top: DepthView, span: number): Column | null => {
-  const row = Math.floor((span - top.origin[1]) / top.cell_m);
+  const row = Math.floor((span - top.origin[1]) / top.cellM);
 
   if (row < 0 || row >= top.height) {
     return null;
@@ -143,7 +159,7 @@ const read_column = (top: DepthView, span: number): Column | null => {
     const far = top.far[pixel];
 
     pixels.push({
-      x: top.origin[0] + column * top.cell_m,
+      x: top.origin[0] + column * top.cellM,
       depth: far - near,
       mid: (far + near) / 2,
     });
@@ -166,7 +182,7 @@ const read_column = (top: DepthView, span: number): Column | null => {
   const runs: (typeof section)[] = [section.slice(0, 1)];
 
   for (let index = 1; index < section.length; index++) {
-    if (section[index].x - section[index - 1].x > top.cell_m * 1.5) {
+    if (section[index].x - section[index - 1].x > top.cellM * 1.5) {
       runs.push([]);
     }
 
@@ -179,7 +195,7 @@ const read_column = (top: DepthView, span: number): Column | null => {
   const next = runs[1];
 
   const leading = longest[0].x;
-  const trailing = longest[longest.length - 1].x + top.cell_m;
+  const trailing = longest[longest.length - 1].x + top.cellM;
   const depths = longest.map(({ depth }) => depth);
   const mids = longest.map(({ mid }) => mid);
 
@@ -192,7 +208,7 @@ const read_column = (top: DepthView, span: number): Column | null => {
       next && next.length >= MIN_SECOND_PIXELS
         ? {
             leading: next[0].x,
-            trailing: next[next.length - 1].x + top.cell_m,
+            trailing: next[next.length - 1].x + top.cellM,
             mid: median(next.map(({ mid }) => mid)),
           }
         : null,
@@ -236,6 +252,93 @@ const fit_line = (xs: number[], ys: number[]): [number, number] => {
   for (let index = 0; index < n; index++) {
     covariance += (xs[index] - mean_x) * (ys[index] - mean_y);
     variance += (xs[index] - mean_x) ** 2;
+  }
+
+  const slope = variance > 0 ? covariance / variance : 0;
+
+  return [mean_y - slope * mean_x, slope];
+};
+
+/**
+ * Smooth the measured wing along the span, from its root to its tip: each
+ * station's edges, mid-plane and thickness become a straight line's, fitted
+ * over the stations round it with Gaussian weights. A straight edge, a crank
+ * or the tip keep their place and slope; a step is evened out over
+ * `SPAN_SMOOTHING` of the semispan either side.
+ * @param shape The wing, smoothed in place
+ * @param from The first station that is wing
+ */
+const smooth_table = (shape: WingShape, from: number) => {
+  const sigma = SPAN_SMOOTHING * (SHAPE_STATIONS - 1);
+  const reach = Math.ceil(3 * sigma);
+
+  const trailing = shape.leadingM.map(
+    (leading, station) => leading + shape.chordM[station],
+  );
+  const rows = [shape.leadingM, trailing, shape.midM, shape.thickness].map(
+    (row) => Float32Array.from(row),
+  );
+
+  for (let station = from; station < SHAPE_STATIONS; station++) {
+    const xs: number[] = [];
+    const weights: number[] = [];
+
+    for (
+      let other = Math.max(station - reach, from);
+      other <= Math.min(station + reach, SHAPE_STATIONS - 1);
+      other++
+    ) {
+      xs.push(other - station);
+      weights.push(Math.exp(-((other - station) ** 2) / (2 * sigma * sigma)));
+    }
+
+    const [leading, trail, mid, thickness] = rows.map(
+      (row) =>
+        weighted_line(
+          xs,
+          xs.map((x) => row[station + x]),
+          weights,
+        )[0],
+    );
+
+    shape.leadingM[station] = leading;
+    shape.chordM[station] = Math.max(trail - leading, 1e-3);
+    shape.midM[station] = mid;
+    shape.thickness[station] = thickness;
+  }
+};
+
+/**
+ * A straight line through weighted points, by least squares.
+ * @param xs Where
+ * @param ys What
+ * @param weights How much each counts
+ * @returns Its intercept and slope
+ */
+const weighted_line = (
+  xs: number[],
+  ys: number[],
+  weights: number[],
+): [number, number] => {
+  let total = 0;
+  let mean_x = 0;
+  let mean_y = 0;
+
+  for (let index = 0; index < xs.length; index++) {
+    total += weights[index];
+    mean_x += weights[index] * xs[index];
+    mean_y += weights[index] * ys[index];
+  }
+
+  mean_x /= total;
+  mean_y /= total;
+
+  let covariance = 0;
+  let variance = 0;
+
+  for (let index = 0; index < xs.length; index++) {
+    covariance += weights[index] * (xs[index] - mean_x) * (ys[index] - mean_y);
+    variance += weights[index] * (xs[index] - mean_x) ** 2;
   }
 
   const slope = variance > 0 ? covariance / variance : 0;
@@ -310,7 +413,7 @@ export const measure_airframe = (views: AirframeViews): MeasuredAirframe => {
     const span = (semispan * station) / (SHAPE_STATIONS - 1);
 
     // Half a pixel in from the tip, or the tip's own column reads empty
-    const inside = Math.min(span, semispan - top.cell_m * 0.5);
+    const inside = Math.min(span, semispan - top.cellM * 0.5);
 
     const right = read_column(top, inside);
     const left = read_column(top, -inside);
@@ -339,7 +442,7 @@ export const measure_airframe = (views: AirframeViews): MeasuredAirframe => {
   const outer_spans = outer.map(({ station }) => span_of(station));
 
   const chord = (column: Column) =>
-    Math.max(column.trailing - column.leading, top.cell_m);
+    Math.max(column.trailing - column.leading, top.cellM);
 
   const ratio = (column: Column) => column.thickness / chord(column);
 
@@ -472,16 +575,16 @@ export const measure_airframe = (views: AirframeViews): MeasuredAirframe => {
     wing.map(
       ({ column }) =>
         column.thickness /
-        Math.max(column.trailing - column.leading, top.cell_m),
+        Math.max(column.trailing - column.leading, top.cellM),
     ),
   );
 
   const shape: WingShape = {
-    semispan_m: semispan,
-    root_span_m: root_span,
-    leading_m: new Float32Array(SHAPE_STATIONS),
-    chord_m: new Float32Array(SHAPE_STATIONS),
-    mid_m: new Float32Array(SHAPE_STATIONS),
+    semispanM: semispan,
+    rootSpanM: root_span,
+    leadingM: new Float32Array(SHAPE_STATIONS),
+    chordM: new Float32Array(SHAPE_STATIONS),
+    midM: new Float32Array(SHAPE_STATIONS),
     thickness: new Float32Array(SHAPE_STATIONS),
     loading: new Float32Array(SHAPE_STATIONS),
   };
@@ -492,22 +595,27 @@ export const measure_airframe = (views: AirframeViews): MeasuredAirframe => {
 
     if (station < root_station || !column) {
       // Through the body, or past what the views caught: the fitted wing
-      shape.leading_m[station] = apex + tan_sweep * span;
-      shape.chord_m[station] = Math.max(
-        trailing_0 + trailing_slope * span - shape.leading_m[station],
-        top.cell_m,
+      shape.leadingM[station] = apex + tan_sweep * span;
+      shape.chordM[station] = Math.max(
+        trailing_0 + trailing_slope * span - shape.leadingM[station],
+        top.cellM,
       );
-      shape.mid_m[station] = mid_0 + tan_dihedral * span;
+      shape.midM[station] = mid_0 + tan_dihedral * span;
       shape.thickness[station] = thickness;
     } else {
-      const chord = Math.max(column.trailing - column.leading, top.cell_m);
+      const chord = Math.max(column.trailing - column.leading, top.cellM);
 
-      shape.leading_m[station] = column.leading;
-      shape.chord_m[station] = chord;
-      shape.mid_m[station] = column.mid;
-      shape.thickness[station] = Math.min(column.thickness / chord, 0.3);
+      shape.leadingM[station] = column.leading;
+      shape.chordM[station] = chord;
+      shape.midM[station] = column.mid;
+      shape.thickness[station] = Math.min(
+        column.thickness / chord,
+        ROOT_THICKNESS * thickness,
+      );
     }
   }
+
+  smooth_table(shape, root_station);
 
   shape.loading.set(lattice_loading(shape));
   shape.secondary = measure_secondary(columns, root_station, semispan);
@@ -517,15 +625,15 @@ export const measure_airframe = (views: AirframeViews): MeasuredAirframe => {
 
   return {
     airframe: {
-      span_m: semispan * 2,
-      root_chord_m: Math.max(trailing_0 - apex, top.cell_m),
-      tip_chord_m: shape.chord_m[tip],
-      leading_edge_sweep_rad: Math.atan(tan_sweep),
-      apex_m: apex,
-      wing_height_m: mid_0,
-      dihedral_rad: Math.atan(tan_dihedral),
+      spanM: semispan * 2,
+      rootChordM: Math.max(trailing_0 - apex, top.cellM),
+      tipChordM: shape.chordM[tip],
+      leadingEdgeSweepRad: Math.atan(tan_sweep),
+      apexM: apex,
+      wingHeightM: mid_0,
+      dihedralRad: Math.atan(tan_dihedral),
       thickness,
-      root_span_m: root_span,
+      rootSpanM: root_span,
       ...body,
     },
     shape,
@@ -580,14 +688,14 @@ const measure_secondary = (
 
   return {
     kind: ahead > 0 ? "canard" : "tail",
-    semispan_m,
-    tip_leading_m: (outer.leading + inner.leading) / 2,
-    tip_chord_m: Math.max(
+    semispanM: semispan_m,
+    tipLeadingM: (outer.leading + inner.leading) / 2,
+    tipChordM: Math.max(
       (outer.trailing - outer.leading + inner.trailing - inner.leading) / 2,
       step,
     ),
-    tip_height_m: (outer.mid + inner.mid) / 2,
-    area_m2: area * 2,
+    tipHeightM: (outer.mid + inner.mid) / 2,
+    areaM2: area * 2,
   };
 };
 
@@ -635,9 +743,9 @@ const measure_body = (
   root_span: number,
 ): Pick<
   VaporAirframe,
-  "nose_m" | "fuselage_length_m" | "fuselage_radius_m" | "fuselage_height_m"
+  "noseM" | "fuselageLengthM" | "fuselageRadiusM" | "fuselageHeightM"
 > => {
-  const band = Math.max(root_span, top.cell_m);
+  const band = Math.max(root_span, top.cellM);
 
   let nose = Infinity;
   let tail = -Infinity;
@@ -645,13 +753,13 @@ const measure_body = (
   let height = 0;
 
   for (let column = 0; column < top.width; column++) {
-    const x = top.origin[0] + (column + 0.5) * top.cell_m;
+    const x = top.origin[0] + (column + 0.5) * top.cellM;
 
     let area = 0;
     let moment = 0;
 
     for (let row = 0; row < top.height; row++) {
-      const span = top.origin[1] + (row + 0.5) * top.cell_m;
+      const span = top.origin[1] + (row + 0.5) * top.cellM;
 
       if (Math.abs(span) > band) {
         continue;
@@ -666,16 +774,16 @@ const measure_body = (
 
       const depth = top.far[pixel] - near;
 
-      area += depth * top.cell_m;
-      moment += depth * top.cell_m * ((top.far[pixel] + near) / 2);
+      area += depth * top.cellM;
+      moment += depth * top.cellM * ((top.far[pixel] + near) / 2);
     }
 
     if (area <= 0) {
       continue;
     }
 
-    nose = Math.min(nose, x - top.cell_m / 2);
-    tail = Math.max(tail, x + top.cell_m / 2);
+    nose = Math.min(nose, x - top.cellM / 2);
+    tail = Math.max(tail, x + top.cellM / 2);
 
     if (area > largest) {
       largest = area;
@@ -685,18 +793,18 @@ const measure_body = (
 
   if (!Number.isFinite(nose)) {
     return {
-      nose_m: 0,
-      fuselage_length_m: 1e-3,
-      fuselage_radius_m: 0,
-      fuselage_height_m: 0,
+      noseM: 0,
+      fuselageLengthM: 1e-3,
+      fuselageRadiusM: 0,
+      fuselageHeightM: 0,
     };
   }
 
   return {
-    nose_m: -nose,
-    fuselage_length_m: tail - nose,
-    fuselage_radius_m: Math.sqrt(largest / Math.PI),
-    fuselage_height_m: height,
+    noseM: -nose,
+    fuselageLengthM: tail - nose,
+    fuselageRadiusM: Math.sqrt(largest / Math.PI),
+    fuselageHeightM: height,
   };
 };
 
@@ -724,19 +832,19 @@ export const capture_airframe = (
  */
 export const capture_airframe_async = async (
   object: Object3D,
-  options: CaptureOptions & { budget_ms?: number; signal?: AbortSignal } = {},
+  options: CaptureOptions & { budgetMs?: number; signal?: AbortSignal } = {},
 ): Promise<MeasuredAirframe> =>
   measure_airframe(
     await run_async(
       capture_view_steps(object, options),
-      options.budget_ms,
+      options.budgetMs,
       options.signal,
     ),
   );
 
 // Bumped whenever the table's layout changes, so an old bake is refused
 // rather than misread
-const BAKE_VERSION = 1;
+const BAKE_VERSION = 2;
 
 /**
  * A measured airframe as plain JSON, to bake at build time and ship in place
@@ -746,11 +854,11 @@ export type BakedAirframe = {
   version: number;
   airframe: MeasuredAirframe["airframe"];
   shape: {
-    semispan_m: number;
-    root_span_m: number;
-    leading_m: number[];
-    chord_m: number[];
-    mid_m: number[];
+    semispanM: number;
+    rootSpanM: number;
+    leadingM: number[];
+    chordM: number[];
+    midM: number[];
     thickness: number[];
     loading: number[];
     secondary: SecondarySurface | null;
@@ -776,11 +884,11 @@ export const serialize_capture = (
     version: BAKE_VERSION,
     airframe: { ...measured.airframe },
     shape: {
-      semispan_m: shape.semispan_m,
-      root_span_m: shape.root_span_m,
-      leading_m: round(shape.leading_m, 3),
-      chord_m: round(shape.chord_m, 3),
-      mid_m: round(shape.mid_m, 3),
+      semispanM: shape.semispanM,
+      rootSpanM: shape.rootSpanM,
+      leadingM: round(shape.leadingM, 3),
+      chordM: round(shape.chordM, 3),
+      midM: round(shape.midM, 3),
       thickness: round(shape.thickness, 4),
       loading: round(shape.loading, 4),
       secondary: shape.secondary ? { ...shape.secondary } : null,
@@ -815,11 +923,11 @@ export const deserialize_capture = (baked: BakedAirframe): MeasuredAirframe => {
   return {
     airframe: { ...baked.airframe },
     shape: {
-      semispan_m: shape.semispan_m,
-      root_span_m: shape.root_span_m,
-      leading_m: table(shape.leading_m),
-      chord_m: table(shape.chord_m),
-      mid_m: table(shape.mid_m),
+      semispanM: shape.semispanM,
+      rootSpanM: shape.rootSpanM,
+      leadingM: table(shape.leadingM),
+      chordM: table(shape.chordM),
+      midM: table(shape.midM),
       thickness: table(shape.thickness),
       loading: table(shape.loading),
       secondary: shape.secondary ? { ...shape.secondary } : null,

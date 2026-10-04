@@ -10,16 +10,16 @@ and the plume follows. This page maps what you see to what to change. The
 
 ## Size and shape
 
-| you want                    | change                                                                        |
-| --------------------------- | ----------------------------------------------------------------------------- |
-| a bigger or smaller plume   | `nozzle_radius_m`. Every length scales with it.                               |
-| an oval, flat or square jet | `nozzle_aspect`, `nozzle_squareness`: see [Shaped nozzles](../nozzle-shapes/) |
-| a longer, faster jet        | `exit_mach` up, or `molar_mass_g_mol` down (lighter gas is faster)            |
-| a jet that balloons         | `pressure_ratio` above 1 (underexpanded)                                      |
-| a jet that pinches          | `pressure_ratio` below 1 (overexpanded)                                       |
-| a longer core, longer train | profile `core_scale`, `shock_persistence`; or `airspeed_m_s`                  |
-| a wider spread              | profile `spread_scale`                                                        |
-| a hard length cap           | profile `max_length_d`, in exit diameters                                     |
+| you want                    | change                                                                           |
+| --------------------------- | -------------------------------------------------------------------------------- |
+| a bigger or smaller plume   | `nozzleRadiusM`. Every length scales with it.                                    |
+| an oval, flat or square jet | `nozzleAspect`, `nozzleSquareness`: see [Shaped nozzles](../nozzle-shapes/)      |
+| a longer, faster jet        | `exitMach` up, or `molarMassGPerMol` down (lighter gas is faster)                |
+| a jet that balloons         | `pressureRatio` above 1 (underexpanded)                                          |
+| a jet that pinches          | `pressureRatio` below 1 (overexpanded)                                           |
+| a longer core, longer train | profile `coreScale`, `shockPersistence` (both 1 as measured); or `airspeedMPerS` |
+| a wider spread              | profile `spreadScale`                                                            |
+| a hard length cap           | profile `maxLengthD`, in exit diameters                                          |
 
 ## Shock diamonds
 
@@ -27,13 +27,13 @@ The **pressure ratio** decides how strong the diamonds are. At exactly 1 the
 jet leaves clean and they all but vanish. Above or below, a train of shocks
 forms.
 
-| you want                   | change                                               |
-| -------------------------- | ---------------------------------------------------- |
-| stronger diamonds          | `pressure_ratio` further from 1                      |
-| some diamonds even at 1    | profile `shock_floor`                                |
-| sharp disks with dark gaps | profile `shock_relaxation` up                        |
-| smeared, glowing cells     | profile `shock_relaxation` down                      |
-| brighter Mach disks        | `exit_temperature_k` up; profile `activation_k` down |
+| you want                   | change                                            |
+| -------------------------- | ------------------------------------------------- |
+| stronger diamonds          | `pressureRatio` further from 1                    |
+| some diamonds even at 1    | profile `shockFloor`                              |
+| sharp disks with dark gaps | profile `shockRelaxation` up                      |
+| smeared, glowing cells     | profile `shockRelaxation` down                    |
+| brighter Mach disks        | `exitTemperatureK` up; profile `activationK` down |
 
 Diamonds read best from the side. From behind they read as rings. See
 [shock diamonds](../../how-it-works/shock-diamonds/) for why.
@@ -43,42 +43,48 @@ Diamonds read best from the side. From behind they read as rings. See
 Colour comes from **temperature**, through Planck's law, plus one line
 spectrum you choose.
 
-| you want                        | change                                         |
-| ------------------------------- | ---------------------------------------------- |
-| hotter, whiter                  | `exit_temperature_k` up                        |
-| more yellow-orange, more opaque | `soot_per_m` up                                |
-| a smoke trail                   | `soot_survival` up                             |
-| a blue / violet / cyan glow     | `band_color`, `band_strength`                  |
-| a bright sheath round the jet   | `afterburning_k` up                            |
-| white, scattering smoke         | `particles_per_m` up, `particle_albedo` near 1 |
-| brighter or dimmer overall      | profile `exposure`                             |
-| a dry engine that glows more    | profile `dry_glow` up                          |
+| you want                        | change                                      |
+| ------------------------------- | ------------------------------------------- |
+| hotter, whiter                  | `exitTemperatureK` up                       |
+| more yellow-orange, more opaque | `sootPerM` up                               |
+| a smoke trail                   | `sootSurvival` up                           |
+| a blue / violet / cyan glow     | `bandColor`, `bandStrength`                 |
+| a bright sheath round the jet   | `afterburningK` up                          |
+| white, scattering smoke         | `particlesPerM` up, `particleAlbedo` near 1 |
+| brighter or dimmer overall      | profile `exposure`                          |
+| a dry engine that glows more    | profile `dryGlow` up                        |
+
+The profile's `exposure` is the plumes' own: it sets which part of their
+physical radiance the tone curve sees, before the renderer's
+`toneMappingExposure`, which brightens the whole frame, scene and plumes alike.
+Tune the scene with the renderer's, then the plumes against it with the
+profile's.
 
 Altitude changes colour too: see
 [Flight and altitude](../flight-and-altitude/).
 
 ## Motion
 
-| you want            | change                                                |
-| ------------------- | ----------------------------------------------------- |
-| a laminar jet       | `turbulence` 0                                        |
-| a churning one      | `turbulence` 1 or more                                |
-| a tail that wanders | `meander`; profile `meander_scale`                    |
-| longer streaks      | profile `shutter_s` (the motion blur), `eddy_stretch` |
-| slow motion         | batch `time_scale`                                    |
-| a snappier throttle | batch `response_s` down, 0 to follow at once          |
+| you want            | change                                              |
+| ------------------- | --------------------------------------------------- |
+| a laminar jet       | `turbulence` 0                                      |
+| a churning one      | `turbulence` 1 or more                              |
+| a tail that wanders | `meander`; profile `meanderScale`                   |
+| longer streaks      | profile `shutterS` (the motion blur), `eddyStretch` |
+| slow motion         | batch `timeScale`                                   |
+| a snappier throttle | batch `responseS` down, 0 to follow at once         |
 
 ## Heat haze
 
-`refraction_m` is how far the hot exhaust bends what is behind it, in metres.
+`refractionM` is how far the hot exhaust bends what is behind it, in metres.
 `0.05` is subtle. Zero on every nozzle compiles the haze out entirely, and so
 does `haze={false}` on the batch.
 
 ## Colours in params
 
-`band_color` takes any three.js `ColorRepresentation`: a hex string, a number,
+`bandColor` takes any three.js `ColorRepresentation`: a hex string, a number,
 or a `Color`.
 
 ```tsx
-<Afterburner params={{ band_color: "#4dd8ff", band_strength: 0.4 }} />
+<Afterburner params={{ bandColor: "#4dd8ff", bandStrength: 0.4 }} />
 ```

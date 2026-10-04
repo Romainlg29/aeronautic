@@ -27,5 +27,15 @@ export const base_options = (): BaseLayoutProps => ({
       url: "/docs/wing-vapor/start/introduction/",
       active: "none",
     },
+    {
+      text: "Controls",
+      url: "/docs/controls/start/introduction/",
+      active: "none",
+    },
+    {
+      text: "Core",
+      url: "/docs/core/start/introduction/",
+      active: "none",
+    },
   ],
 });
