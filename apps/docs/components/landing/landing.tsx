@@ -8,6 +8,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { type FC, type ReactNode, useState } from "react";
 import { app_name, repository, tagline } from "@/lib/shared";
+import { AIR, START_THROTTLE } from "./flight-plan";
 import type { Sky } from "./flight-scene";
 import { Legend, usePilot } from "./pilot";
 
@@ -62,16 +63,10 @@ const Button: FC<{
   );
 };
 
-// The flight the keyboard writes: low over the sea on a humid summer day,
+// The flight the keyboard writes: just over the sea on a humid summer day,
 // gear up, well into reheat. The same air and throttle the scene's fake
 // starts with
-const START = {
-  altitudeM: 300,
-  temperatureOffsetK: 10,
-  relativeHumidity: 0.88,
-  throttle: 1.04,
-  gear: 0,
-};
+const START = { ...AIR, throttle: START_THROTTLE, gear: 0 };
 
 /**
  * What the HUD shows, rendered ten times a second at most.

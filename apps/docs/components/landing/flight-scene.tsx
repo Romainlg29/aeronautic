@@ -7,7 +7,6 @@ import {
 import type { Flight } from "@aeronautic/core";
 import { FlightProvider, useFlightStore } from "@aeronautic/core/react";
 import { ControlSurfaces } from "@aeronautic/controls/react";
-import { moist_air } from "@aeronautic/core";
 import { WingVapor, type WingVaporHandle } from "@aeronautic/wing-vapor/react";
 import { angle_of_attack_for_load } from "@aeronautic/wing-vapor/physics";
 import { type FC, type RefObject, Suspense, useMemo, useRef } from "react";
@@ -23,6 +22,7 @@ import { WebGPURenderer } from "three/webgpu";
 import { airframe_only, Exhaust, useFighter } from "@/examples/fighter";
 import { DAY_EXPOSURE, Grade, Reflections } from "@/examples/stage";
 import { NO_SHADOWS } from "@/lib/no-shadows";
+import { cruise_mach, MOIST, START_THROTTLE } from "./flight-plan";
 import type { Keys, Levers } from "./pilot";
 
 // The docs' fighter on a humid summer day, flown from the keyboard. It turns
@@ -30,18 +30,6 @@ import type { Keys, Levers } from "./pilot";
 // seems to fly, its speed following the throttle and its g and rates the
 // stick, and everything on it reads that flight, the control surfaces, the
 // plumes and the vapor
-
-// A humid summer day, low over the sea
-const AIR = {
-  altitudeM: 300,
-  temperatureOffsetK: 10,
-  relativeHumidity: 0.88,
-};
-const MOIST = moist_air(
-  AIR.altitudeM,
-  AIR.relativeHumidity,
-  AIR.temperatureOffsetK,
-);
 
 // Where the sun is, for the skin and the vapor both
 const SUN: [number, number, number] = [5, 10, 5];
@@ -184,16 +172,8 @@ const DEG = Math.PI / 180;
 // Where the plumes and the vapor start; `SkyFade` takes them on from there
 const DAY_PROFILE = { exposure: SKIES.day.exposure };
 
-// How the fake flies. The Mach number it settles at, at idle, at military
-// power and at full reheat, less what the gear, the flaps and the air brake
-// cost. Reheat takes it through Mach one and on past where the vapor cone
-// is gone, about Mach 1.12
-const IDLE_MACH = 0.3;
-const DRY_MACH = 0.9;
-const REHEAT_MACH = 1.8;
-// Where it starts: well into the reheat, holding just over Mach one, the cone
-// on it
-const START_THROTTLE = 1.04;
+// How the fake flies: what the gear, the flaps and the air brake cost off the
+// Mach number its throttle settles at, from `flight-plan`
 const DRAG_MACH = { gear: 0.1, flaps: 0.05, airbrake: 0.15 };
 // How long it takes to get most of the way to that speed, in seconds
 const SPEED_S = 4;
@@ -218,18 +198,6 @@ const YAW_RATE = 0.3;
  * @returns The share of the way to go
  */
 const ease = (delta: number, time_s: number) => 1 - Math.exp(-delta / time_s);
-
-/**
- * The Mach number a throttle setting settles at, clean: idle to military
- * power, then on through the reheat. The drag climbs steeply round Mach one,
- * so the first of the reheat buys the least speed.
- * @param throttle The throttle, 0 to 1.1
- * @returns The Mach number
- */
-const cruise_mach = (throttle: number) =>
-  throttle <= 1
-    ? IDLE_MACH + (DRY_MACH - IDLE_MACH) * throttle
-    : DRY_MACH + (REHEAT_MACH - DRY_MACH) * ((throttle - 1) / 0.1) ** 2;
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
