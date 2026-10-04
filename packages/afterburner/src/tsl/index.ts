@@ -8,12 +8,16 @@ export {
   signed,
   turbulence,
   value_noise,
+  volume_noise,
+  volume_turbulence,
+  volume_wander,
   wander_noise,
 } from "./noise";
 export { blackbody } from "./blackbody";
 export {
   PLUME_EPSILON,
   plume_bound,
+  plume_bound_coarse,
   plume_centreline,
   plume_closest,
   plume_field,
@@ -23,6 +27,8 @@ export {
   plume_outline,
   plume_span,
   plume_station,
+  plume_sun_depth,
+  plume_sun_phase,
   type PlumeContext,
   type PlumeEngineNodes,
   type PlumeFieldHooks,
@@ -35,6 +41,7 @@ export {
   type PlumeOutlineRadius,
   type PlumeProfileNodes,
   type PlumeSampleContext,
+  type PlumeSunNodes,
 } from "./plume";
 export {
   AFTERBURNER_ATTRIBUTES,

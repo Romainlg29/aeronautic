@@ -83,13 +83,13 @@ in the nozzle's frame, and where it enters and leaves), `lod` (0 near, 1 mid,
 `@aeronautic/afterburner/tsl` exports every piece the material is made of, for building
 a material of your own:
 
-| group        | exports                                                                                                             |
-| ------------ | ------------------------------------------------------------------------------------------------------------------- |
-| Noise        | `hash_cell`, `value_noise`, `wander_noise`, `turbulence`, `signed`                                                  |
-| Light        | `blackbody`, temperature to linear radiance from a Planck lookup                                                    |
-| The jet      | `plume_jet` (the fully expanded jet from the nozzle, gas and air), `plume_half_width`, `plume_centreline`           |
-| The field    | `plume_frame`, `plume_field`, `plume_bound`, `plume_span`, `plume_closest`, `plume_station`, `plume_outline`        |
-| The material | `create_afterburner_material`, `create_afterburner_uniforms`, `write_afterburner_profile`, `AFTERBURNER_ATTRIBUTES` |
+| group        | exports                                                                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Noise        | `volume_noise`, `volume_turbulence` (the baked volume the eddies read), `hash_cell`, `value_noise`, `wander_noise`, `turbulence`, `signed` |
+| Light        | `blackbody`, temperature to linear radiance from a Planck lookup; `plume_sun_phase`, `plume_sun_depth` for the sun                         |
+| The jet      | `plume_jet` (the fully expanded jet from the nozzle, gas and air), `plume_half_width`, `plume_centreline`                                  |
+| The field    | `plume_frame`, `plume_field`, `plume_bound`, `plume_span`, `plume_closest`, `plume_station`, `plume_outline`                               |
+| The material | `create_afterburner_material`, `create_afterburner_uniforms`, `write_afterburner_profile`, `AFTERBURNER_ATTRIBUTES`                        |
 
 - `plume_frame` takes a point in the nozzle's frame to its station and mixing
   layer, and measures how far out it is against the nozzle's outline,

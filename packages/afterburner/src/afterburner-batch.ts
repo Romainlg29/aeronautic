@@ -91,6 +91,10 @@ const DEFAULT_RESPONSE_S = 0.25;
 // Close enough to the throttle asked for to stop easing
 const RESPONSE_SETTLED = 1e-4;
 
+// How much nearer, as a share, a plume must be than the one drawn after it
+// before the two are swapped
+const SORT_TOLERANCE = 0.02;
+
 /**
  * Where a nozzle is: following an object, or held at a fixed matrix.
  */
@@ -168,6 +172,9 @@ export class AfterburnerNozzle {
 
   /** @internal The world scale the static instance was written at */
   _scale = 1;
+
+  /** @internal How far its plume is from the camera, for the draw order */
+  _depth = 0;
 
   /** The object the plume follows, if any */
   object: Object3D | null;
@@ -814,7 +821,84 @@ export class AfterburnerBatch {
     this._last_ms = now;
 
     this.place();
+    this.sort(camera);
     this.upload();
+  }
+
+  /**
+   * Put the instances in draw order, furthest plume first.
+   *
+   * The plumes blend over one another in instance order with no depth test, so
+   * a near plume drawn first is painted over by the far one behind it. A clean
+   * jet's glow barely shows it; a sooty cluster seen obliquely does. Each plume
+   * is measured by the nearest point of its axis, and the slots are only
+   * rewritten when two are out of order by more than a little, so plumes side
+   * by side do not swap back and forth every frame.
+   * @param camera The camera the frame is drawn from
+   */
+  private sort(camera: Camera) {
+    const nozzles = this._nozzles;
+
+    if (nozzles.length < 2) {
+      return;
+    }
+
+    camera.getWorldPosition(scratch_position);
+
+    for (const nozzle of nozzles) {
+      const reach = jet_state(
+        nozzle._params,
+        nozzle._drawn,
+        this._profile,
+        nozzle._scale,
+      ).reach_m;
+
+      nozzle._depth = axis_distance(nozzle._written, reach, scratch_position);
+    }
+
+    let ordered = true;
+
+    for (let index = 1; index < nozzles.length; index++) {
+      const before = nozzles[index - 1]._depth;
+      const after = nozzles[index]._depth;
+
+      if (after > before * (1 + SORT_TOLERANCE)) {
+        ordered = false;
+        break;
+      }
+    }
+
+    if (ordered) {
+      return;
+    }
+
+    const count = nozzles.length;
+    const statics = this._static.array.slice(0, count * STATIC_STRIDE);
+    const dynamics = this._dynamic.array.slice(0, count * DYNAMIC_STRIDE);
+
+    const sorted = nozzles.slice().sort((a, b) => b._depth - a._depth);
+
+    sorted.forEach((nozzle, slot) => {
+      const from = nozzle._slot;
+
+      this._static.array.set(
+        statics.subarray(from * STATIC_STRIDE, (from + 1) * STATIC_STRIDE),
+        slot * STATIC_STRIDE,
+      );
+      this._dynamic.array.set(
+        dynamics.subarray(from * DYNAMIC_STRIDE, (from + 1) * DYNAMIC_STRIDE),
+        slot * DYNAMIC_STRIDE,
+      );
+
+      nozzle._slot = slot;
+    });
+
+    this._nozzles = sorted;
+
+    this.mark_static(0);
+    this.mark_static(count - 1);
+    this.mark_dynamic(0);
+    this.mark_dynamic(count - 1);
   }
 
   /**
@@ -1247,6 +1331,34 @@ const write_color = (
   target[offset + 1] = color.g;
   target[offset + 2] = color.b;
   target[offset + 3] = extra;
+};
+
+/**
+ * How far a point is from a plume's axis, the segment from its nozzle out to
+ * its reach along the nozzle's +X.
+ * @param elements The nozzle's world matrix
+ * @param reach How far the plume is drawn, in metres
+ * @param point The point, in world space
+ * @returns The distance, in metres
+ */
+export const axis_distance = (
+  elements: ArrayLike<number>,
+  reach: number,
+  point: Vector3Like,
+): number => {
+  const dx = point.x - elements[12];
+  const dy = point.y - elements[13];
+  const dz = point.z - elements[14];
+
+  // The matrix's +X, scale and all, as a unit vector
+  const length = Math.hypot(elements[0], elements[1], elements[2]) || 1;
+  const ax = elements[0] / length;
+  const ay = elements[1] / length;
+  const az = elements[2] / length;
+
+  const along = Math.min(Math.max(dx * ax + dy * ay + dz * az, 0), reach);
+
+  return Math.hypot(dx - ax * along, dy - ay * along, dz - az * along);
 };
 
 /**
