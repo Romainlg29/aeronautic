@@ -28,7 +28,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm fmt:check
+      # Built first: packages that depend on @aeronautic/core resolve its
+      # types and code from its dist, as they would once installed
+      - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm test
-      - run: pnpm build
       - run: pnpm build:docs
