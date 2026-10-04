@@ -2,7 +2,8 @@ name: Release
 
 # Publishes one @aeronautic package to npm when its tag is pushed:
 # afterburner-vX.Y.Z publishes packages/afterburner, wing-vapor-vX.Y.Z
-# publishes packages/wing-vapor
+# publishes packages/wing-vapor, and core-vX.Y.Z and controls-vX.Y.Z the same.
+# The others depend on core, so a core they need is released before them
 #
 # Only the maintainer releases. The guards, from GitHub's side to npm's:
 # - a tag ruleset lets only the maintainer create release tags
@@ -18,7 +19,7 @@ name: Release
 
 on:
   push:
-    tags: ["afterburner-v*", "wing-vapor-v*"]
+    tags: ["core-v*", "afterburner-v*", "wing-vapor-v*", "controls-v*"]
 
 permissions:
   contents: read
@@ -62,7 +63,7 @@ jobs:
           package="${TAG%-v*}"
           tag_version="${TAG##*-v}"
           case "$package" in
-            afterburner | wing-vapor) ;;
+            core | afterburner | wing-vapor | controls) ;;
             *)
               echo "Tag $TAG doesn't name a package that's released from here" >&2
               exit 1
@@ -86,13 +87,20 @@ jobs:
       - run: npm install --global npm@^11.5.1
       - run: pnpm build
       # Only what an install needs: dist, README, LICENSE and a package.json
-      # without the scripts and dev dependencies
+      # without the scripts and dev dependencies. pnpm packs it, so a
+      # workspace:^ dependency on core becomes the version it's at; npm
+      # publishes the tarball, for trusted publishing
       - name: Publish
         working-directory: packages/${{ steps.tag.outputs.package }}
         run: |
           npm pkg delete scripts devDependencies
-          npm pack --dry-run
-          npm publish --access public --provenance --ignore-scripts
+          tarball=$(pnpm pack --json | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).filename")
+          tar -xOzf "$tarball" package/package.json
+          if tar -xOzf "$tarball" package/package.json | grep -q '"workspace:'; then
+            echo "The packed package.json still names a workspace: version" >&2
+            exit 1
+          fi
+          npm publish "$tarball" --access public --provenance --ignore-scripts
 
   # The GitHub release for the tag, once the package is on npm. A job of its
   # own, so the one that can write to the repo never touches npm
