@@ -1,3 +1,5 @@
+import type { AfterburnerBatch } from "@aeronautic/afterburner";
+import type { VaporLook, WingVapor } from "@aeronautic/wing-vapor";
 import { OrbitControls } from "@react-three/drei";
 import { Moon, Sun } from "lucide-react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
@@ -14,6 +16,7 @@ import {
   AgXToneMapping,
   Color,
   type DirectionalLight,
+  type GridHelper,
   type HemisphereLight,
   type Scene,
   type Texture,
@@ -101,29 +104,95 @@ export const Reflections: FC<{ intensity?: number }> = ({
 };
 
 // The two skies an example can be under, and how long it takes to go between
-const NIGHT = { background: "#05070b", hemisphere: 0.6, sun: 1.2 };
-const DAY = { background: "#6f9fd8", hemisphere: 1.6, sun: 3 };
+const NIGHT = {
+  background: "#05070b",
+  grid: "#121620",
+  hemisphere: 0.6,
+  sun: 1.2,
+  look: {
+    sunColor: [0.7, 0.78, 1],
+    sunIntensity: 0.6,
+    skyColor: [0.08, 0.1, 0.18],
+    skyIntensity: 0.15,
+  },
+} as const;
+const DAY = {
+  background: "#6f9fd8",
+  grid: "#4f74a3",
+  hemisphere: 1.6,
+  sun: 3,
+  look: {
+    sunColor: [1, 0.96, 0.9],
+    sunIntensity: 3,
+    skyColor: [0.55, 0.68, 0.9],
+    skyIntensity: 1,
+  },
+} as const;
 const FADE_S = 0.6;
+
+// By day the sky sets the camera, and the plume is drawn at what that leaves
+// it. A plume's radiance is in units of a blackbody's at 2000 K, about
+// 4.8e5 cd/m² (the old candela's platinum, at 2042 K, was 6e5). A clear sky
+// away from the sun is about 6000 cd/m², and it is drawn here at the
+// background's linear luminance, so one unit on screen is 6000 over that
+const BLACKBODY_2000K_CD_M2 = 4.8e5;
+const CLEAR_SKY_CD_M2 = 6000;
+const day_sky = new Color(DAY.background);
+export const DAY_EXPOSURE =
+  (BLACKBODY_2000K_CD_M2 *
+    (0.2126 * day_sky.r + 0.7152 * day_sky.g + 0.0722 * day_sky.b)) /
+  CLEAR_SKY_CD_M2;
+
+/**
+ * A plume's exposure under the sky, from its own at night. A camera stopped
+ * down further than the sky needs, for a rocket, stays there; the rest come
+ * down to the sky's. Eased in stops, as an exposure is.
+ * @param night Its exposure at night
+ * @param shade How far to day, 0 to 1
+ * @returns Its exposure now
+ */
+const exposure_under = (night: number, shade: number) =>
+  night * (Math.min(night, DAY_EXPOSURE) / night) ** shade;
+
+const mix_rgb = (
+  from: readonly number[],
+  to: readonly number[],
+  share: number,
+): [number, number, number] => [
+  from[0] + (to[0] - from[0]) * share,
+  from[1] + (to[1] - from[1]) * share,
+  from[2] + (to[2] - from[2]) * share,
+];
 
 /**
  * Light the scene under a night or a daylit sky, easing from one to the other
- * rather than rebuilding anything.
- * @param props Whether it is day
- * @returns The lights
+ * rather than rebuilding anything: the sky, the lights, the grid, every
+ * plume's exposure and the vapor's light.
+ * @param props Whether it is day, and where the grid is
+ * @returns The lights and the grid
  */
-const Sky: FC<{ day: boolean }> = ({ day }) => {
+const Sky: FC<{ day: boolean; floor: number | null }> = ({ day, floor }) => {
   const { scene } = useThree();
   const hemisphere = useRef<HemisphereLight>(null);
   const sun = useRef<DirectionalLight>(null);
+  const grid = useRef<GridHelper>(null);
   const shade = useRef(day ? 1 : 0);
   const colors = useMemo(
     () => ({
       night: new Color(NIGHT.background),
       day: new Color(DAY.background),
       now: new Color(),
+      night_grid: new Color(NIGHT.grid),
+      day_grid: new Color(DAY.grid),
     }),
     [],
   );
+
+  // Each plume's exposure at night, its preset's, from when it was first seen
+  const nights = useMemo(() => new WeakMap<AfterburnerBatch, number>(), []);
+
+  // The sky each vapor was last lit for: its colours compare by reference
+  const lit = useMemo(() => new WeakMap<WingVapor, number>(), []);
 
   useEffect(() => {
     const previous = scene.background;
@@ -149,12 +218,58 @@ const Sky: FC<{ day: boolean }> = ({ day }) => {
     if (hemisphere.current)
       hemisphere.current.intensity = mix(NIGHT.hemisphere, DAY.hemisphere);
     if (sun.current) sun.current.intensity = mix(NIGHT.sun, DAY.sun);
+    if (grid.current) {
+      const material = grid.current.material as { color: Color };
+
+      material.color.lerpColors(colors.night_grid, colors.day_grid, t);
+    }
+
+    // Written whenever one is off, so a plume or a vapor that arrives late,
+    // or has its profile set again, comes under the sky too
+    scene.traverse((object) => {
+      const batch = object.userData.afterburnerBatch as
+        | AfterburnerBatch
+        | undefined;
+      const vapor = object.userData.wingVapor as WingVapor | undefined;
+
+      if (batch) {
+        let night = nights.get(batch);
+
+        if (night === undefined) {
+          night = batch.profile.exposure;
+          nights.set(batch, night);
+        }
+
+        const exposure = exposure_under(night, t);
+
+        if (Math.abs(batch.profile.exposure - exposure) > 1e-6 * night)
+          batch.updateProfile({ exposure });
+      }
+
+      if (!vapor || lit.get(vapor) === t) return;
+
+      lit.set(vapor, t);
+      vapor.updateLook({
+        sunColor: mix_rgb(NIGHT.look.sunColor, DAY.look.sunColor, t),
+        sunIntensity: mix(NIGHT.look.sunIntensity, DAY.look.sunIntensity),
+        skyColor: mix_rgb(NIGHT.look.skyColor, DAY.look.skyColor, t),
+        skyIntensity: mix(NIGHT.look.skyIntensity, DAY.look.skyIntensity),
+      } satisfies Partial<VaporLook>);
+    });
   });
 
   return (
     <>
       <hemisphereLight ref={hemisphere} args={["#8090b0", "#101010"]} />
       <directionalLight ref={sun} position={[-5, 10, 5]} />
+      {floor !== null && (
+        // White, so the material's colour is the line's, and can fade
+        <gridHelper
+          ref={grid}
+          args={[200, 100, "#ffffff", "#ffffff"]}
+          position={[0, floor, 0]}
+        />
+      )}
     </>
   );
 };
@@ -225,13 +340,7 @@ export const Stage: FC<StageProps> = ({
           return renderer;
         }}
       >
-        <Sky day={day} />
-        {floor !== null && (
-          <gridHelper
-            args={[200, 100, "#1c2230", "#121620"]}
-            position={[0, floor, 0]}
-          />
-        )}
+        <Sky day={day} floor={floor} />
         {reflections && <Reflections />}
         {/* A loaded model streams in, the plumes around it waiting for it */}
         <Suspense fallback={null}>{children}</Suspense>

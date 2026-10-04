@@ -445,7 +445,10 @@ const PLUME_AXIS = new Vector3(0, 0, 1);
  * flame stops at whatever is in front of it.
  */
 export class AfterburnerBatch {
-  /** The mesh to put in the scene */
+  /**
+   * The mesh to put in the scene. Its `userData.afterburnerBatch` is this, for finding
+   * every one in a scene
+   */
   readonly mesh: Mesh<InstancedBufferGeometry, MeshBasicNodeMaterial>;
 
   /** The uniforms every variant of the material shares */
@@ -546,6 +549,7 @@ export class AfterburnerBatch {
     const mesh = new Mesh(geometry, this.materialFor(false));
 
     mesh.name = "AfterburnerBatch";
+    mesh.userData.afterburnerBatch = this;
     mesh.frustumCulled = false;
 
     // The mesh's world matrix is the anchor and nothing else, whatever it is

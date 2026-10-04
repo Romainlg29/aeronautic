@@ -21,7 +21,7 @@ import {
 } from "three";
 import { WebGPURenderer } from "three/webgpu";
 import { airframe_only, Exhaust, useFighter } from "@/examples/fighter";
-import { Grade, Reflections } from "@/examples/stage";
+import { DAY_EXPOSURE, Grade, Reflections } from "@/examples/stage";
 import { NO_SHADOWS } from "@/lib/no-shadows";
 import type { Keys, Levers } from "./pilot";
 
@@ -62,8 +62,8 @@ const SKIES = {
       skyColor: [0.55, 0.68, 0.9],
       skyIntensity: 1,
     },
-    // A plume is far dimmer than the daylit sky round it
-    exposure: 6,
+    // What the daylit sky leaves the camera, as in every example
+    exposure: DAY_EXPOSURE,
   },
   night: {
     background: "#05070b",

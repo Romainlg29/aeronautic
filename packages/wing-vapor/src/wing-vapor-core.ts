@@ -170,7 +170,10 @@ const unchanged = <T extends object>(current: T, change: Partial<T>) =>
  * the vapour stops at the wing it sits on.
  */
 export class WingVapor {
-  /** The mesh to put in the scene */
+  /**
+   * The mesh to put in the scene. Its `userData.wingVapor` is this, for finding
+   * every one in a scene
+   */
   readonly mesh: Mesh<BoxGeometry, MeshBasicNodeMaterial>;
 
   /** The uniforms the material is driven by */
@@ -253,6 +256,7 @@ export class WingVapor {
     );
 
     mesh.name = "WingVapor";
+    mesh.userData.wingVapor = this;
     mesh.frustumCulled = false;
 
     // Placed in world space by hand, whatever it is parented to
