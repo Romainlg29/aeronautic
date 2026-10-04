@@ -1,22 +1,24 @@
 name: Release
 
-# Publishes @aeronautic/afterburner to npm when a v* tag is pushed
+# Publishes one @aeronautic package to npm when its tag is pushed:
+# afterburner-vX.Y.Z publishes packages/afterburner, wing-vapor-vX.Y.Z
+# publishes packages/wing-vapor
 #
 # Only the maintainer releases. The guards, from GitHub's side to npm's:
-# - a tag ruleset lets only the maintainer create v* tags
+# - a tag ruleset lets only the maintainer create release tags
 # - the job only runs for the maintainer's own push, and waits in the `npm`
 #   environment for the maintainer's approval
 # - npm trusted publishing (OIDC) publishes with provenance, so no npm token is
-#   stored anywhere, and the package is set to require 2FA and disallow tokens
+#   stored anywhere, and each package is set to require 2FA and disallow tokens
 #
 # Once it's published, a GitHub release is created for the tag, with notes
-# generated from the PRs and commits since the previous one
+# generated from the PRs and commits since that package's previous tag
 #
 # See CONTRIBUTING.md, "Releasing", for the one-time setup
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["afterburner-v*", "wing-vapor-v*"]
 
 permissions:
   contents: read
@@ -29,9 +31,12 @@ jobs:
   publish:
     if: github.repository_owner == 'Romainlg29' && github.actor == 'Romainlg29' && github.triggering_actor == 'Romainlg29'
     runs-on: ubuntu-latest
+    outputs:
+      package: ${{ steps.tag.outputs.package }}
+      version: ${{ steps.tag.outputs.version }}
     environment:
       name: npm
-      url: https://www.npmjs.com/package/@aeronautic/afterburner
+      url: https://www.npmjs.com/package/@aeronautic/${{ steps.tag.outputs.package }}
     permissions:
       contents: read
       # For npm's trusted publishing and provenance
@@ -47,16 +52,29 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
-      # The tag has to name the version being published
-      - name: Check the tag against the version
+      # The tag names the package and the version being published:
+      # <package>-vX.Y.Z, where <package> is a folder in packages/
+      - name: Read the package and version from the tag
+        id: tag
         env:
           TAG: ${{ github.ref_name }}
         run: |
-          version=$(node -p "require('./packages/afterburner/package.json').version")
-          if [ "$TAG" != "v$version" ]; then
-            echo "Tag $TAG doesn't match package version $version" >&2
+          package="${TAG%-v*}"
+          tag_version="${TAG##*-v}"
+          case "$package" in
+            afterburner | wing-vapor) ;;
+            *)
+              echo "Tag $TAG doesn't name a package that's released from here" >&2
+              exit 1
+              ;;
+          esac
+          version=$(node -p "require('./packages/$package/package.json').version")
+          if [ "$tag_version" != "$version" ]; then
+            echo "Tag $TAG doesn't match $package's version $version" >&2
             exit 1
           fi
+          echo "package=$package" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
@@ -70,7 +88,7 @@ jobs:
       # Only what an install needs: dist, README, LICENSE and a package.json
       # without the scripts and dev dependencies
       - name: Publish
-        working-directory: packages/afterburner
+        working-directory: packages/${{ steps.tag.outputs.package }}
         run: |
           npm pkg delete scripts devDependencies
           npm pack --dry-run
@@ -89,4 +107,26 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes
+          PACKAGE: ${{ needs.publish.outputs.package }}
+          VERSION: ${{ needs.publish.outputs.version }}
+        run: |
+          # The package's previous release, newest first. Afterburner was
+          # tagged vX.Y.Z before the repo held more than one package, so those
+          # count as its releases too
+          previous=""
+          for tag in $(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName'); do
+            case "$tag" in
+              "$TAG") ;;
+              "$PACKAGE"-v*) previous="$tag"; break ;;
+              v*) if [ "$PACKAGE" = afterburner ]; then previous="$tag"; break; fi ;;
+            esac
+          done
+
+          # Afterburner stays the repo's "Latest" release
+          latest=false
+          if [ "$PACKAGE" = afterburner ]; then latest=true; fi
+
+          args=(--repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes
+            --title "@aeronautic/$PACKAGE $VERSION" "--latest=$latest")
+          if [ -n "$previous" ]; then args+=(--notes-start-tag "$previous"); fi
+          gh release create "$TAG" "${args[@]}"

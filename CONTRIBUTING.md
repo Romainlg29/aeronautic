@@ -116,36 +116,48 @@ Picking one of those up is a good first contribution.
 
 ## Releasing
 
-Only the maintainer publishes to npm. Pushing a `v*` tag runs
-`.github/workflows/release.yml`, which checks the tag against the version, runs
-every check, waits for the maintainer's approval in the `npm` environment, and
-publishes with provenance through npm's trusted publishing. No npm token is
-stored anywhere.
+Only the maintainer publishes to npm. Each package is released on its own, from
+a tag naming it: `afterburner-vX.Y.Z` publishes `@aeronautic/afterburner`,
+`wing-vapor-vX.Y.Z` publishes `@aeronautic/wing-vapor`. Pushing one runs
+`.github/workflows/release.yml`, which checks the tag against that package's
+version, runs every check, waits for the maintainer's approval in the `npm`
+environment, and publishes with provenance through npm's trusted publishing.
+No npm token is stored anywhere.
 
-1. Bump `version` in `packages/afterburner/package.json`, and commit.
-2. Tag the commit `vX.Y.Z` and push the tag.
+1. Bump `version` in `packages/<package>/package.json` and merge it through a
+   pull request (`main` takes no direct pushes).
+2. Tag the merged commit `<package>-vX.Y.Z` and push the tag:
+
+   ```bash
+   git tag afterburner-v0.4.0 && git push origin afterburner-v0.4.0
+   ```
+
 3. Approve the run in the Actions tab. Once the package is on npm, the
-   workflow creates the GitHub release for the tag, with generated notes.
+   workflow creates the GitHub release for the tag, with notes since that
+   package's previous release. Afterburner's releases are marked Latest.
+
+Afterburner was tagged `vX.Y.Z` up to 0.3.0, before the repo held more than
+one package. Those tags no longer start a release.
 
 ### One-time setup (maintainer)
 
 - **GitHub account:** two-factor authentication on.
 - **Environment:** Settings → Environments → New environment `npm`, with
   **Required reviewers** set to yourself and **Deployment branches and tags**
-  limited to the `v*` tag pattern.
+  limited to the `afterburner-v*` and `wing-vapor-v*` tag patterns.
 - **Tag ruleset:** Settings → Rules → Rulesets → New tag ruleset targeting
-  `v*`, restricting creations, updates and deletions, with no bypass list
-  except Repository admin.
+  `v*`, `afterburner-v*` and `wing-vapor-v*`, restricting creations, updates
+  and deletions, with no bypass list except Repository admin.
 - **Branch ruleset** on `main`: require a pull request and the CI check.
 - **Pages:** Settings → Pages → Source: GitHub Actions, for the docs.
 - **Security:** Settings → Code security, turn on private vulnerability
   reporting and Dependabot alerts.
-- **First publish:** trusted publishing needs the package to exist, so 0.0.1
-  goes up by hand, with your 2FA code:
+- **First publish of a new package:** trusted publishing needs the package to
+  exist, so its first version goes up by hand, with your 2FA code:
 
   ```bash
   pnpm build
-  cd packages/afterburner
+  cd packages/<package>
   npm pkg delete scripts devDependencies
   npm publish --access public
   git restore package.json
@@ -157,11 +169,11 @@ stored anywhere.
   - Set publishing access to **Require two-factor authentication and disallow
     tokens**. Trusted publishing still works with this on, and nothing else
     can publish.
-- **The 0.0.1 release on GitHub**, by hand too: push the `v0.0.1` tag, reject
-  the Release run it starts (0.0.1 is already on npm), and create the release:
+- **That first version's GitHub release**, by hand too. If the new tag starts
+  a Release run, reject it at the approval step: the version is already on npm.
 
   ```bash
-  gh release create v0.0.1 --verify-tag --generate-notes
+  gh release create <package>-vX.Y.Z --target main --latest=false --notes "…"
   ```
 
 ## Code of conduct
