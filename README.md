@@ -176,7 +176,7 @@ as [SECURITY.md](SECURITY.md) describes.
 
 The docs deploy on every push to `main`. Releases to npm are
 the maintainer's, each package from a tag naming it, `core-v*`, `afterburner-v*`,
-`wing-vapor-v*` or `controls-v*` (see "Releasing" in CONTRIBUTING.md).
+`wing-vapor-v*` or `controls-v*` (see [RELEASING.md](RELEASING.md)).
 
 ## License
 
