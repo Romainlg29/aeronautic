@@ -467,9 +467,9 @@ const Flight: FC<{ sky: Sky; readout: Readout }> = ({ sky, readout }) => {
           }}
           target={exhaust}
           preset="afterburner"
-          position={[0, 0, 0.18]}
+          position={[0, 0, 0.08]}
           direction={[0, 0, -1]}
-          params={{ nozzle_radius_m: 0.27, nozzle_aspect: 1.4 }}
+          params={{ nozzle_radius_m: 0.29, nozzle_aspect: 1.67 }}
         />
       ))}
     </AfterburnerBatch>

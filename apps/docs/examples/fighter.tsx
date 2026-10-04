@@ -53,12 +53,13 @@ export const airframe_only = (mesh: Mesh): boolean => {
 export const Exhaust: FC = () => (
   <Afterburner
     preset="afterburner"
-    // A little up the throat from the anchor, in the anchor's frame
-    position={[0, 0, 0.18]}
+    // At the petals' trailing edge, in the anchor's frame
+    position={[0, 0, 0.08]}
     // The exhaust streams down the anchor's -Z: aft
     direction={[0, 0, -1]}
-    // The exit as modelled: an oval 0.32 m wide and 0.23 m high
-    params={{ nozzle_radius_m: 0.27, nozzle_aspect: 1.4 }}
+    // The exit as modelled, inside the petals: an oval 0.76 m wide and 0.45 m
+    // high, sized as the round exit of its area
+    params={{ nozzle_radius_m: 0.29, nozzle_aspect: 1.67 }}
   />
 );
 
