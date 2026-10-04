@@ -297,6 +297,12 @@ export type JetState = {
   afterburningK: number;
 
   /**
+   * What the friction slowing the jet adds, in kelvin: a quarter of its
+   * kinetic energy over the air as heat, where jet and air are evenly mixed
+   */
+  kineticK: number;
+
+  /**
    * How much thinner the gas is once expanded than at the exit plane
    * What it carries, its soot and its radicals, is diluted by the same
    */
@@ -602,8 +608,17 @@ export const jet_state = (
     exit_temperature_k,
   );
 
+  // What the friction slowing the jet gives back as heat, at an even mix. Its
+  // total enthalpy mixes as its speed does (Crocco and Busemann), so a share f
+  // of jet keeps f of its kinetic energy but moves at f of its speed, and the
+  // rest, f(1 - f) of it, is heat
+  const excess_speed = Math.max(velocity_m_s - airspeed, 0);
+
+  const kinetic_k =
+    (excess_speed * excess_speed * (gamma - 1)) / (8 * gamma * gas_constant);
+
   const hottest_excess =
-    Math.max(temperature_k - ambient_k, 0) + 4 * afterburning_k;
+    Math.max(temperature_k - ambient_k, 0) + 4 * (afterburning_k + kinetic_k);
 
   const thermal_m =
     core_length_m /
@@ -669,6 +684,7 @@ export const jet_state = (
     shockLengthM: shock_length_m,
     firstDisk: first_disk,
     afterburningK: afterburning_k,
+    kineticK: kinetic_k,
     thinning,
     exitTemperatureK: exit_temperature_k,
     lipTemperatureK: lip_temperature_k,

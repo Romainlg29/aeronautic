@@ -391,6 +391,29 @@ describe("soot_formation", () => {
   });
 });
 
+describe("jet_state's friction heat", () => {
+  const params = default_afterburner_params();
+
+  it("is a quarter of the jet's kinetic energy over the air", () => {
+    const state = jet_state(params, FULL, profile);
+    const gas_constant = 8314.46 / params.molarMassGPerMol;
+    const cp = (params.gamma * gas_constant) / (params.gamma - 1);
+
+    expect(state.kineticK).toBeCloseTo(state.velocityMPerS ** 2 / (8 * cp), 3);
+    expect(state.kineticK).toBeGreaterThan(100);
+  });
+
+  it("falls as the air moves with the jet", () => {
+    const standing = jet_state(params, FULL, profile);
+    const flying = jet_state(params, FULL, {
+      ...profile,
+      airspeedMPerS: 300,
+    });
+
+    expect(flying.kineticK).toBeLessThan(standing.kineticK);
+  });
+});
+
 describe("sonic_distance", () => {
   // Air's γR, and a reheat's jet at sea level
   const gamma_r = 1.3 * 287;

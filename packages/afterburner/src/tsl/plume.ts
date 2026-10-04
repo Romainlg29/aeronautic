@@ -145,7 +145,10 @@ export type PlumeJetNodes = {
   coreLength: F;
   reach: F;
 
-  /** The fully expanded static temperature, and what afterburning adds to it */
+  /**
+   * The fully expanded static temperature, and what the mixing layer adds to
+   * it at an even mix: the fuel left burning, and the friction's heat
+   */
   temperature: F;
   afterburning: F;
 
@@ -622,8 +625,18 @@ export const plume_jet = (
 
   const reheat = afterburning.mul(breathes);
 
+  // What the friction slowing the jet gives back as heat, at an even mix. Its
+  // total enthalpy mixes as its speed does (Crocco and Busemann), so a share f
+  // of jet keeps f of its kinetic energy but moves at f of its speed, and the
+  // rest, f(1 - f) of it, is heat. Mirrors `jet_state`
+  const excess_speed = max(velocity.sub(airspeed), 0);
+  const kinetic = excess_speed
+    .mul(excess_speed)
+    .mul(gamma.sub(1))
+    .div(gamma.mul(gas_constant).mul(8));
+
   const hottest_excess = max(temperature.sub(ambient), 0).add(
-    afterburning.mul(4),
+    afterburning.add(kinetic).mul(4),
   );
 
   const thermal = core_length.div(
@@ -708,6 +721,7 @@ export const plume_jet = (
     reach,
     temperature,
     afterburning,
+    kinetic,
     reheat,
     thinning,
     exit_temperature,
@@ -1291,7 +1305,8 @@ export const plume_field = (
   );
 
   // Mixed: exhaust and air in proportion, and the fuel the exhaust still
-  // carries burning where it meets the air, peaking at an even mix
+  // carries burning where it meets the air, peaking at an even mix. The
+  // friction slowing the jet heats it there too, with the same shape
   const mixed = ambient
     .add(core_temperature.sub(ambient).mul(mixture))
     .add(jet.afterburning.mul(mixture).mul(mixture.oneMinus()).mul(4))

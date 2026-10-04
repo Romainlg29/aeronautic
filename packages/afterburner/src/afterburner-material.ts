@@ -608,7 +608,12 @@ export const create_afterburner_material = (
     "v_jet",
   ) as unknown as V4;
   const v_heat = varying(
-    vec4(jet.temperature, jet.afterburning, jet.shock_heat, jet.shock_length),
+    vec4(
+      jet.temperature,
+      jet.afterburning.add(jet.kinetic),
+      jet.shock_heat,
+      jet.shock_length,
+    ),
     "v_heat",
   ) as unknown as V4;
   const v_cell = varying(

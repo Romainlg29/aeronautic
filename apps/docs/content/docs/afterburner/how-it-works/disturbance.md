@@ -37,6 +37,22 @@ as a Gaussian. Past the core that is the far field's own Gaussian, so nothing
 downstream changes. The hot, bright part is then the narrowing cone that every
 photograph of a reheat flame shows, and that flight sims draw.
 
+The mixing layer is also **hotter** than a straight blend of jet and air. The
+friction that slows the jet turns its speed back into heat. With a Prandtl number
+near one, the total enthalpy mixes the way the velocity does (Crocco and
+Busemann). Gas that is a share `f` exhaust keeps `f` of the jet's kinetic energy
+but moves at only `f` of its speed, so `f(1 − f)` of that energy is now heat:
+
+```text
+T = T_air + f · (T_jet − T_air) + 4 f (1 − f) · (afterburningK + Δu² / 8 c_p)
+```
+
+`Δu` is the jet's speed over the air, and `c_p` its heat capacity. The friction
+term has the same shape as the fuel still burning, peaking at an even mix. It is
+worth about 160 K on a fighter at full reheat on the ground, 100 K at Mach one,
+and 500 K round a kerosene rocket. Planck's law is steep enough that this makes
+the sheath several times brighter than the blend alone.
+
 ### Eddies are stretched, and they coarsen
 
 A jet stretches what is in it, so the noise domain is stretched the same way —
