@@ -26,6 +26,12 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* The landing is one fixed screen that never scrolls: a gutter kept for a
+   scrollbar it can't have is a strip of the page down its right */
+html:has(.landing) {
+  scrollbar-gutter: auto;
+}
+
 /* The live examples */
 
 .example {

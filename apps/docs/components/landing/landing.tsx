@@ -102,7 +102,7 @@ const Page: FC = () => {
   return (
     <FlightProvider flight={flight}>
       <main
-        className="fixed inset-0 overflow-hidden"
+        className="landing fixed inset-0 overflow-hidden"
         style={{
           background: sky === "day" ? "#6f9fd8" : "#05070b",
           transition: "background-color 0.6s ease-in-out",
