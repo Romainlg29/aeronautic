@@ -140,12 +140,12 @@ const SHOCK_TRAIN_LENGTHS = 3;
 const LUMINANCE: [number, number, number] = [0.2126, 0.7152, 0.0722];
 
 // How far up the jet pipe the last turbine stage stands, in nozzle radii
-// A fighter's pipe is long, the burner's duct being most of it, so the
-// turbine only shows to a camera nearly astern
-const TURBINE_DEPTH = 3;
+const TURBINE_DEPTH = 2;
 
-// How brightly the pipe's wall glows, against the turbine at its end
-const PIPE_GLOW = 0.3;
+// How brightly the pipe's wall glows, against the turbine at its end: the
+// liner is hot all the way down, a little cooler by the lip
+const PIPE_GLOW_LIP = 0.55;
+const PIPE_GLOW = 0.8;
 
 /**
  * The names of the per instance attributes the material reads.
@@ -1040,7 +1040,7 @@ export const create_afterburner_material = (
 
         // Through the lip, and nothing opaque in the way
         const through_lip = float(1)
-          .sub(smoothstep(0.9, 1, at_exit))
+          .sub(smoothstep(0.97, 1, at_exit))
           .mul(step(0, to_exit))
           .mul(step(to_exit, scene_t));
 
@@ -1051,9 +1051,10 @@ export const create_afterburner_material = (
           .sub(smoothstep(0.85, 1, at_turbine))
           .mul(blades);
 
-        // A ray that misses the turbine meets the pipe's wall, cool by the lip
-        // and hotter the deeper it goes. How deep, from where it crosses the
-        // radius between the exit plane and the turbine
+        // A ray that misses the turbine meets the pipe's wall, hot all the way
+        // and hotter the deeper it goes, so the whole exit glows from any
+        // angle. How deep, from where it crosses the radius between the exit
+        // plane and the turbine
         const deep = clamp(
           float(1)
             .sub(at_exit)
@@ -1062,7 +1063,7 @@ export const create_afterburner_material = (
           1,
         );
 
-        const wall = deep.mul(deep).mul(PIPE_GLOW);
+        const wall = mix(float(PIPE_GLOW_LIP), float(PIPE_GLOW), deep);
 
         const seen = mix(wall, float(1), turbine).mul(through_lip);
 
