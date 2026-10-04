@@ -333,8 +333,7 @@ const weighted_line = (
   let variance = 0;
 
   for (let index = 0; index < xs.length; index++) {
-    covariance +=
-      weights[index] * (xs[index] - mean_x) * (ys[index] - mean_y);
+    covariance += weights[index] * (xs[index] - mean_x) * (ys[index] - mean_y);
     variance += weights[index] * (xs[index] - mean_x) ** 2;
   }
 
