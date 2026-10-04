@@ -1,68 +1,40 @@
-import { useAnimations, useGLTF } from "@react-three/drei";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import {
-  Afterburner,
-  AfterburnerBatch,
-  type AfterburnerBatchCore,
-  type AfterburnerHandle,
-} from "@aeronautic/afterburner";
+import { OrbitControls } from "@react-three/drei";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { AfterburnerBatch } from "@aeronautic/afterburner";
+import type { Flight } from "@aeronautic/core";
+import { FlightProvider, useFlightStore } from "@aeronautic/core/react";
+import { ControlSurfaces } from "@aeronautic/controls/react";
 import {
   angle_of_attack_for_load,
   moist_air,
   WingVapor,
   type WingVaporCore,
 } from "@aeronautic/wing-vapor";
-import {
-  type FC,
-  type RefObject,
-  Suspense,
-  useEffect,
-  useMemo,
-  useRef,
-} from "react";
-import {
-  type Group,
-  LoopOnce,
-  Matrix4,
-  type Mesh,
-  type Object3D,
-  type PerspectiveCamera,
-  Quaternion,
-  Vector3,
-} from "three";
+import { type FC, type RefObject, Suspense, useMemo, useRef } from "react";
+import { Euler, type Group, Quaternion } from "three";
 import { WebGPURenderer } from "three/webgpu";
+import { airframe_only, Exhaust, useFighter } from "@/examples/fighter";
 import { Grade, Reflections } from "@/examples/stage";
 import { NO_SHADOWS } from "@/lib/no-shadows";
-import { base_path } from "@/lib/shared";
+import type { Keys, Levers } from "./pilot";
 
-// The docs' fighter flying a figure of eight over the sea on a humid summer
-// day: fast and straight through the crossing, for the vapor cone, and hard
-// turns at the ends, for the tip trails and the vapor over the wing. Its bank
-// and its g come out of the path's curvature, as a real one's would
-
-const MODEL = `${base_path}/fighter.glb`;
-
-const G = 9.81;
+// The docs' fighter on a humid summer day, flown from the keyboard. It turns
+// freely about its own axes but goes nowhere: the keys write a flight it only
+// seems to fly, its speed following the throttle and its g and rates the
+// stick, and everything on it reads that flight, the control surfaces, the
+// plumes and the vapor
 
 // A humid summer day, low over the sea
-const AIR = { altitude_m: 300, temperature_offset_k: 10 };
-const HUMIDITY = 0.88;
-const SOUND_M_S = moist_air(
+const AIR = {
+  altitude_m: 300,
+  temperature_offset_k: 10,
+  relative_humidity: 0.88,
+};
+const MOIST = moist_air(
   AIR.altitude_m,
-  HUMIDITY,
+  AIR.relative_humidity,
   AIR.temperature_offset_k,
-).sound_m_s;
-
-// The eight: A across, B along, rising and falling by RISE, in metres. Its
-// turns are about 430 m in radius at their tightest
-const A = 1200;
-const B = 360;
-const RISE = 80;
-
-// Mach 0.96 through the crossing, and slowing for the turns so as never to
-// pull past about 7 g
-const FAST_M_S = 0.96 * SOUND_M_S;
-const TURN_G = 9;
+);
 
 // Where the sun is, for the skin and the vapor both
 const SUN: [number, number, number] = [5, 10, 5];
@@ -103,57 +75,33 @@ const SKIES = {
   },
 } as const;
 
-// Not the shape the air flies round: the gear and its doors, and the pylons
-const NOT_AIRFRAME =
-  /^(GEAR_|DOOR_|HINGE_Gear|CTRL_Gear|HINGE_Door|CTRL_Door|PYLON_|BAY_)/;
+const DEG = Math.PI / 180;
 
-/**
- * Whether a mesh of the fighter is part of its airframe.
- * @param mesh The mesh
- * @returns Whether to measure it
- */
-const airframe_only = (mesh: Mesh): boolean => {
-  for (let node: Object3D | null = mesh; node; node = node.parent) {
-    if (!node.visible || NOT_AIRFRAME.test(node.name)) return false;
-  }
-
-  return true;
-};
-
-/**
- * Where the eight is, and its first two derivatives, at an angle along it.
- * @param theta The angle, in radians
- * @param out Where to write the point and its derivatives
- */
-const eight = (
-  theta: number,
-  out: { point: Vector3; d1: Vector3; d2: Vector3 },
-) => {
-  const s = Math.sin(theta);
-  const c = Math.cos(theta);
-  const s2 = Math.sin(2 * theta);
-  const c2 = Math.cos(2 * theta);
-
-  out.point.set(A * s, RISE * s, B * s2);
-  out.d1.set(A * c, RISE * c, 2 * B * c2);
-  out.d2.set(-A * s, -RISE * s, -4 * B * s2);
-};
-
-/**
- * How fast it flies at a point along the eight: flat out where it runs
- * straight, and as fast as its g allows where it turns, blended smoothly.
- * @param at The point and its derivatives there
- * @returns The airspeed, in metres per second
- */
-const airspeed_at = ({ d1, d2 }: { d1: Vector3; d2: Vector3 }) => {
-  // The path's curvature, |d1 x d2| / |d1|^3
-  const cx = d1.y * d2.z - d1.z * d2.y;
-  const cy = d1.z * d2.x - d1.x * d2.z;
-  const cz = d1.x * d2.y - d1.y * d2.x;
-  const curvature = Math.hypot(cx, cy, cz) / d1.length() ** 3;
-
-  return 1 / Math.sqrt(1 / FAST_M_S ** 2 + curvature / (TURN_G * G));
-};
+// How the fake flies. The Mach number it settles at, at idle, at military
+// power and at full reheat, less what the gear, the flaps and the air brake
+// cost. Reheat takes it through Mach one and on past where the vapor cone
+// fades, about Mach 1.25 to 1.6
+const IDLE_MACH = 0.3;
+const DRY_MACH = 0.9;
+const REHEAT_MACH = 1.8;
+// Where it starts: lit, just through Mach one, the cone still on it
+const START_THROTTLE = 1.02;
+const DRAG_MACH = { gear: 0.1, flaps: 0.05, airbrake: 0.15 };
+// How long it takes to get most of the way to that speed, in seconds
+const SPEED_S = 4;
+// The g a stick held hard over pulls, back and forward, at Mach 0.9
+const PULL_G = 8;
+const PUSH_G = 3;
+// How fast the throttle runs with its key held, in throttle a second
+const THROTTLE_RATE = 0.45;
+// How long the stick takes to get most of the way over, in seconds
+const STICK_S = 0.15;
+// Its rates, stick and pedals hard over at Mach 0.9, in rad/s: quicker than
+// the g it shows would turn it, for the feel of it
+const ROLL_RATE = 4;
+const PULL_RATE = 0.55;
+const PUSH_RATE = 0.3;
+const YAW_RATE = 0.3;
 
 /**
  * How far to move towards a target this frame, easing in over a time.
@@ -163,332 +111,171 @@ const airspeed_at = ({ d1, d2 }: { d1: Vector3; d2: Vector3 }) => {
  */
 const ease = (delta: number, time_s: number) => 1 - Math.exp(-delta / time_s);
 
+/**
+ * The Mach number a throttle setting settles at, clean: idle to military
+ * power, then on through the reheat.
+ * @param throttle The throttle, 0 to 1.1
+ * @returns The Mach number
+ */
+const cruise_mach = (throttle: number) =>
+  throttle <= 1
+    ? IDLE_MACH + (DRY_MACH - IDLE_MACH) * throttle
+    : DRY_MACH + (REHEAT_MACH - DRY_MACH) * ((throttle - 1) / 0.1);
+
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
-const DEG = Math.PI / 180;
-
-// The model's moving parts, each a node turning about its own X, positive as
-// its extras say
-const SURFACES = {
-  elevons_l: ["CTRL_Elevon_Inner_L", "CTRL_Elevon_Outer_L"],
-  elevons_r: ["CTRL_Elevon_Inner_R", "CTRL_Elevon_Outer_R"],
-  leading_edge: [
-    "CTRL_LEFlap_Inner_L",
-    "CTRL_LEFlap_Outer_L",
-    "CTRL_LEFlap_Inner_R",
-    "CTRL_LEFlap_Outer_R",
-  ],
-  rudders: ["CTRL_Rudder_L", "CTRL_Rudder_R"],
-  nozzle_pitch: ["CTRL_Nozzle_L_Pitch", "CTRL_Nozzle_R_Pitch"],
-  nozzle_yaw: ["CTRL_Nozzle_L_Yaw", "CTRL_Nozzle_R_Yaw"],
-  stick_pitch: ["CTRL_Stick_Pitch"],
-  stick_roll: ["CTRL_Stick_Roll"],
-  throttle: ["CTRL_Throttle_C"],
-} as const;
-
-type Surface = keyof typeof SURFACES;
+type Pilot = { keys: RefObject<Keys>; levers: Levers };
 
 /**
- * Turn every node of a moving part.
- * @param parts The model's parts, found by name
- * @param surface Which one
- * @param angle The angle, in radians
+ * The fighter, turning in place at the keyboard's rates and pitched up by its
+ * angle of attack, with the keyboard's flight written to it each frame.
+ * @param props The sky, and the pilot's keys and levers
+ * @returns The model, its moving parts, its plumes and its vapor
  */
-const deflect = (
-  parts: Record<Surface, Object3D[]>,
-  surface: Surface,
-  angle: number,
-) => {
-  for (const node of parts[surface]) node.rotation.x = angle;
-};
-
-export type Readout = RefObject<HTMLSpanElement | null>;
-
-/**
- * The fighter on the eight, burners lit and vapor on, with the camera
- * chasing it.
- * @param props The sky, and where to say what it is doing
- * @returns The model, its plumes and its vapor
- */
-const Flight: FC<{ sky: Sky; readout: Readout }> = ({ sky, readout }) => {
-  const { scene, nodes, animations } = useGLTF(MODEL);
-  const path = useRef<Group>(null);
+const Fighter: FC<{ sky: Sky } & Pilot> = ({ sky, keys, levers }) => {
+  const { scene, animations } = useFighter();
+  const flight = useFlightStore();
+  const attitude = useRef<Group>(null);
   const body = useRef<Group>(null);
   const vapor = useRef<WingVaporCore>(null);
-  const batch = useRef<AfterburnerBatchCore>(null);
-  const engines = useRef<(AfterburnerHandle | null)[]>([]);
-  const { actions } = useAnimations(animations, body);
-  const camera = useThree((state) => state.camera);
 
-  const scratch = useMemo(
+  // What the fake carries from frame to frame
+  const state = useMemo(
     () => ({
-      theta: 0,
-      at: { point: new Vector3(), d1: new Vector3(), d2: new Vector3() },
-      tangent: new Vector3(),
-      lift: new Vector3(),
-      x: new Vector3(),
-      z: new Vector3(),
-      back: new Vector3(),
-      side: new Vector3(),
-      basis: new Matrix4(),
-      // Where the path asks the airframe to point, and where it pointed last
-      // frame, to measure its rates from
-      aim: new Quaternion(),
-      last: new Quaternion(),
-      turn: new Quaternion(),
-      // The camera's way back from the aircraft, eased round
-      chase: new Vector3(0, 0, 1),
-      settled: false,
+      pitch: 0,
+      roll: 0,
+      yaw: 0,
+      throttle: START_THROTTLE,
+      mach: cruise_mach(START_THROTTLE),
       alpha: 0,
-      load: 1,
-      throttle: 1.05,
-      // Its roll, pitch and yaw rates, in rad/s, eased
-      rates: new Vector3(),
-      air: moist_air(AIR.altitude_m, HUMIDITY, AIR.temperature_offset_k),
-      clock: 0,
+      euler: new Euler(),
+      turn: new Quaternion(),
     }),
     [],
   );
 
-  const parts = useMemo(() => {
-    const found = {} as Record<Surface, Object3D[]>;
-
-    for (const [surface, names] of Object.entries(SURFACES)) {
-      found[surface as Surface] = names.flatMap((name) => {
-        const node = nodes[name];
-
-        return node ? [node] : [];
-      });
-    }
-
-    return found;
-  }, [nodes]);
-
-  useEffect(() => {
-    // The afterburner cones and the pylons are meant hidden, flagged so in
-    // their extras, which three hands over as userData
-    scene.traverse((node) => {
-      if (node.userData.visible_default === false) node.visible = false;
-    });
-
-    // It's modelled on its wheels: fold them away
-    const retract = actions.ANIM_Gear_Retract;
-
-    if (!retract) return;
-
-    retract.setLoop(LoopOnce, 1);
-    retract.clampWhenFinished = true;
-    retract.play();
-  }, [scene, actions]);
-
   useFrame((_, frame_delta) => {
     const delta = Math.min(frame_delta, 0.1);
-    const { at, tangent, lift, x, z, back, side, basis } = scratch;
+    const input = keys.current;
 
-    if (!path.current || !body.current) return;
+    if (!flight || !attitude.current || !body.current) return;
 
-    // Along the eight at the airspeed there
-    eight(scratch.theta, at);
+    // The stick and pedals sweep over and spring back, as a keyboard's do
+    state.pitch += (input.pitch - state.pitch) * ease(delta, STICK_S);
+    state.roll += (input.roll - state.roll) * ease(delta, STICK_S);
+    state.yaw += (input.yaw - state.yaw) * ease(delta, STICK_S);
+    state.throttle = clamp(
+      state.throttle + input.throttle * THROTTLE_RATE * delta,
+      0,
+      1.1,
+    );
 
-    scratch.theta += (airspeed_at(at) / at.d1.length()) * delta;
-    scratch.clock += delta;
-    eight(scratch.theta, at);
+    // The speed it settles at, from the throttle and what's hanging out
+    const mach_target =
+      cruise_mach(state.throttle) -
+      DRAG_MACH.gear * levers.gear -
+      DRAG_MACH.flaps * levers.flaps -
+      DRAG_MACH.airbrake * levers.airbrake;
 
-    const airspeed_m_s = airspeed_at(at);
+    state.mach += (mach_target - state.mach) * ease(delta, SPEED_S);
 
-    // The lift has to turn the flight path and hold the aircraft up: the
-    // path's curvature times the airspeed squared, plus one g
-    tangent.copy(at.d1).normalize();
-    lift
-      .copy(at.d2)
-      .addScaledVector(tangent, -at.d2.dot(tangent))
-      .multiplyScalar((airspeed_m_s * airspeed_m_s) / at.d1.lengthSq());
-    lift.y += G;
-    lift.addScaledVector(tangent, -lift.dot(tangent));
+    const airspeed_m_s = state.mach * MOIST.sound_m_s;
+    // The g a full stick gives grows with the dynamic pressure
+    const authority = (state.mach / 0.9) ** 2;
+    const load_factor = clamp(
+      1 + state.pitch * (state.pitch > 0 ? PULL_G : PUSH_G) * authority,
+      -PUSH_G,
+      PULL_G + 1,
+    );
 
-    const load_now = lift.length() / G;
+    // The angle of attack it takes the wing to pull that g, at that speed
+    const airframe = vapor.current?.airframe;
+    const alpha = airframe
+      ? angle_of_attack_for_load(airframe, load_factor, airspeed_m_s, MOIST)
+      : 0;
 
-    lift.normalize();
+    state.alpha = clamp(alpha, -8 * DEG, 25 * DEG);
 
-    // Flying along -Z, the lift up its +Y: the bank follows from it
-    z.copy(tangent).negate();
-    x.crossVectors(lift, z);
-    basis.makeBasis(x, lift, z);
-    scratch.aim.setFromRotationMatrix(basis);
-    path.current.position.copy(at.point);
+    const roll_rate = ROLL_RATE * state.roll * Math.min(authority, 1);
+    const pitch_rate =
+      state.pitch *
+      (state.pitch > 0 ? PULL_RATE : PUSH_RATE) *
+      Math.min(authority, 1);
+    const yaw_rate = YAW_RATE * state.yaw;
 
-    if (!scratch.settled) {
-      path.current.quaternion.copy(scratch.aim);
-      scratch.last.copy(scratch.aim);
-      scratch.settled = true;
-    }
+    flight.set({
+      airspeed_m_s,
+      angle_of_attack_rad: state.alpha,
+      // Right pedal yaws the nose right, the air then from the left
+      sideslip_rad: -3 * DEG * state.yaw,
+      load_factor,
+      roll_rate_rad_s: roll_rate,
+      pitch_rate_rad_s: pitch_rate,
+      yaw_rate_rad_s: yaw_rate,
+      throttle: state.throttle,
+      roll: state.roll,
+      pitch: state.pitch,
+      yaw: state.yaw,
+      ...levers,
+    });
 
-    // An airframe takes a moment to roll and pull to where the path asks
-    path.current.quaternion.slerp(scratch.aim, ease(delta, 0.22));
-    scratch.load += (load_now - scratch.load) * ease(delta, 0.25);
-
-    const load = scratch.load;
-
-    // Its rates, in its own frame, from how it turned since the last frame
-    scratch.turn.copy(scratch.last).invert().multiply(path.current.quaternion);
-    scratch.last.copy(path.current.quaternion);
-
-    if (scratch.turn.w < 0) {
-      scratch.turn.set(
-        -scratch.turn.x,
-        -scratch.turn.y,
-        -scratch.turn.z,
-        -scratch.turn.w,
-      );
-    }
-
-    // For a small turn, the quaternion's vector part is half the angle
-    const per_s = delta > 0 ? 2 / delta : 0;
-
-    // Rolling right is about -Z, pitching up about +X, yawing right about -Y
-    const rates = scratch.rates;
-
-    rates.x += (-scratch.turn.z * per_s - rates.x) * ease(delta, 0.12);
-    rates.y += (scratch.turn.x * per_s - rates.y) * ease(delta, 0.12);
-    rates.z += (-scratch.turn.y * per_s - rates.z) * ease(delta, 0.12);
-
-    const current = vapor.current;
-
-    if (current) {
-      const alpha = angle_of_attack_for_load(
-        current.airframe,
-        load,
-        airspeed_m_s,
-        scratch.air,
-      );
-
-      scratch.alpha += (alpha - scratch.alpha) * ease(delta, 0.15);
-      current.update_flight({
-        airspeed_m_s,
-        angle_of_attack_rad: scratch.alpha,
-      });
-    }
+    // It turns where it stands, about its own axes: rolling right about -Z,
+    // pitching up about +X, yawing right about -Y
+    state.euler.set(pitch_rate * delta, -yaw_rate * delta, -roll_rate * delta);
+    state.turn.setFromEuler(state.euler);
+    attitude.current.quaternion.multiply(state.turn).normalize();
 
     // The nose is up off the flight path by the angle of attack
-    body.current.rotation.x = scratch.alpha;
-
-    // The controls, as a pilot would hold them: the elevons up to pull and
-    // split to roll, the rudders into the yaw, the leading edge drooped
-    // with the angle of attack, and the nozzles vectoring with the elevons
-    const roll_input = clamp(rates.x / 2.5, -1, 1);
-    const pull_input = clamp((load - 1) / 6, -0.3, 1);
-    const pitch = -18 * pull_input * DEG;
-    const roll = 14 * roll_input * DEG;
-
-    deflect(parts, "elevons_l", clamp(pitch + roll, -30 * DEG, 30 * DEG));
-    deflect(parts, "elevons_r", clamp(pitch - roll, -30 * DEG, 30 * DEG));
-    deflect(parts, "rudders", clamp(rates.z * 40, -12, 12) * DEG);
-    deflect(
-      parts,
-      "leading_edge",
-      clamp((scratch.alpha / DEG) * 1.2, -3, 25) * DEG,
-    );
-    deflect(parts, "nozzle_pitch", -4 * pull_input * DEG);
-    deflect(parts, "nozzle_yaw", clamp(rates.z * 30, -9.5, 9.5) * DEG);
-    deflect(parts, "stick_pitch", 15 * pull_input * DEG);
-    deflect(parts, "stick_roll", 15 * roll_input * DEG);
-
-    // Reheat all the way round, the throttle firewalled as the pull comes on,
-    // to hold the energy through the turn
-    const throttle = 1.02 + 0.08 * clamp((load - 1.5) / 3.5, 0, 1);
-
-    scratch.throttle += (throttle - scratch.throttle) * ease(delta, 0.4);
-
-    for (const engine of engines.current) {
-      if (engine) engine.throttle = scratch.throttle;
-    }
-
-    // The lever, its reheat detent at 0.85 of its travel
-    deflect(
-      parts,
-      "throttle",
-      (0.85 + (scratch.throttle - 1) * 1.5) * 40 * DEG,
-    );
-
-    batch.current?.update_profile({ airspeed_m_s });
-
-    // The camera chases it, level, easing round as it turns and swinging
-    // slowly from astern to abeam
-    back.set(-tangent.x, 0, -tangent.z).normalize();
-    scratch.chase.lerp(back, ease(delta, 0.9)).normalize();
-    back.copy(scratch.chase);
-    side.set(back.z, 0, -back.x);
-
-    const swing = 0.95 + 0.6 * Math.sin(scratch.clock * 0.07);
-    // Further back on a narrow screen, to keep the wings in
-    const aspect = (camera as PerspectiveCamera).aspect;
-    const distance = 44 * Math.max(1, 1.2 / aspect);
-
-    camera.position
-      .copy(at.point)
-      .addScaledVector(back, Math.cos(swing) * distance)
-      .addScaledVector(side, Math.sin(swing) * distance);
-    camera.position.y += 6;
-    // Looking a little below it, so it flies above the page's title
-    camera.lookAt(at.point.x, at.point.y - 4, at.point.z);
-
-    if (readout.current) {
-      readout.current.textContent = `Mach ${(airspeed_m_s / SOUND_M_S).toFixed(2)} · ${load.toFixed(1)} g`;
-    }
+    body.current.rotation.x = state.alpha;
   });
-
-  const look = SKIES[sky].look;
 
   return (
     <AfterburnerBatch
-      ref={batch}
       preset="afterburner"
-      profile={{ ...AIR, exposure: SKIES[sky].exposure }}
+      profile={{ exposure: SKIES[sky].exposure }}
     >
-      <group ref={path}>
+      <group ref={attitude}>
         <group ref={body}>
           <primitive object={scene} />
+          <ControlSurfaces
+            object={scene}
+            animations={animations}
+            exhaust={<Exhaust />}
+          />
           <WingVapor
             ref={vapor}
             capture={scene}
             capture_filter={airframe_only}
-            air={{ ...AIR, relative_humidity: HUMIDITY }}
-            look={look}
+            look={SKIES[sky].look}
             forward={[0, 0, -1]}
           />
         </group>
       </group>
-      {[nodes.FX_Exhaust_L, nodes.FX_Exhaust_R].map((exhaust, index) => (
-        <Afterburner
-          key={index}
-          ref={(engine) => {
-            engines.current[index] = engine;
-          }}
-          target={exhaust}
-          preset="afterburner"
-          position={[0, 0, 0.08]}
-          direction={[0, 0, -1]}
-          params={{ nozzle_radius_m: 0.29, nozzle_aspect: 1.67 }}
-        />
-      ))}
     </AfterburnerBatch>
   );
 };
 
 /**
- * The landing page's sky: the fighter flying the eight, fullscreen.
- * @param props Day or night, and where to say what it is doing
+ * The landing page's sky: the fighter, fullscreen, flown from the keyboard
+ * and looked round with the mouse.
+ * @param props Day or night, the flight, and the pilot's keys and levers
  * @returns The canvas
  */
-const FlightScene: FC<{ sky: Sky; readout: Readout }> = ({ sky, readout }) => {
+const FlightScene: FC<{ sky: Sky; flight: Flight } & Pilot> = ({
+  sky,
+  flight,
+  keys,
+  levers,
+}) => {
   const lights = SKIES[sky];
 
   return (
     <Canvas
       dpr={[1, 1.25]}
       shadows={NO_SHADOWS}
-      camera={{ position: [0, 5, 30], fov: 40, near: 0.1, far: 5000 }}
+      // Astern and to the right, the plumes towards the camera
+      camera={{ position: [16, 5, 24], fov: 40, near: 0.1, far: 5000 }}
       gl={async (props) => {
         const renderer = new WebGPURenderer({
           ...(props as object),
@@ -508,9 +295,21 @@ const FlightScene: FC<{ sky: Sky; readout: Readout }> = ({ sky, readout }) => {
         color={lights.sun_color}
       />
       <Reflections intensity={lights.reflections} />
-      <Suspense fallback={null}>
-        <Flight sky={sky} readout={readout} />
-      </Suspense>
+      {/* Context doesn't cross into the canvas: the same flight again */}
+      <FlightProvider flight={flight}>
+        <Suspense fallback={null}>
+          <Fighter sky={sky} keys={keys} levers={levers} />
+        </Suspense>
+      </FlightProvider>
+      <OrbitControls
+        // Looking a little below it, so it sits above the page's title
+        target={[0, -3, 4]}
+        enablePan={false}
+        enableDamping
+        minDistance={10}
+        maxDistance={90}
+        makeDefault
+      />
       <Grade />
     </Canvas>
   );
