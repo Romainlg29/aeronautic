@@ -80,12 +80,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm fmt:check
+      # Built first: packages that depend on @aeronautic/core resolve its
+      # types and code from its dist, as they would once installed
+      - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm test
 
       # Trusted publishing needs npm 11.5.1 or later
       - run: npm install --global npm@^11.5.1
-      - run: pnpm build
       # Only what an install needs: dist, README, LICENSE and a package.json
       # without the scripts and dev dependencies. pnpm packs it, so a
       # workspace:^ dependency on core becomes the version it's at; npm
