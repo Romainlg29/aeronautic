@@ -1,5 +1,5 @@
 import { Flight } from "@aeronautic/core";
-import { type AnimationClip, type Object3D, Vector3 } from "three";
+import { type AnimationClip, type Object3D, Quaternion, Vector3 } from "three";
 import { beforeEach, describe, expect, it } from "vitest";
 import { load_fighter } from "./fighter.fixture";
 import { add_engine } from "./engine";
@@ -230,6 +230,36 @@ describe("ControlRig", () => {
     run(rig, 1);
 
     expect(rig.value("CTRL_Rudder_L")).toBe(-30);
+  });
+
+  it("leaves the model as it found it, for a rig made on it again", () => {
+    const flight = new Flight({ gear: 1, pitch: 1, yaw: 1 });
+    const first = new ControlRig(scene, { animations, source: flight });
+    const controls = fighter_controls(first);
+
+    run(first, 2);
+
+    expect(turned(first, "CTRL_DragRudder_Upper_R")).toBeGreaterThan(10);
+
+    controls.dispose();
+    first.dispose();
+
+    flight.set({ pitch: 0, yaw: 0 });
+
+    const again = fighter({ source: flight });
+
+    run(again, 2);
+
+    for (const name of [
+      "CTRL_DragRudder_Upper_R",
+      "CTRL_Nozzle_L_Pitch",
+      "CTRL_Nozzle_L_Yaw",
+    ]) {
+      expect(turned(again, name)).toBeCloseTo(0);
+      expect(
+        again.surface(name)!.node.quaternion.angleTo(new Quaternion()),
+      ).toBeCloseTo(0);
+    }
   });
 });
 

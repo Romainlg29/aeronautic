@@ -801,11 +801,17 @@ export class ControlRig {
     }
   }
 
-  /** Stop the clips. The parts stay where they are */
+  /**
+   * Stop the clips, and put every part back as it was found: a rig made on
+   * the model again, as a remount makes one on a cached model, would
+   * otherwise take a part left over as its zero
+   */
   dispose() {
     if (this._mixer) {
       this._mixer.stopAllAction();
       this._mixer.uncacheRoot(this.root);
     }
+
+    for (const surface of this._surfaces) pose_surface(surface, 0);
   }
 }
