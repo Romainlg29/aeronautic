@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { angle_of_attack_for_load } from "./aerodynamics";
-import { moist_air } from "./atmosphere";
+import { moist_air } from "@aeronautic/core";
 import { shape_station, trapezoid_shape, type WingShape } from "./wing-shape";
 import {
   cone_pocket,

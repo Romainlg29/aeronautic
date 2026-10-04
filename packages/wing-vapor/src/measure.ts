@@ -6,7 +6,7 @@ import {
   type AirframeViews,
   type CaptureOptions,
   type DepthView,
-} from "./capture";
+} from "@aeronautic/core";
 import type { VaporAirframe } from "./types";
 import {
   lattice_loading,

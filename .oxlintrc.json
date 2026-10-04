@@ -41,7 +41,12 @@
       }
     },
     {
-      "files": ["packages/afterburner/src/**", "packages/wing-vapor/src/**"],
+      "files": [
+        "packages/core/src/**",
+        "packages/afterburner/src/**",
+        "packages/wing-vapor/src/**",
+        "packages/controls/src/**"
+      ],
       "rules": {
         "react/only-export-components": "off",
         "react/immutability": "off",

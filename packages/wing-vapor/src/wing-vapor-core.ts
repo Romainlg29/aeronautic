@@ -9,7 +9,12 @@ import {
   Vector3,
 } from "three";
 import type { MeshBasicNodeMaterial } from "three/webgpu";
-import { canonical_frame, capture_views, type CaptureOptions } from "./capture";
+import {
+  canonical_frame,
+  capture_views,
+  type CaptureOptions,
+  type Flight,
+} from "@aeronautic/core";
 import { condensation_table } from "./condensation";
 import {
   capture_airframe_async,
@@ -91,7 +96,15 @@ export type WingVaporOptions = {
 
   // The most iterations a pixel's march may take
   max_steps?: number;
+
+  // A shared flight to read the airspeed, the angles, the altitude and the
+  // day from, every frame. What it gives wins over `flight` and `air`
+  source?: Flight | null;
 };
+
+// The condensation table is rebuilt for every change of the air, so a shared
+// flight's altitude is read to the nearest this many metres
+const SOURCE_ALTITUDE_STEP_M = 10;
 
 // The longest a frame may advance the noise's clock, so a tab coming back
 // from the background does not jump the patches a kilometre downstream
@@ -155,6 +168,13 @@ export class WingVapor {
   /** How fast the moisture's clock runs, one being real time */
   time_scale = 1;
 
+  /**
+   * A shared flight, read every frame: its airspeed, angle of attack and
+   * sideslip win over `flight`, and its altitude and day over `air`. null
+   * flies only what is written
+   */
+  source: Flight | null;
+
   private _airframe: VaporAirframe;
   private _flight: VaporFlight;
   private _air: VaporAir;
@@ -178,6 +198,10 @@ export class WingVapor {
 
   private _frame_number = -1;
 
+  // The source last read, and at which of its writes
+  private _read_from: Flight | null = null;
+  private _read_version = -1;
+
   // The attitude last frame, and the roll rate measured from it
   private readonly _attitude = new Quaternion();
   private _attitude_set = false;
@@ -192,6 +216,7 @@ export class WingVapor {
     this._effects = { ...default_vapor_effects(), ...options.effects };
 
     this.object = options.object ?? null;
+    this.source = options.source ?? null;
 
     this.uniforms = create_vapor_uniforms();
     this.uniforms.seed.value = (seeds++ * 7.31) % 100;
@@ -628,6 +653,41 @@ export class WingVapor {
   }
 
   /**
+   * Take the flight and the day from the shared flight, if there is one and
+   * it changed. Written in place: the refresh at the end of the frame picks
+   * it up, and nothing is allocated.
+   */
+  private read_source() {
+    const source = this.source;
+
+    if (
+      !source ||
+      (source === this._read_from && source.version === this._read_version)
+    ) {
+      return;
+    }
+
+    this._read_from = source;
+    this._read_version = source.version;
+
+    const values = source.values;
+    const flight = this._flight;
+    const air = this._air;
+
+    flight.airspeed_m_s = values.airspeed_m_s;
+    flight.angle_of_attack_rad = values.angle_of_attack_rad;
+
+    // The flight's sideslip is from the right; the vapour's from +z, the left
+    flight.sideslip_rad = -values.sideslip_rad;
+
+    air.altitude_m =
+      Math.round(values.altitude_m / SOURCE_ALTITUDE_STEP_M) *
+      SOURCE_ALTITUDE_STEP_M;
+    air.temperature_offset_k = values.temperature_offset_k;
+    air.relative_humidity = values.relative_humidity;
+  }
+
+  /**
    * Follow the aircraft and the camera, just before the mesh is drawn.
    * @param renderer The renderer drawing it
    * @param camera The camera it is drawn from
@@ -670,6 +730,8 @@ export class WingVapor {
     }
 
     this._frame_number = renderer.info.frame;
+
+    this.read_source();
 
     const now = performance.now();
     const delta_s =

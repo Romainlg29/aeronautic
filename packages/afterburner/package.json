@@ -1,6 +1,6 @@
 {
   "name": "@aeronautic/afterburner",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Realistic jet afterburner and rocket exhaust plumes for three.js and React Three Fiber: raymarched in TSL for WebGPU, with shock diamonds, heat haze and one instanced draw",
   "keywords": [
     "afterburner",
@@ -69,6 +69,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "@aeronautic/core": "workspace:^"
   },
   "devDependencies": {
     "@react-three/fiber": "^9.8.1",

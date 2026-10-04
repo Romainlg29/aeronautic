@@ -13,6 +13,7 @@ import {
   Vector3,
 } from "three";
 import type { MeshBasicNodeMaterial } from "three/webgpu";
+import type { Flight, FlightValues } from "@aeronautic/core";
 import {
   AFTERBURNER_ATTRIBUTES,
   create_afterburner_material,
@@ -137,6 +138,10 @@ export type AfterburnerNozzleOptions = {
 
   // How hard the engine runs: 0 to 1 dry, on to 1.1 at full reheat
   throttle?: number;
+
+  // Read the throttle from the batch's source with this, each time the
+  // source changes, rather than run at what is written to it
+  throttle_from?: ((values: Readonly<FlightValues>) => number) | null;
 };
 
 /**
@@ -179,6 +184,13 @@ export class AfterburnerNozzle {
   /** The object the plume follows, if any */
   object: Object3D | null;
 
+  /**
+   * Read the throttle from the batch's `source` with this, each time the
+   * source changes, rather than run at what is written to `throttle`: the
+   * flight's own throttle, or one engine's
+   */
+  throttle_from: ((values: Readonly<FlightValues>) => number) | null;
+
   /** The world matrix, when there is no object */
   readonly matrix = new Matrix4();
 
@@ -202,6 +214,7 @@ export class AfterburnerNozzle {
     this._batch = batch;
     this._seed = seed;
     this.object = options.object ?? null;
+    this.throttle_from = options.throttle_from ?? null;
     this._throttle = clamp_throttle(
       options.throttle ?? AFTERBURNER_MAX_THROTTLE,
     );
@@ -387,6 +400,10 @@ export type AfterburnerBatchOptions = {
   // How long, in seconds, a plume takes to follow its throttle. Zero is at once
   response_s?: number;
 
+  // A shared flight: its altitude, airspeed and day win over the profile's,
+  // and nozzles with a `throttle_from` read their throttle from it
+  source?: Flight | null;
+
   // The opaque scene drawn in a pass of its own, for plumes drawn in another,
   // as `afterburner_pass` sets up. Fixed for the batch's life
   backdrop?: AfterburnerBackdrop;
@@ -429,6 +446,13 @@ export class AfterburnerBatch {
    */
   response_s = DEFAULT_RESPONSE_S;
 
+  /**
+   * A shared flight, read every frame: its altitude, airspeed and day win
+   * over the profile's, and nozzles with a `throttle_from` read theirs from it
+   * throttle. null leaves the batch to what is written to it
+   */
+  source: Flight | null;
+
   /** Plumes shorter than this share of the screen height are not drawn */
   min_screen_fraction = 0.001;
 
@@ -467,6 +491,10 @@ export class AfterburnerBatch {
   private _frame = -1;
   private _last_ms = -1;
 
+  // The source last read, and at which of its writes
+  private _read_from: Flight | null = null;
+  private _read_version = -1;
+
   private _camera: Camera | null = null;
 
   private _stats: AfterburnerStats = {
@@ -480,6 +508,7 @@ export class AfterburnerBatch {
   constructor(options: AfterburnerBatchOptions = {}) {
     this.preset = options.preset;
     this.response_s = options.response_s ?? DEFAULT_RESPONSE_S;
+    this.source = options.source ?? null;
     this._profile = resolve_afterburner_profile(
       options.profile,
       options.preset,
@@ -808,6 +837,8 @@ export class AfterburnerBatch {
 
     this._frame = frame;
 
+    this.read_source();
+
     const now = performance.now();
 
     if (this._last_ms >= 0) {
@@ -899,6 +930,50 @@ export class AfterburnerBatch {
     this.mark_static(count - 1);
     this.mark_dynamic(0);
     this.mark_dynamic(count - 1);
+  }
+
+  /**
+   * Take the air and the throttle from the shared flight, if there is one and
+   * it changed since the last frame.
+   */
+  private read_source() {
+    const source = this.source;
+
+    if (
+      !source ||
+      (source === this._read_from && source.version === this._read_version)
+    ) {
+      return;
+    }
+
+    this._read_from = source;
+    this._read_version = source.version;
+
+    const values = source.values;
+
+    for (const nozzle of this._nozzles) {
+      const from = nozzle.throttle_from;
+
+      if (from) {
+        nozzle.throttle = from(values);
+      }
+    }
+
+    const profile = this._profile;
+
+    if (
+      profile.altitude_m !== values.altitude_m ||
+      profile.airspeed_m_s !== values.airspeed_m_s ||
+      profile.temperature_offset_k !== values.temperature_offset_k
+    ) {
+      // The batch's own copy, made when it was set: written in place, so a
+      // flight that climbs every frame allocates nothing
+      profile.altitude_m = values.altitude_m;
+      profile.airspeed_m_s = values.airspeed_m_s;
+      profile.temperature_offset_k = values.temperature_offset_k;
+
+      write_afterburner_profile(this.uniforms, profile);
+    }
   }
 
   /**

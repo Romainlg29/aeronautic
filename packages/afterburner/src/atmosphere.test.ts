@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { atmosphere, standard_atmosphere } from "./atmosphere";
+import { atmosphere } from "./atmosphere";
 import { jet_state } from "./plume-profile";
 import {
   resolve_afterburner_params,
@@ -9,22 +9,6 @@ import {
   default_afterburner_params,
   default_afterburner_profile,
 } from "./types";
-
-describe("standard_atmosphere", () => {
-  it("matches the standard's tables at its layer boundaries", () => {
-    expect(standard_atmosphere(0).pressure).toBeCloseTo(1);
-    expect(standard_atmosphere(11_000).temperature_k).toBeCloseTo(216.65);
-    expect(standard_atmosphere(11_000).pressure).toBeCloseTo(0.2234, 3);
-    expect(standard_atmosphere(20_000).pressure).toBeCloseTo(0.05403, 4);
-    expect(standard_atmosphere(32_000).temperature_k).toBeCloseTo(228.65);
-    expect(standard_atmosphere(32_000).pressure).toBeCloseTo(0.008567, 5);
-  });
-
-  it("never runs out of air", () => {
-    expect(standard_atmosphere(1e7).pressure).toBeGreaterThan(0);
-    expect(standard_atmosphere(-500).pressure).toBe(1);
-  });
-});
 
 describe("atmosphere", () => {
   it("thins the air on a hot day, at the same pressure", () => {

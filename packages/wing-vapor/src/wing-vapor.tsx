@@ -1,3 +1,5 @@
+import type { Flight } from "@aeronautic/core";
+import { useFlightStore } from "@aeronautic/core/react";
 import { createPortal, useThree, type ThreeElements } from "@react-three/fiber";
 import {
   useEffect,
@@ -127,6 +129,13 @@ export type WingVaporProps = Omit<ThreeElements["group"], "ref"> & {
   /** The most iterations one pixel's march may take */
   max_steps?: number;
 
+  /**
+   * A shared flight to fly: its airspeed, angles, altitude and day win over
+   * `flight` and `air`, read every frame without rendering. By default the
+   * nearest `<FlightProvider>`'s; null flies only the props
+   */
+  source?: Flight | null;
+
   /** The vapour itself, to drive every frame or read its state */
   ref?: Ref<Core | null>;
 };
@@ -149,11 +158,14 @@ export const WingVapor: FC<WingVaporProps> = ({
   capture_filter,
   measured,
   max_steps,
+  source,
   ref,
   children,
   ...group_props
 }) => {
   const scene = useThree((state) => state.scene);
+  const provided = useFlightStore();
+  const flight_source = source === undefined ? provided : source;
   const group = useRef<Group>(null);
 
   const [vapor, set_vapor] = useState<Core | null>(null);
@@ -261,6 +273,12 @@ export const WingVapor: FC<WingVaporProps> = ({
   useLayoutEffect(() => {
     vapor?.set_frame({ forward: [fx, fy, fz], up: [ux, uy, uz] });
   }, [vapor, fx, fy, fz, ux, uy, uz]);
+
+  useLayoutEffect(() => {
+    if (vapor) {
+      vapor.source = flight_source;
+    }
+  }, [vapor, flight_source]);
 
   useLayoutEffect(() => {
     if (vapor && max_steps !== undefined) {

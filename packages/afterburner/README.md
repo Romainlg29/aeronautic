@@ -146,6 +146,34 @@ exhaust temperatures:
 `atmosphere`, `propellant_effects`, `propellant_params` and `jet_state` are
 exported for working these out on the main thread.
 
+Inside an `@aeronautic/core` `<FlightProvider>`, all of this comes from the
+flight. The batch takes `altitude_m`, `airspeed_m_s` and
+`temperature_offset_k` from it, and a nozzle with no `throttle` prop follows
+the flight's throttle. The flight is read only when it changes, inside the
+batch's own frame update, so nothing renders:
+
+```tsx
+<FlightProvider track={jet}>
+  {/* throttle, altitude and airspeed from the flight */}
+  <Afterburner position={[0, 0, 6]} />
+</FlightProvider>
+```
+
+A number for `throttle`, or a write to the handle's `throttle`, takes over from
+the flight. A function reads the flight its own way, and is called only when
+the flight changes: `throttle={(f) => f.throttle * 0.9}` for an engine
+spooling short of the other. `source={null}` ignores the flight altogether.
+
+Inside an `@aeronautic/controls` `<Engine>`, a nozzle sits on that engine's
+exhaust and runs at its throttle. It also turns with the nozzle when the
+engine vectors:
+
+```tsx
+<Engine side="left">
+  <Afterburner />
+</Engine>
+```
+
 A preset can also be an object of your own, `{ params, profile }`, and
 `AFTERBURNER_PRESETS` is there to spread from:
 
@@ -165,15 +193,16 @@ const sunset_booster = {
 
 Takes every `<group>` prop (`position`, `rotation`, `scale`, children…), plus:
 
-| prop        | type                                         | default      | what it does                                                                                             |
-| ----------- | -------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------- |
-| `preset`    | `AfterburnerPresetName \| AfterburnerPreset` | the defaults | Which look to start from. Outside an `<AfterburnerBatch>` it also picks the batch, and so the profile.   |
-| `params`    | `AfterburnerParamsInput`                     | —            | How this plume looks, over the preset. Colours take any `ColorRepresentation`.                           |
-| `throttle`  | `number`                                     | `1.1`        | 0 to 1 is dry thrust, on to 1.1 at full reheat. A jet's burner lights past 1; a rocket's is always lit.  |
-| `batch`     | `AfterburnerBatchCore`                       | nearest      | Draw it with this batch rather than the nearest one.                                                     |
-| `target`    | `Object3D`                                   | —            | Sit on this mesh, group or bone from anywhere in the scene. `position`/`rotation` are then in its frame. |
-| `direction` | `[x, y, z]`                                  | —            | Which way the exhaust streams, in the frame it sits in. Wins over `rotation`.                            |
-| `ref`       | `AfterburnerHandle`                          | —            | Imperative handle, see below.                                                                            |
+| prop        | type                                         | default                  | what it does                                                                                             |
+| ----------- | -------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `preset`    | `AfterburnerPresetName \| AfterburnerPreset` | the defaults             | Which look to start from. Outside an `<AfterburnerBatch>` it also picks the batch, and so the profile.   |
+| `params`    | `AfterburnerParamsInput`                     | —                        | How this plume looks, over the preset. Colours take any `ColorRepresentation`.                           |
+| `throttle`  | `number \| (flight) => number`               | the flight's, else `1.1` | 0 to 1 is dry thrust, on to 1.1 at full reheat. A jet's burner lights past 1; a rocket's is always lit.  |
+| `source`    | `Flight \| null`                             | nearest                  | The flight it follows. `null` follows none.                                                              |
+| `batch`     | `AfterburnerBatchCore`                       | nearest                  | Draw it with this batch rather than the nearest one.                                                     |
+| `target`    | `Object3D \| null`                           | its `<Engine>`'s exhaust | Sit on this mesh, group or bone from anywhere in the scene. `position`/`rotation` are then in its frame. |
+| `direction` | `[x, y, z]`                                  | —                        | Which way the exhaust streams, in the frame it sits in. Wins over `rotation`.                            |
+| `ref`       | `AfterburnerHandle`                          | —                        | Imperative handle, see below.                                                                            |
 
 `params` is compared field by field, so an inline object is fine. A change
 rewrites only this nozzle's instance. The group's scale scales the plume, look
@@ -276,6 +305,7 @@ For taking control of the batch its children draw with.
 | `cheap_distance_m`    | `number`                                                                | `3000`   | Past this, a plume is a single sample.                                |
 | `min_screen_fraction` | `number`                                                                | `0.001`  | Plumes smaller than this share of the screen height are not drawn.    |
 | `pass`                | `AfterburnerPass`                                                       | —        | Draw the plumes in their own pass, see below. A change rebuilds.      |
+| `source`              | `Flight \| null`                                                        | nearest  | The flight whose air and airspeed the profile follows. `null`: none.  |
 | `ref`                 | `AfterburnerBatchCore`                                                  | —        | The batch, for `stats()` or to drive it directly.                     |
 
 `useAfterburnerBatch()` returns the nearest batch from inside one.

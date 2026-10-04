@@ -10,7 +10,7 @@ import {
   planform,
   polhamus,
 } from "./aerodynamics";
-import { moist_air } from "./atmosphere";
+import { moist_air } from "@aeronautic/core";
 import { default_vapor_airframe } from "./types";
 
 const airframe = default_vapor_airframe();

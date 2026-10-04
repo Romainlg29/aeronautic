@@ -1,4 +1,4 @@
-import { AIR_GAMMA, type MoistAir } from "./atmosphere";
+import { AIR_GAMMA, type MoistAir } from "@aeronautic/core";
 import type { VaporAirframe, VaporFlight } from "./types";
 
 // What the wing does to the air, in the handful of numbers the vapour needs

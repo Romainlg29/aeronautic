@@ -1,30 +1,22 @@
 {
-  "name": "@aeronautic/wing-vapor",
-  "version": "0.2.0",
-  "description": "Physically based wing vapor for three.js and React Three Fiber: wingtip and leading-edge vortex trails, shock vapor over the wing and the transonic vapor cone, raymarched in TSL for WebGPU",
+  "name": "@aeronautic/core",
+  "version": "0.1.0",
+  "description": "The shared ground of the @aeronautic effects: the International Standard Atmosphere and moist air, an aircraft's flight as one mutable store read for free every frame, and six-view depth capture of a model, for three.js and React Three Fiber",
   "keywords": [
     "aircraft",
-    "condensation",
-    "contrail",
-    "effects",
-    "fighter",
-    "prandtl-glauert",
+    "atmosphere",
+    "flight",
+    "flight-model",
+    "isa",
     "r3f",
-    "raymarching",
     "react-three-fiber",
-    "shader",
+    "standard-atmosphere",
     "three",
     "three.js",
     "threejs",
-    "tsl",
-    "vapor-cone",
-    "vfx",
-    "vortex",
-    "webgpu",
-    "wing",
-    "wingtip-vortex"
+    "webgpu"
   ],
-  "homepage": "https://romainlg29.github.io/aeronautic/docs/wing-vapor/start/introduction/",
+  "homepage": "https://romainlg29.github.io/aeronautic/",
   "bugs": {
     "url": "https://github.com/Romainlg29/aeronautic/issues"
   },
@@ -33,7 +25,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Romainlg29/aeronautic.git",
-    "directory": "packages/wing-vapor"
+    "directory": "packages/core"
   },
   "files": [
     "dist",
@@ -50,9 +42,9 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./tsl": {
-      "types": "./dist/tsl.d.ts",
-      "default": "./dist/tsl.js"
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
     },
     "./package.json": "./package.json"
   },
@@ -67,12 +59,8 @@
     "test:watch": "vitest",
     "prepublishOnly": "pnpm build"
   },
-  "dependencies": {
-    "@aeronautic/core": "workspace:^"
-  },
   "devDependencies": {
     "@react-three/fiber": "^9.8.1",
-    "@types/node": "^24.0.0",
     "@types/react": "^19.3.0",
     "@types/three": "~0.186.0",
     "react": "^19.3.0",
@@ -85,5 +73,13 @@
     "@react-three/fiber": "^9.0.0 || ^10.0.0-alpha.0",
     "react": "^19.0.0",
     "three": ">=0.186.0 <0.187.0"
+  },
+  "peerDependenciesMeta": {
+    "@react-three/fiber": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
   }
 }

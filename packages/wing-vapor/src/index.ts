@@ -16,7 +16,7 @@ export {
   type CaptureFrame,
   type CaptureOptions,
   type DepthView,
-} from "./capture";
+} from "@aeronautic/core";
 export {
   capture_airframe,
   capture_airframe_async,
@@ -47,7 +47,7 @@ export {
   saturation_pressure,
   standard_atmosphere,
   type MoistAir,
-} from "./atmosphere";
+} from "@aeronautic/core";
 export {
   cloud_extinction,
   condensate,

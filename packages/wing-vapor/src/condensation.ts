@@ -5,7 +5,7 @@ import {
   mixing_ratio,
   saturation_pressure,
   type MoistAir,
-} from "./atmosphere";
+} from "@aeronautic/core";
 
 // What happens to a parcel of air the aircraft drops the pressure on
 //

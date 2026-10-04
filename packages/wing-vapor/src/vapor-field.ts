@@ -10,7 +10,7 @@ import {
   type FlightState,
 } from "./aerodynamics";
 import { Vector3 } from "three";
-import { AIR_GAMMA, moist_air, type MoistAir } from "./atmosphere";
+import { AIR_GAMMA, moist_air, type MoistAir } from "@aeronautic/core";
 import { CONDENSATION_MIN_RATIO, condensate, moistest } from "./condensation";
 import {
   nearest_along,

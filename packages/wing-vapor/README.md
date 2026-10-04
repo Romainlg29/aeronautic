@@ -88,6 +88,11 @@ useFrame(() => {
 <WingVapor ref={vapor} airframe={airframe} />;
 ```
 
+Inside an `@aeronautic/core` `<FlightProvider>`, you don't need to write it at
+all. The vapour reads the airspeed, the angles, the altitude and the day from
+the flight whenever it changes, inside its own frame update. Pass
+`source={null}` to ignore the flight.
+
 A flight model usually knows the load factor, not the angle of attack.
 `angle_of_attack_for_load(airframe, g, airspeed, air)` inverts the lift curve
 for it.

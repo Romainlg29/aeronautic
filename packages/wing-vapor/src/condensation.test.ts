@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AIR_CP, AIR_GAS_CONSTANT, moist_air } from "./atmosphere";
+import { AIR_CP, AIR_GAS_CONSTANT, moist_air } from "@aeronautic/core";
 import {
   CONDENSATION_TEXELS,
   cloud_extinction,

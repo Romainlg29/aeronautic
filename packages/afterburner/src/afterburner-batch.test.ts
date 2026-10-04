@@ -1,4 +1,5 @@
 import { Matrix4, Object3D, Vector3 } from "three";
+import { Flight } from "@aeronautic/core";
 import { describe, expect, it, vi } from "vitest";
 import { AFTERBURNER_ATTRIBUTES } from "./afterburner-material";
 import { AfterburnerBatch, axis_distance } from "./afterburner-batch";
@@ -263,5 +264,59 @@ describe("AfterburnerNozzle placement", () => {
 
     expect(batch.profile.altitude_m).toBe(9000);
     expect(batch.profile.airspeed_m_s).toBe(200);
+  });
+});
+
+describe("AfterburnerBatch with a source", () => {
+  it("flies through the source's air", () => {
+    const flight = new Flight({ altitude_m: 0, airspeed_m_s: 0 });
+    const batch = new AfterburnerBatch({ source: flight });
+
+    batch.add();
+    render(batch, 1);
+
+    expect(batch.profile.altitude_m).toBe(0);
+
+    flight.set({
+      altitude_m: 9000,
+      airspeed_m_s: 250,
+      temperature_offset_k: 5,
+    });
+    render(batch, 2);
+
+    expect(batch.profile.altitude_m).toBe(9000);
+    expect(batch.profile.airspeed_m_s).toBe(250);
+    expect(batch.profile.temperature_offset_k).toBe(5);
+  });
+
+  it("runs only the nozzles that follow at the source's throttle", () => {
+    const flight = new Flight({ throttle: 1 });
+    const batch = new AfterburnerBatch({ source: flight, response_s: 0 });
+
+    const following = batch.add({
+      throttle: 1,
+      throttle_from: (values) => values.throttle,
+    });
+    const halved = batch.add({
+      throttle: 1,
+      throttle_from: (values) => values.throttle / 2,
+    });
+    const own = batch.add({ throttle: 0.5 });
+
+    flight.set({ throttle: 0.3 });
+    render(batch, 1);
+
+    expect(following.throttle).toBeCloseTo(0.3);
+    expect(halved.throttle).toBeCloseTo(0.15);
+    expect(own.throttle).toBeCloseTo(0.5);
+  });
+
+  it("is left alone with no source", () => {
+    const batch = new AfterburnerBatch({ profile: { altitude_m: 1200 } });
+
+    batch.add();
+    render(batch, 1);
+
+    expect(batch.profile.altitude_m).toBe(1200);
   });
 });

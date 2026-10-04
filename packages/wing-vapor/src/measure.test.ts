@@ -6,7 +6,7 @@ import {
   Group,
   Mesh,
 } from "three";
-import { capture_views } from "./capture";
+import { capture_views } from "@aeronautic/core";
 import { fighter_filter, load_fighter } from "./fighter.fixture";
 import {
   capture_airframe,
