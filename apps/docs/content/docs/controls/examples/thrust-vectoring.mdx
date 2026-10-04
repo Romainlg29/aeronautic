@@ -1,0 +1,34 @@
+---
+title: Thrust vectoring
+description: "The fighter's nozzles turning with the stick and the pedals, their plumes turning with them."
+---
+
+<Example name="thrust-vectoring" />
+
+The fighter's model has a gimbal in each nozzle, `CTRL_Nozzle_L_Pitch` and
+`CTRL_Nozzle_L_Yaw` and their right-hand twins, so each `<Engine>` vectors
+without being asked. Their extras say `limit_shape: "ellipse"`: pitch and
+yaw share one round limit, so full stick and full pedal together stop on the
+circle, not at its corner.
+
+- **The stick, pitch** turns the exhausts up as the stick comes back, which
+  pushes the tail down and the nose up.
+- **The pedals** turn them right with the right pedal.
+- **The throttle** opens the petals at idle, closes them down at military
+  power and opens them wide in reheat.
+
+The plume is put on each engine's exhaust anchor, so it turns with the
+nozzle. The readout comes from `on_vector`, called in the frame the nozzle
+turns:
+
+```tsx
+<ControlSurfaces
+  object={scene}
+  animations={animations}
+  engine={{ on_vector: (pitch_deg, yaw_deg) => show(pitch_deg, yaw_deg) }}
+  exhaust={<Afterburner preset="afterburner" direction={[0, 0, -1]} />}
+/>
+```
+
+See [Engines](../../guides/engines/) for capping the limits, turning
+vectoring off, or giving a model with no gimbal one.

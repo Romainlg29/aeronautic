@@ -8,6 +8,12 @@ exported.
 
 ## The air
 
+The air is [`@aeronautic/core`](../../../core/reference/atmosphere/)'s,
+re-exported here: `moist_air`, `standard_atmosphere`, `saturation_pressure`,
+`dew_point`, `mixing_ratio` and the constants `AIR_GAMMA`, `AIR_GAS_CONSTANT`,
+`AIR_CP` and `LATENT_HEAT`. So is the depth capture: `capture_views`,
+`depth_views` and the rest are [the core's](../../../core/reference/capture/).
+
 | export                                                                     | what it does                                                                                                                                        |
 | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `moist_air(altitude_m, humidity, offset_k?)`                               | The air at one altitude with the water in it: temperature, pressure, density, the speed of sound, the vapor's pressure, mixing ratio and dew point. |

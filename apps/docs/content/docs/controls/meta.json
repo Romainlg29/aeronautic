@@ -1,0 +1,18 @@
+{
+  "title": "Controls",
+  "description": "Control surfaces, thrust vectoring and gear",
+  "icon": "Plane",
+  "root": true,
+  "pages": [
+    "---[Rocket]Start here---",
+    "...start",
+    "---[BookOpen]Guides---",
+    "...guides",
+    "---[Play]Examples---",
+    "...examples",
+    "---[Braces]Reference---",
+    "...reference",
+    "---[Atom]How it works---",
+    "...how-it-works"
+  ]
+}

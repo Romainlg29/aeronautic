@@ -25,6 +25,11 @@ const config: NextConfig = {
     // Served from the library's source rather than its build, so the live
     // examples are always the code in the tree
     resolveAlias: {
+      "@aeronautic/core/react": "../../packages/core/src/react/index.tsx",
+      "@aeronautic/core": "../../packages/core/src/index.ts",
+      "@aeronautic/controls/react":
+        "../../packages/controls/src/react/index.tsx",
+      "@aeronautic/controls": "../../packages/controls/src/index.ts",
       "@aeronautic/afterburner/tsl":
         "../../packages/afterburner/src/tsl/index.ts",
       "@aeronautic/afterburner": "../../packages/afterburner/src/index.ts",

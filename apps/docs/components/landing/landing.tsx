@@ -59,7 +59,7 @@ const Button: FC<{
 };
 
 /**
- * The landing page: the fighter flying fullscreen, with both libraries on it,
+ * The landing page: the fighter flying fullscreen, with the libraries on it,
  * and the way into the docs over it.
  * @returns The page
  */

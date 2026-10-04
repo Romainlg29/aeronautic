@@ -1,0 +1,13 @@
+{
+  "title": "Guides",
+  "icon": "BookOpen",
+  "pages": [
+    "choosing-parts",
+    "shaping-moves",
+    "engines",
+    "model-metadata",
+    "by-hand",
+    "rigging-a-model",
+    "without-react"
+  ]
+}

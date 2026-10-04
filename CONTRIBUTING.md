@@ -26,12 +26,15 @@ shows up in the examples straight away, with no build.
 | `packages/afterburner/src/tsl`   | The shader, in TSL: the jet, the field, the march                         |
 | `packages/wing-vapor/src`        | Wing vapor: moist air, condensation, the lift and its pressure field      |
 | `packages/wing-vapor/src/tsl`    | Its shader, in TSL: the same field, node for node                         |
+| `packages/controls/src`          | Control surfaces, gear and engines: finding parts, mixing, the rig        |
+| `packages/core/src`              | The shared flight, the atmosphere and the depth capture                   |
 | `apps/docs`                      | The docs site (Fumadocs on Next.js, exported static)                      |
 | `apps/docs/examples`             | Each live example. Its page runs the file and shows it as the code        |
 | `apps/docs/scripts/reference.ts` | Generates the params, profile and quality reference pages from `types.ts` |
 
-The docs hold one section per library, `content/docs/afterburner` and
-`content/docs/wing-vapor`, each with its own sidebar. Afterburner's params,
+The docs hold one section per library, `content/docs/afterburner`,
+`content/docs/wing-vapor`, `content/docs/controls` and `content/docs/core`,
+each with its own sidebar. Afterburner's params,
 profile and quality pages are generated from the comments in
 `packages/afterburner/src/types.ts`. Edit the comments there, not the pages.
 Wing vapor's reference is written by hand: change its dials page with
@@ -122,7 +125,9 @@ Picking one of those up is a good first contribution.
 
 Only the maintainer publishes to npm. Each package is released on its own, from
 a tag naming it: `afterburner-vX.Y.Z` publishes `@aeronautic/afterburner`,
-`wing-vapor-vX.Y.Z` publishes `@aeronautic/wing-vapor`. Pushing one runs
+`wing-vapor-vX.Y.Z` publishes `@aeronautic/wing-vapor`, and `core-vX.Y.Z` and
+`controls-vX.Y.Z` the same. The others depend on core, so release a core they
+need first. Pushing one runs
 `.github/workflows/release.yml`, which checks the tag against that package's
 version, runs every check, waits for the maintainer's approval in the `npm`
 environment, and publishes with provenance through npm's trusted publishing.

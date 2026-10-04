@@ -1,0 +1,5 @@
+{
+  "title": "Reference",
+  "icon": "Braces",
+  "pages": ["components", "rig", "parts", "engine", "helpers"]
+}

@@ -13,6 +13,8 @@ the day: the look comes out of them.
 | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | [`@aeronautic/afterburner`](packages/afterburner#readme) | [![npm](https://img.shields.io/npm/v/@aeronautic/afterburner)](https://www.npmjs.com/package/@aeronautic/afterburner) | Jet afterburners and rocket exhaust plumes                        |
 | [`@aeronautic/wing-vapor`](packages/wing-vapor#readme)   | [![npm](https://img.shields.io/npm/v/@aeronautic/wing-vapor)](https://www.npmjs.com/package/@aeronautic/wing-vapor)   | Vortex trails, shock vapor and the vapor cone a wing pulls in air |
+| [`@aeronautic/controls`](packages/controls#readme)       | [![npm](https://img.shields.io/npm/v/@aeronautic/controls)](https://www.npmjs.com/package/@aeronautic/controls)       | Control surfaces, gear, nozzles and thrust vectoring on a model   |
+| [`@aeronautic/core`](packages/core#readme)               | [![npm](https://img.shields.io/npm/v/@aeronautic/core)](https://www.npmjs.com/package/@aeronautic/core)               | The shared flight, the atmosphere and the depth capture           |
 
 Each installs on its own, with the same peers: `react` 19, `three` 0.186 and
 `@react-three/fiber` 9. Each release supports one three minor, because TSL
@@ -106,6 +108,9 @@ export const Jet = () => {
 
 - [`packages/afterburner`](packages/afterburner): `@aeronautic/afterburner`.
 - [`packages/wing-vapor`](packages/wing-vapor): `@aeronautic/wing-vapor`.
+- [`packages/controls`](packages/controls): `@aeronautic/controls`.
+- [`packages/core`](packages/core): `@aeronautic/core`, which the others
+  depend on.
 - [`apps/docs`](apps/docs): a [Fumadocs](https://fumadocs.dev) site (Next.js,
   exported static) with a section per library: getting started, guides, live
   examples, the reference and how the shaders work. Deployed to GitHub Pages at

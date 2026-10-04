@@ -16,6 +16,12 @@
     "incremental": true,
     "paths": {
       "@/*": ["./*"],
+      "@aeronautic/core": ["../../packages/core/src/index.ts"],
+      "@aeronautic/core/react": ["../../packages/core/src/react/index.tsx"],
+      "@aeronautic/controls": ["../../packages/controls/src/index.ts"],
+      "@aeronautic/controls/react": [
+        "../../packages/controls/src/react/index.tsx"
+      ],
       "@aeronautic/afterburner": ["../../packages/afterburner/src/index.ts"],
       "@aeronautic/afterburner/tsl": [
         "../../packages/afterburner/src/tsl/index.ts"

@@ -17,10 +17,12 @@ import { source } from "@/lib/source";
 const STARTS: Record<string, string> = {
   afterburner: "/docs/afterburner/start/introduction/",
   "wing-vapor": "/docs/wing-vapor/start/introduction/",
+  controls: "/docs/controls/start/introduction/",
+  core: "/docs/core/start/introduction/",
 };
 
 // The afterburner's sections, which sat at the top of /docs/ before there
-// were two libraries
+// were several libraries
 const SECTIONS = [
   "start",
   "tutorial",

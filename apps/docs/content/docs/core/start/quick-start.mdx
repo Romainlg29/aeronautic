@@ -1,0 +1,97 @@
+---
+title: Quick start
+description: "One flight, read by every effect on an aircraft."
+---
+
+## Wrap the aircraft
+
+Put a `<FlightProvider>` round the aircraft. Every `@aeronautic` effect inside
+it follows the same flight:
+
+```tsx
+import { FlightProvider } from "@aeronautic/core/react";
+import { Afterburner } from "@aeronautic/afterburner";
+import { WingVapor } from "@aeronautic/wing-vapor";
+import { ControlSurfaces } from "@aeronautic/controls/react";
+import { useGLTF } from "@react-three/drei";
+
+const Jet = () => {
+  const gltf = useGLTF("/fighter.glb");
+
+  return (
+    <FlightProvider initial={{ airspeed_m_s: 200, altitude_m: 3000 }}>
+      <primitive object={gltf.scene} />
+      <ControlSurfaces object={gltf.scene} animations={gltf.animations} />
+      <Afterburner position={[0, 0, 6]} />
+      <WingVapor capture={gltf.scene} />
+    </FlightProvider>
+  );
+};
+```
+
+The afterburner takes its throttle, altitude and airspeed from the flight. The
+vapor takes the airspeed, the angles, the altitude and the day. The control
+surfaces take the stick, the pedals, the flaps, the air brake and the gear.
+
+## Fly it
+
+Write to the flight from anything inside the provider. A write is a few
+property assignments, so do it every frame:
+
+```tsx
+import { useFlightStore } from "@aeronautic/core/react";
+import { useFrame } from "@react-three/fiber";
+
+const Pilot = () => {
+  const flight = useFlightStore();
+
+  useFrame(() => {
+    flight?.set({
+      airspeed_m_s: model.speed,
+      angle_of_attack_rad: model.alpha,
+      load_factor: model.g,
+      throttle: input.throttle,
+      pitch: input.stick_y,
+      roll: input.stick_x,
+    });
+  });
+
+  return null;
+};
+```
+
+## Or let it watch
+
+With no flight model, give the provider the object that moves. It works out
+the airspeed, the angles, the load factor and the rates from how the object
+moves, each frame before anything reads them:
+
+```tsx
+const jet = useRef<Group>(null);
+
+<FlightProvider track={jet} sea_level_y={0}>
+  <group ref={jet}>
+    <primitive object={gltf.scene} />
+  </group>
+  <Afterburner position={[0, 0, 6]} />
+</FlightProvider>;
+```
+
+What it cannot see, such as the throttle and the stick, keeps whatever you
+write to it. See [Tracking](../../guides/tracking/).
+
+## Show it
+
+A HUD reads the flight with `useFlight`, which renders only when what it
+selects changes, at most `hz` times a second:
+
+```tsx
+const Mach = () => {
+  const mach = useFlight((v) => v.mach, { hz: 10 });
+
+  return <span>M {mach.toFixed(2)}</span>;
+};
+```
+
+Next, read [one flight for every effect](../../guides/one-flight/), or see it
+[running](../../examples/one-flight/).

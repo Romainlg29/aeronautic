@@ -30,6 +30,9 @@ It returns an `AfterburnerPass`: `{ output, scene, backdrop, scene_pass, plume_p
 
 ## The air
 
+`standard_atmosphere` is [`@aeronautic/core`](../../../core/reference/atmosphere/)'s,
+re-exported, so the engines and the wing vapor fly through the same day.
+
 | export                            | what it is                                                                                                  |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `standard_atmosphere(altitude_m)` | ISA temperature (K) and pressure (share of sea level), to 86 km.                                            |

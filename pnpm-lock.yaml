@@ -23,6 +23,12 @@ importers:
       '@aeronautic/afterburner':
         specifier: workspace:*
         version: link:../../packages/afterburner
+      '@aeronautic/controls':
+        specifier: workspace:*
+        version: link:../../packages/controls
+      '@aeronautic/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@aeronautic/wing-vapor':
         specifier: workspace:*
         version: link:../../packages/wing-vapor

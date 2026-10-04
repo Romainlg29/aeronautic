@@ -7,6 +7,36 @@ The vapor comes and goes with the flight. Lift, and with it every vortex and
 every suction peak, follows from the airspeed and the angle of attack, so those
 are the two dials a scene writes every frame.
 
+## From a shared flight
+
+Inside a [`<FlightProvider>`](../../../core/guides/one-flight/), the vapor
+reads the flight's airspeed, angle of attack, sideslip, altitude, day and
+humidity on its own, whenever the flight changes, without a React render. The
+plumes and the control surfaces read the same flight:
+
+```tsx
+const flight = useFlightStore();
+
+useFrame(() => {
+  flight.set({
+    airspeed_m_s: aircraft.airspeed,
+    angle_of_attack_rad: aircraft.alpha,
+    altitude_m: aircraft.position.y,
+  });
+});
+
+<WingVapor airframe={airframe} />;
+```
+
+The flight wins over `flight` and `air` for what it holds. The altitude is
+read to the nearest 10 m, so a climb rewrites the condensation table every
+10 m rather than every frame. `source` picks another flight, and
+`source={null}` flies only the props.
+
+The flight's sideslip is from the right, as a flight model gives it; the
+vapor's own `sideslip_rad` is from +Z, the left, so it is turned round on the
+way in.
+
 ## Through the ref
 
 `<WingVapor>`'s ref is the `WingVaporCore` underneath. Its `update_*` methods

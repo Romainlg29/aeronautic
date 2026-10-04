@@ -1,0 +1,31 @@
+---
+title: One flight
+description: "Sliders write one flight; the control surfaces, the nozzles, the plumes, the vapor and the readout all read it."
+---
+
+<Example name="one-flight" />
+
+Everything here reads one `Flight`. It is made outside the canvas and handed to
+two providers: one round the page's overlay, where the sliders write it and the
+readout reads it with `useFlight`, and one inside the canvas, round the
+fighter. React's context does not cross into a `<Canvas>`, so the same flight is
+given to both.
+
+- **Mach** writes the airspeed, worked out from the speed of sound in the air
+  the flight is in now. The vapor reads it.
+- **Angle of attack** writes the angle, and holds the stick back with it so
+  the elevons show it. The vapor, the leading-edge flaps and the elevons read
+  it, and the fighter is pitched up by it so the flight path stays level.
+- **Throttle** opens and closes the nozzles' petals, moves the throttle lever
+  in the cockpit and lights the plumes, each on its engine's exhaust.
+- **Altitude** changes the air: its temperature, its pressure and how far it
+  is from its dew point. The plumes and the vapor are drawn in that air, and
+  the readout follows it.
+
+The readout is a `useFlight` per number, at 10 Hz for the ones that move, so
+the overlay renders a few times a second however fast the scene draws.
+
+The fighter carries `<ControlSurfaces exhaust={<Exhaust />} />`, which puts an
+`<Engine>` on each of its nozzles and the plume inside each. See
+[the controls](../../../controls/examples/the-controls/) for every part on
+its own slider.

@@ -20,6 +20,9 @@ const EXAMPLES = {
   "rocket-mix": load(() => import("@/examples/rocket-mix")),
   "wing-vapor": load(() => import("@/examples/wing-vapor")),
   "any-shape": load(() => import("@/examples/any-shape")),
+  "one-flight": load(() => import("@/examples/one-flight")),
+  "the-controls": load(() => import("@/examples/the-controls")),
+  "thrust-vectoring": load(() => import("@/examples/thrust-vectoring")),
 } satisfies Record<string, ComponentType>;
 
 export type ExampleName = keyof typeof EXAMPLES;
