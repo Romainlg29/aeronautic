@@ -2,9 +2,15 @@ import {
   formatForDisplay,
   type RegisterableHotkey,
   useHotkeys,
-  useKeyHold,
 } from "@tanstack/react-hotkeys";
-import { type FC, type RefObject, useEffect, useRef, useState } from "react";
+import {
+  type FC,
+  type RefObject,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 // The keyboard, as War Thunder's keyboard-only controls lay it out: W and S
 // push and pull the stick, A and D roll, the arrows doing the same, Q and E the pedals, Shift and Ctrl
@@ -38,6 +44,91 @@ const FLAP_NOTCHES = [0, 0.5, 1];
  */
 const axis = (plus: boolean, minus: boolean) => Number(plus) - Number(minus);
 
+// The keys held down, by the physical key, as the name each went down as.
+// A key is let go on its own release alone: letting go of Shift doesn't let
+// go of W, as a tracker that clears with the modifiers would. Shift held
+// makes W's name "W" and its release's "w", so the physical key is what
+// matches the two
+const held = new Map<string, string>();
+const listeners = new Set<() => void>();
+let snapshot: ReadonlySet<string> = new Set();
+
+const publish = () => {
+  snapshot = new Set(held.values());
+  for (const listener of listeners) listener();
+};
+
+const press = (event: KeyboardEvent) => {
+  const id = event.code || event.key;
+
+  if (held.has(id)) return;
+
+  held.set(id, event.key.toLowerCase());
+  publish();
+};
+
+const release = (event: KeyboardEvent) => {
+  if (held.delete(event.code || event.key)) publish();
+};
+
+// Away from the page, no release comes: everything is let go
+const release_all = () => {
+  if (held.size === 0) return;
+
+  held.clear();
+  publish();
+};
+
+const on_hidden = () => {
+  if (document.hidden) release_all();
+};
+
+/**
+ * Follow the keys held down.
+ * @param listener Called whenever one goes down or up
+ * @returns How to stop
+ */
+const subscribe = (listener: () => void) => {
+  if (listeners.size === 0) {
+    window.addEventListener("keydown", press, true);
+    window.addEventListener("keyup", release, true);
+    window.addEventListener("blur", release_all);
+    document.addEventListener("visibilitychange", on_hidden);
+  }
+
+  listeners.add(listener);
+
+  return () => {
+    listeners.delete(listener);
+
+    if (listeners.size === 0) {
+      window.removeEventListener("keydown", press, true);
+      window.removeEventListener("keyup", release, true);
+      window.removeEventListener("blur", release_all);
+      document.removeEventListener("visibilitychange", on_hidden);
+      held.clear();
+      snapshot = new Set();
+    }
+  };
+};
+
+const no_keys: ReadonlySet<string> = new Set();
+
+/**
+ * Whether a key is held down.
+ * @param name The key's name, as KeyboardEvent.key gives it
+ * @returns Whether it is held
+ */
+const useKeyHold = (name: string) => {
+  const key = name.toLowerCase();
+
+  return useSyncExternalStore(
+    subscribe,
+    () => snapshot.has(key),
+    () => no_keys.has(key),
+  );
+};
+
 /**
  * The keys held down, as the axes they push.
  * @returns The axes, in a ref read each frame
@@ -45,26 +136,26 @@ const axis = (plus: boolean, minus: boolean) => Number(plus) - Number(minus);
 const useKeys = (): RefObject<Keys> => {
   const keys = useRef<Keys>({ pitch: 0, roll: 0, yaw: 0, throttle: 0 });
 
-  const w = useKeyHold("W");
-  const s = useKeyHold("S");
-  const a = useKeyHold("A");
-  const d = useKeyHold("D");
-  const q = useKeyHold("Q");
-  const e = useKeyHold("E");
-  const up = useKeyHold("ArrowUp");
-  const down = useKeyHold("ArrowDown");
-  const left = useKeyHold("ArrowLeft");
-  const right = useKeyHold("ArrowRight");
-  const shift = useKeyHold("Shift");
-  const control = useKeyHold("Control");
-
   useEffect(() => {
-    // S pulls the stick aft, nose up, the flight's positive pitch
-    keys.current.pitch = axis(s || down, w || up);
-    keys.current.roll = axis(d || right, a || left);
-    keys.current.yaw = axis(e, q);
-    keys.current.throttle = axis(shift, control);
-  }, [w, s, a, d, q, e, up, down, left, right, shift, control]);
+    const on = (key: string) => snapshot.has(key);
+    const update = () => {
+      // S pulls the stick aft, nose up, the flight's positive pitch
+      keys.current.pitch = axis(
+        on("s") || on("arrowdown"),
+        on("w") || on("arrowup"),
+      );
+      keys.current.roll = axis(
+        on("d") || on("arrowright"),
+        on("a") || on("arrowleft"),
+      );
+      keys.current.yaw = axis(on("e"), on("q"));
+      keys.current.throttle = axis(on("shift"), on("control"));
+    };
+
+    update();
+
+    return subscribe(update);
+  }, []);
 
   return keys;
 };
@@ -141,12 +232,12 @@ const LEGEND: [keys: string[], does: string][] = [
  * @returns The key cap
  */
 const Key: FC<{ name: string }> = ({ name }) => {
-  const held = useKeyHold(name as Parameters<typeof useKeyHold>[0]);
+  const down = useKeyHold(name);
 
   return (
     <kbd
       className={`inline-flex min-w-6 items-center justify-center rounded border px-1.5 py-0.5 font-mono text-[11px] transition-colors ${
-        held
+        down
           ? "border-orange-300 bg-orange-400/80 text-black"
           : "border-white/25 bg-black/30 text-white/85"
       }`}
