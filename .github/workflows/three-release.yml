@@ -72,17 +72,17 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           types=$(npm view "@types/three@~$LATEST" version 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d "'")
-          pnpm --filter r3f-afterburner add -D "three@$LATEST" "@types/three@${types:-latest}"
+          pnpm --filter @aeronautic/afterburner add -D "three@$LATEST" "@types/three@${types:-latest}"
       - name: Typecheck
         id: typecheck
         if: steps.versions.outputs.open == 'true'
         continue-on-error: true
-        run: pnpm --filter r3f-afterburner typecheck
+        run: pnpm --filter @aeronautic/afterburner typecheck
       - name: Test
         id: test
         if: steps.versions.outputs.open == 'true'
         continue-on-error: true
-        run: pnpm --filter r3f-afterburner test
+        run: pnpm --filter @aeronautic/afterburner test
 
       - name: Open the issue
         if: steps.versions.outputs.open == 'true'

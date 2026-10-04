@@ -1,9 +1,9 @@
 ---
 title: Introduction
-description: "What r3f-afterburner is, what it needs, and how these docs are laid out."
+description: "What @aeronautic/afterburner is, what it needs, and how these docs are laid out."
 ---
 
-`r3f-afterburner` draws jet and rocket exhaust plumes in
+`@aeronautic/afterburner` draws jet and rocket exhaust plumes in
 [React Three Fiber](https://r3f.docs.pmnd.rs). Each plume is a signed distance
 field, raymarched inside an instanced proxy hull and written in TSL for three's
 `WebGPURenderer`. It draws:

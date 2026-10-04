@@ -8,6 +8,8 @@
     "on-a-model",
     "nozzle-shapes",
     "throttle-and-aim",
-    "rocket-mixture"
+    "rocket-mixture",
+    "wing-vapor",
+    "any-shape"
   ]
 }

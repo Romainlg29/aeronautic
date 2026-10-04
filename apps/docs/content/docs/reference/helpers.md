@@ -87,5 +87,5 @@ aspect, squareness, roll and outline length, and `afterburner_outline_fit` is
 `nozzle_outline_fit`'s `area_scale` and `reach`. See
 [Shaped nozzles](../../guides/nozzle-shapes/).
 
-The rest of the shader is in `r3f-afterburner/tsl`: see
+The rest of the shader is in `@aeronautic/afterburner/tsl`: see
 [Shader hooks and TSL](../../guides/shader-hooks/#the-tsl-itself).

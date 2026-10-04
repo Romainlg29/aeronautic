@@ -3,7 +3,7 @@ import {
   Afterburner,
   AfterburnerBatch,
   type AfterburnerBatchCore,
-} from "r3f-afterburner";
+} from "@aeronautic/afterburner";
 import { type FC, type RefObject, useRef, useState } from "react";
 import { Nozzle, Stage } from "./stage";
 

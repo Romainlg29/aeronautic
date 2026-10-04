@@ -17,7 +17,7 @@ const config: NextConfig = {
   env: {
     NEXT_PUBLIC_BASE_PATH: base_path,
     NEXT_PUBLIC_REPOSITORY_URL:
-      process.env.REPOSITORY_URL ?? "https://github.com/Romainlg29/afterburner",
+      process.env.REPOSITORY_URL ?? "https://github.com/Romainlg29/aeronautic",
   },
   turbopack: {
     // The workspace, so the library's source is in reach
@@ -25,8 +25,12 @@ const config: NextConfig = {
     // Served from the library's source rather than its build, so the live
     // examples are always the code in the tree
     resolveAlias: {
-      "r3f-afterburner/tsl": "../../packages/afterburner/src/tsl/index.ts",
-      "r3f-afterburner": "../../packages/afterburner/src/index.ts",
+      "@aeronautic/afterburner/tsl":
+        "../../packages/afterburner/src/tsl/index.ts",
+      "@aeronautic/afterburner": "../../packages/afterburner/src/index.ts",
+      "@aeronautic/wing-vapor/tsl":
+        "../../packages/wing-vapor/src/tsl/index.ts",
+      "@aeronautic/wing-vapor": "../../packages/wing-vapor/src/index.ts",
     },
   },
 };

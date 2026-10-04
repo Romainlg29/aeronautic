@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // For the tests' fixture, which reads the docs' model from disk
+    "types": ["node"]
+  },
+  "include": ["src"]
+}

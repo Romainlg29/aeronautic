@@ -1,8 +1,8 @@
-# r3f-afterburner
+# @aeronautic/afterburner
 
 <!-- An absolute URL: npm shows this README without the repo around it -->
 
-![A twin-engined fighter banking, both afterburners lit, rendered with r3f-afterburner](https://raw.githubusercontent.com/Romainlg29/afterburner/main/.github/assets/afterburner.gif)
+![A twin-engined fighter banking, both afterburners lit, rendered with @aeronautic/afterburner](https://raw.githubusercontent.com/Romainlg29/aeronautic/main/.github/assets/afterburner.gif)
 
 Raymarched jet and rocket plumes for [React Three Fiber](https://r3f.docs.pmnd.rs),
 written in TSL for three's `WebGPURenderer`.
@@ -15,7 +15,7 @@ turbulent reheat, kerolox, hydrolox and methalox rockets, a solid booster and a
 plasma thruster, and the shader is exported piece by piece for building your
 own.
 
-**[Docs and live examples](https://romainlg29.github.io/afterburner/)**
+**[Docs and live examples](https://romainlg29.github.io/aeronautic/)**
 
 The docs have a tutorial, guides, live examples, the full reference and how
 the shader works. This README is the short version.
@@ -23,7 +23,7 @@ the shader works. This README is the short version.
 ## Install
 
 ```bash
-pnpm add r3f-afterburner
+pnpm add @aeronautic/afterburner
 ```
 
 Peer dependencies: `react` 19, `three` 0.186.x, `@react-three/fiber` 9 (or 10).
@@ -40,7 +40,7 @@ preset.
 
 ```tsx
 import { Canvas } from "@react-three/fiber";
-import { Afterburner } from "r3f-afterburner";
+import { Afterburner } from "@aeronautic/afterburner";
 import { WebGPURenderer } from "three/webgpu";
 
 const Jet = () => (
@@ -278,7 +278,7 @@ For taking control of the batch its children draw with.
 `AfterburnerBatchCore` is the plain three.js class underneath:
 
 ```ts
-import { AfterburnerBatchCore } from "r3f-afterburner";
+import { AfterburnerBatchCore } from "@aeronautic/afterburner";
 
 const batch = new AfterburnerBatchCore({ preset: "rocket_kerolox" });
 scene.add(batch.mesh);
@@ -347,7 +347,7 @@ Make `hooks` stable (a module constant or `useMemo`): a new object recompiles.
 
 ### The TSL itself
 
-`r3f-afterburner/tsl` exports every piece the material is made of, for building
+`@aeronautic/afterburner/tsl` exports every piece the material is made of, for building
 a material of your own:
 
 - **Noise:** `hash_cell`, `value_noise`, `wander_noise`, `turbulence`, `signed`.
@@ -390,7 +390,7 @@ by depth, so a nozzle's edge stays sharp. Close up and astern of a fighter it ta
 the worst case from 6.8 ms to 2.7 ms.
 
 ```tsx
-import { afterburner_pass } from "r3f-afterburner";
+import { afterburner_pass } from "@aeronautic/afterburner";
 
 const split = afterburner_pass(scene, camera, { resolution_scale: 0.5 });
 
@@ -405,7 +405,7 @@ its mesh to `split.scene`.
 
 ## How it works
 
-[How it works](https://romainlg29.github.io/afterburner/docs/how-it-works/the-plume/), in
+[How it works](https://romainlg29.github.io/aeronautic/docs/how-it-works/the-plume/), in
 the docs, covers why the plume is a distance field, what each dial means physically, why
 shock diamonds need the camera nearly abeam, and how the tiers work.
 

@@ -16,7 +16,7 @@ There are two refs. Each value lives on one of them:
 ## The nozzle handle
 
 ```tsx
-import { Afterburner, type AfterburnerHandle } from "r3f-afterburner";
+import { Afterburner, type AfterburnerHandle } from "@aeronautic/afterburner";
 
 const engine = useRef<AfterburnerHandle>(null);
 
@@ -50,7 +50,10 @@ and a burner lights. `handle.nozzle.drawn_throttle` is where it has got to. Set
 `<AfterburnerBatch ref>` is the `AfterburnerBatchCore` itself:
 
 ```tsx
-import { AfterburnerBatch, type AfterburnerBatchCore } from "r3f-afterburner";
+import {
+  AfterburnerBatch,
+  type AfterburnerBatchCore,
+} from "@aeronautic/afterburner";
 
 const batch = useRef<AfterburnerBatchCore>(null);
 

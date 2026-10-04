@@ -2,12 +2,12 @@
 
 ## Supported versions
 
-Only the latest published version of `r3f-afterburner` gets fixes.
+Only the latest published version of `@aeronautic/afterburner` gets fixes.
 
 ## Reporting a vulnerability
 
 Please don't open a public issue. Report it privately through GitHub's
-[private vulnerability reporting](https://github.com/Romainlg29/afterburner/security/advisories/new)
+[private vulnerability reporting](https://github.com/Romainlg29/aeronautic/security/advisories/new)
 instead.
 
 Include what's affected, how to reproduce it, and what an attacker could do

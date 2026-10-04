@@ -3,7 +3,7 @@ import {
   AFTERBURNER_PRESETS,
   type AfterburnerParamsInput,
   type AfterburnerPresetName,
-} from "r3f-afterburner";
+} from "@aeronautic/afterburner";
 import { type FC, useState } from "react";
 import { Aim, Nozzle, Stage } from "./stage";
 

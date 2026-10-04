@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/Romainlg29/afterburner/security/advisories/new
+    url: https://github.com/Romainlg29/aeronautic/security/advisories/new
     about: Please report security issues privately, not as an issue.
   - name: Docs and live examples
-    url: https://romainlg29.github.io/afterburner/
+    url: https://romainlg29.github.io/aeronautic/
     about: The tutorial, guides and reference may already answer your question.

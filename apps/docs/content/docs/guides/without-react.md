@@ -9,7 +9,7 @@ directly in a vanilla three.js app, or in R3F when you want full control.
 ## A batch and its nozzles
 
 ```ts
-import { AfterburnerBatchCore } from "r3f-afterburner";
+import { AfterburnerBatchCore } from "@aeronautic/afterburner";
 import { WebGPURenderer } from "three/webgpu";
 
 const renderer = new WebGPURenderer({ antialias: false });
@@ -100,7 +100,7 @@ import {
   jet_state,
   resolve_afterburner_params,
   resolve_afterburner_profile,
-} from "r3f-afterburner";
+} from "@aeronautic/afterburner";
 
 const params = resolve_afterburner_params({}, "afterburner");
 const profile = resolve_afterburner_profile({ altitude_m: 9000 });

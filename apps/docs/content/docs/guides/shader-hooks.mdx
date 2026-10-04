@@ -10,7 +10,7 @@ easy way to change the look without forking. A hook is called **once**, when
 the material is built, so it costs exactly what the nodes it returns cost.
 
 ```tsx
-import type { AfterburnerHooks } from "r3f-afterburner";
+import type { AfterburnerHooks } from "@aeronautic/afterburner";
 import { atan, cos, mix, vec3 } from "three/tsl";
 
 const hooks: AfterburnerHooks = {
@@ -80,7 +80,7 @@ in the nozzle's frame, and where it enters and leaves), `lod` (0 near, 1 mid,
 
 ## The TSL itself
 
-`r3f-afterburner/tsl` exports every piece the material is made of, for building
+`@aeronautic/afterburner/tsl` exports every piece the material is made of, for building
 a material of your own:
 
 | group        | exports                                                                                                                                    |

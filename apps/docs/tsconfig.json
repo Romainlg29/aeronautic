@@ -16,8 +16,14 @@
     "incremental": true,
     "paths": {
       "@/*": ["./*"],
-      "r3f-afterburner": ["../../packages/afterburner/src/index.ts"],
-      "r3f-afterburner/tsl": ["../../packages/afterburner/src/tsl/index.ts"]
+      "@aeronautic/afterburner": ["../../packages/afterburner/src/index.ts"],
+      "@aeronautic/afterburner/tsl": [
+        "../../packages/afterburner/src/tsl/index.ts"
+      ],
+      "@aeronautic/wing-vapor": ["../../packages/wing-vapor/src/index.ts"],
+      "@aeronautic/wing-vapor/tsl": [
+        "../../packages/wing-vapor/src/tsl/index.ts"
+      ]
     },
     "plugins": [{ "name": "next" }]
   },

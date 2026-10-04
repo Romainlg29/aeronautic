@@ -80,7 +80,10 @@ The `outline` hook replaces the superellipse with any shape. You give its
 radius in every direction across the plume, in nozzle radii, as TSL:
 
 ```tsx
-import { AfterburnerBatch, type AfterburnerHooks } from "r3f-afterburner";
+import {
+  AfterburnerBatch,
+  type AfterburnerHooks,
+} from "@aeronautic/afterburner";
 import { atan, cos } from "three/tsl";
 
 // Eight lobes, 15% deep: r(θ) = 1 + 0.15 cos 8θ

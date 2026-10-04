@@ -6,7 +6,7 @@ description: "Install the package and its peer dependencies."
 ## From npm
 
 ```bash
-pnpm add r3f-afterburner
+pnpm add @aeronautic/afterburner
 ```
 
 Install the peer dependencies too, if you don't have them yet:
@@ -23,9 +23,9 @@ pnpm add three@~0.186 @react-three/fiber react react-dom
 
 ## Two entry points
 
-| import                | what's in it                                                         |
-| --------------------- | -------------------------------------------------------------------- |
-| `r3f-afterburner`     | The components, the plain three.js classes, presets and helpers.     |
-| `r3f-afterburner/tsl` | Every TSL piece the material is built from, for a material of yours. |
+| import                        | what's in it                                                         |
+| ----------------------------- | -------------------------------------------------------------------- |
+| `@aeronautic/afterburner`     | The components, the plain three.js classes, presets and helpers.     |
+| `@aeronautic/afterburner/tsl` | Every TSL piece the material is built from, for a material of yours. |
 
 Next, [put a plume on screen](../quick-start/).
