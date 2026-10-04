@@ -1027,12 +1027,16 @@ export const create_afterburner_material = (
           .add(exit_radius.mul(TURBINE_DEPTH))
           .div(direction.x.negate());
 
-        const at_exit = length(origin.yz.add(direction.yz.mul(to_exit))).div(
-          exit_radius,
-        );
-        const at_turbine = length(
-          origin.yz.add(direction.yz.mul(to_turbine)),
-        ).div(exit_radius);
+        // Measured against the nozzle's outline, as the plume is at its lip:
+        // the pipe is the exit's shape all the way up
+        const across = (t: F) =>
+          plume_frame(
+            vec3(0, origin.yz.add(direction.yz.mul(t))),
+            context,
+          ).radial.div(exit_radius);
+
+        const at_exit = across(to_exit);
+        const at_turbine = across(to_turbine);
 
         // Through the lip, and nothing opaque in the way
         const through_lip = float(1)
