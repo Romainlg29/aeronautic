@@ -1,34 +1,34 @@
-# r3f-afterburner
+# @aeronautic/afterburner
 
-[![npm](https://img.shields.io/npm/v/r3f-afterburner)](https://www.npmjs.com/package/r3f-afterburner)
-[![CI](https://github.com/Romainlg29/afterburner/actions/workflows/ci.yml/badge.svg)](https://github.com/Romainlg29/afterburner/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@aeronautic/afterburner)](https://www.npmjs.com/package/@aeronautic/afterburner)
+[![CI](https://github.com/Romainlg29/aeronautic/actions/workflows/ci.yml/badge.svg)](https://github.com/Romainlg29/aeronautic/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-![A twin-engined fighter banking, both afterburners lit, rendered with r3f-afterburner](.github/assets/afterburner.gif)
+![A twin-engined fighter banking, both afterburners lit, rendered with @aeronautic/afterburner](.github/assets/afterburner.gif)
 
 Realistic **jet engine afterburner** and **rocket exhaust plumes** for
 **three.js** and **React Three Fiber**. They are raymarched in TSL for
 WebGPU, with shock diamonds (Mach diamonds), heat haze, soot and eddies.
 Every plume in a batch is one instanced draw.
 
-**[Docs and live examples](https://romainlg29.github.io/afterburner/)**
+**[Docs and live examples](https://romainlg29.github.io/aeronautic/)**
 
 - **Library:** [`packages/afterburner`](packages/afterburner), published to npm as
-  [`r3f-afterburner`](https://www.npmjs.com/package/r3f-afterburner).
-- **Wing vapor:** [`packages/wing-vapor`](packages/wing-vapor), `r3f-wing-vapor`:
+  [`@aeronautic/afterburner`](https://www.npmjs.com/package/@aeronautic/afterburner).
+- **Wing vapor:** [`packages/wing-vapor`](packages/wing-vapor), `@aeronautic/wing-vapor`:
   tip and leading-edge vortex trails, shock vapor over the wing and the vapor
   cone, from the aircraft's planform, its flight and the day's humidity. See
   [its README](packages/wing-vapor/README.md).
 - **Docs:** [`apps/docs`](apps/docs), a [Fumadocs](https://fumadocs.dev) site
   (Next.js, exported static) with a tutorial, guides, live examples, the
   reference and how the shader works. Deployed to GitHub Pages at
-  <https://romainlg29.github.io/afterburner/>.
+  <https://romainlg29.github.io/aeronautic/>.
 
 ```bash
-pnpm add r3f-afterburner
+pnpm add @aeronautic/afterburner
 ```
 
-Start with the [docs](https://romainlg29.github.io/afterburner/), or the
+Start with the [docs](https://romainlg29.github.io/aeronautic/), or the
 [library README](packages/afterburner/README.md) for the full API.
 
 ## Usage
@@ -45,7 +45,7 @@ group's local **+X**, and every distance is in metres:
 
 ```tsx
 import { Canvas } from "@react-three/fiber";
-import { Afterburner } from "r3f-afterburner";
+import { Afterburner } from "@aeronautic/afterburner";
 import { WebGPURenderer } from "three/webgpu";
 
 export const App = () => (
@@ -183,7 +183,7 @@ Performance was the main objective from the start:
 
 Each of these was measured in GPU time, not FPS, from the worst-case viewpoint
 (close up, astern) as well as the common one (abeam).
-[Frame budget](https://romainlg29.github.io/afterburner/docs/how-it-works/frame-budget/)
+[Frame budget](https://romainlg29.github.io/aeronautic/docs/how-it-works/frame-budget/)
 in the docs shows where the time goes.
 
 ## Contributing

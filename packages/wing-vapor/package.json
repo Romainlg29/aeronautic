@@ -1,5 +1,5 @@
 {
-  "name": "r3f-wing-vapor",
+  "name": "@aeronautic/wing-vapor",
   "version": "0.0.1",
   "description": "Physically based wing vapor for three.js and React Three Fiber: wingtip and leading-edge vortex trails, shock vapor over the wing and the transonic vapor cone, raymarched in TSL for WebGPU",
   "keywords": [
@@ -24,15 +24,15 @@
     "wing",
     "wingtip-vortex"
   ],
-  "homepage": "https://romainlg29.github.io/afterburner/",
+  "homepage": "https://romainlg29.github.io/aeronautic/",
   "bugs": {
-    "url": "https://github.com/Romainlg29/afterburner/issues"
+    "url": "https://github.com/Romainlg29/aeronautic/issues"
   },
   "license": "MIT",
   "author": "Romain Le Gall (https://github.com/Romainlg29)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Romainlg29/afterburner.git",
+    "url": "git+https://github.com/Romainlg29/aeronautic.git",
     "directory": "packages/wing-vapor"
   },
   "files": [

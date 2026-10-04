@@ -5,7 +5,7 @@ import {
   moist_air,
   WingVapor,
   type WingVaporCore,
-} from "r3f-wing-vapor";
+} from "@aeronautic/wing-vapor";
 import { type FC, type RefObject, useEffect, useRef, useState } from "react";
 import { type Group, LoopOnce, type Mesh, type Object3D } from "three";
 import { base_path } from "@/lib/shared";

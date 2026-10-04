@@ -10,6 +10,8 @@
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@aeronautic/afterburner": "workspace:*",
+    "@aeronautic/wing-vapor": "workspace:*",
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.1",
     "fumadocs-core": "16.15.17",
@@ -17,8 +19,6 @@
     "fumadocs-ui": "npm:@fumadocs/base-ui@16.15.17",
     "lucide-react": "^1.47.0",
     "next": "16.3.7",
-    "r3f-afterburner": "workspace:*",
-    "r3f-wing-vapor": "workspace:*",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "three": "~0.186.1"

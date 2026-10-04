@@ -4,7 +4,7 @@ import {
   type AfterburnerHooks,
   type AfterburnerParamsInput,
   nozzle_outline_fit,
-} from "r3f-afterburner";
+} from "@aeronautic/afterburner";
 import { type FC, useMemo, useState } from "react";
 import { DoubleSide, Path, Shape } from "three";
 import { atan, cos, float } from "three/tsl";

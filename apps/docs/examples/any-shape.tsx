@@ -4,7 +4,7 @@ import {
   moist_air,
   WingVapor,
   type WingVaporCore,
-} from "r3f-wing-vapor";
+} from "@aeronautic/wing-vapor";
 import { type FC, type RefObject, useMemo, useRef, useState } from "react";
 import {
   ConeGeometry,

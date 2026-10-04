@@ -1,6 +1,6 @@
 // What the site needs to know about where it lives
 
-export const app_name = "r3f-afterburner";
+export const app_name = "aeronautic";
 
 export const tagline =
   "Raymarched jet and rocket plumes for React Three Fiber, in TSL for WebGPU.";
@@ -17,7 +17,7 @@ export const site_url = `${process.env.NEXT_PUBLIC_SITE_ORIGIN ?? "https://romai
 
 export const repository =
   process.env.NEXT_PUBLIC_REPOSITORY_URL ??
-  "https://github.com/Romainlg29/afterburner";
+  "https://github.com/Romainlg29/aeronautic";
 
 /**
  * Where a page's markdown is served, for the copy and open buttons.

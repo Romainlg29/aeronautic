@@ -1,6 +1,6 @@
 import { useAnimations, useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { Afterburner } from "r3f-afterburner";
+import { Afterburner } from "@aeronautic/afterburner";
 import { type FC, useEffect, useRef } from "react";
 import { type Group, LoopOnce } from "three";
 import { base_path } from "@/lib/shared";

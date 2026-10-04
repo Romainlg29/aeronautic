@@ -1,6 +1,6 @@
 name: Release
 
-# Publishes r3f-afterburner to npm when a v* tag is pushed
+# Publishes @aeronautic/afterburner to npm when a v* tag is pushed
 #
 # Only the maintainer releases. The guards, from GitHub's side to npm's:
 # - a tag ruleset lets only the maintainer create v* tags
@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: npm
-      url: https://www.npmjs.com/package/r3f-afterburner
+      url: https://www.npmjs.com/package/@aeronautic/afterburner
     permissions:
       contents: read
       # For npm's trusted publishing and provenance

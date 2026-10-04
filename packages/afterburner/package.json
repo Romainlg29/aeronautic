@@ -1,5 +1,5 @@
 {
-  "name": "r3f-afterburner",
+  "name": "@aeronautic/afterburner",
   "version": "0.1.0",
   "description": "Realistic jet afterburner and rocket exhaust plumes for three.js and React Three Fiber: raymarched in TSL for WebGPU, with shock diamonds, heat haze and one instanced draw",
   "keywords": [
@@ -27,15 +27,15 @@
     "vfx",
     "webgpu"
   ],
-  "homepage": "https://romainlg29.github.io/afterburner/",
+  "homepage": "https://romainlg29.github.io/aeronautic/",
   "bugs": {
-    "url": "https://github.com/Romainlg29/afterburner/issues"
+    "url": "https://github.com/Romainlg29/aeronautic/issues"
   },
   "license": "MIT",
   "author": "Romain Le Gall (https://github.com/Romainlg29)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Romainlg29/afterburner.git",
+    "url": "git+https://github.com/Romainlg29/aeronautic.git",
     "directory": "packages/afterburner"
   },
   "files": [

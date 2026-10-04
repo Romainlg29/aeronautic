@@ -1,5 +1,5 @@
 import { useFrame } from "@react-three/fiber";
-import { Afterburner, type AfterburnerHandle } from "r3f-afterburner";
+import { Afterburner, type AfterburnerHandle } from "@aeronautic/afterburner";
 import { type FC, type RefObject, useRef } from "react";
 import { Nozzle, Stage } from "./stage";
 

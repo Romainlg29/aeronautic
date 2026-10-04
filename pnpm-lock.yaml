@@ -20,6 +20,12 @@ importers:
 
   apps/docs:
     dependencies:
+      '@aeronautic/afterburner':
+        specifier: workspace:*
+        version: link:../../packages/afterburner
+      '@aeronautic/wing-vapor':
+        specifier: workspace:*
+        version: link:../../packages/wing-vapor
       '@react-three/drei':
         specifier: ^10.7.9
         version: 10.7.9(@react-three/fiber@9.8.1(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(three@0.186.1))(@types/react@19.3.0)(@types/three@0.186.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(three@0.186.1)
@@ -41,12 +47,6 @@ importers:
       next:
         specifier: 16.3.7
         version: 16.3.7(@types/node@24.19.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      r3f-afterburner:
-        specifier: workspace:*
-        version: link:../../packages/afterburner
-      r3f-wing-vapor:
-        specifier: workspace:*
-        version: link:../../packages/wing-vapor
       react:
         specifier: ^19.3.0
         version: 19.3.0

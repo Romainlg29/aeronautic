@@ -796,14 +796,14 @@ export const serialize_capture = (
 export const deserialize_capture = (baked: BakedAirframe): MeasuredAirframe => {
   if (baked.version !== BAKE_VERSION) {
     throw new Error(
-      `r3f-wing-vapor: a bake of version ${baked.version}, this reads ${BAKE_VERSION}; capture again`,
+      `@aeronautic/wing-vapor: a bake of version ${baked.version}, this reads ${BAKE_VERSION}; capture again`,
     );
   }
 
   const table = (values: number[]) => {
     if (values.length !== SHAPE_STATIONS) {
       throw new Error(
-        `r3f-wing-vapor: a baked table of ${values.length} stations, not ${SHAPE_STATIONS}`,
+        `@aeronautic/wing-vapor: a baked table of ${values.length} stations, not ${SHAPE_STATIONS}`,
       );
     }
 

@@ -12,7 +12,7 @@ code.
 ## The renderer
 
 Start from an empty React app with `three`, `@react-three/fiber`,
-`@react-three/drei` and `r3f-afterburner` installed. The canvas needs a
+`@react-three/drei` and `@aeronautic/afterburner` installed. The canvas needs a
 `WebGPURenderer`. Initialise it before handing it back:
 
 ```tsx title="app.tsx"
@@ -83,7 +83,7 @@ engine can behind the origin, on −X, so the plume comes out of its mouth:
 
 ```tsx title="scene.tsx"
 import { OrbitControls } from "@react-three/drei";
-import { Afterburner } from "r3f-afterburner";
+import { Afterburner } from "@aeronautic/afterburner";
 import { Grade } from "./grade";
 
 const Nozzle = () => (

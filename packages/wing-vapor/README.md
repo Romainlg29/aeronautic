@@ -1,4 +1,4 @@
-# r3f-wing-vapor
+# @aeronautic/wing-vapor
 
 Physically based **wing vapor** for [React Three Fiber](https://r3f.docs.pmnd.rs)
 and three.js, written in TSL for three's `WebGPURenderer`.
@@ -21,15 +21,15 @@ day's moist air through that pressure field, and draws cloud wherever the air
 passes its dew point. Dry air stays clear however hard the pull, and in humid
 air a gentle turn trails its tips.
 
-**[Live example on the docs' fighter](https://romainlg29.github.io/afterburner/docs/examples/wing-vapor/)**
+**[Live example on the docs' fighter](https://romainlg29.github.io/aeronautic/docs/examples/wing-vapor/)**
 
 ## Install
 
 ```bash
-pnpm add r3f-wing-vapor
+pnpm add @aeronautic/wing-vapor
 ```
 
-The same peer dependencies as `r3f-afterburner`: `react` 19, `three` 0.186.x and
+The same peer dependencies as `@aeronautic/afterburner`: `react` 19, `three` 0.186.x and
 `@react-three/fiber` 9 (or 10). It needs a `WebGPURenderer`, which falls back to
 WebGL 2 by itself. It doesn't run on the classic `WebGLRenderer`.
 
@@ -39,7 +39,7 @@ WebGL 2 by itself. It doesn't run on the classic `WebGLRenderer`.
 inside the model, and give it the airframe, the flight and the day:
 
 ```tsx
-import { WingVapor } from "r3f-wing-vapor";
+import { WingVapor } from "@aeronautic/wing-vapor";
 
 const Jet = () => (
   <group>

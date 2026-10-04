@@ -18,7 +18,7 @@ import { source } from "@/lib/source";
 import order from "@/content/docs/examples/meta.json";
 
 const SNIPPET = `import { Canvas } from "@react-three/fiber";
-import { Afterburner } from "r3f-afterburner";
+import { Afterburner } from "@aeronautic/afterburner";
 import { WebGPURenderer } from "three/webgpu";
 
 export const Scene = () => (
@@ -174,7 +174,7 @@ const HomePage = () => {
               </Link>
             </div>
             <div className="mt-8 w-full">
-              <Install command="pnpm add r3f-afterburner" />
+              <Install command="pnpm add @aeronautic/afterburner" />
             </div>
           </div>
 

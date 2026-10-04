@@ -24,7 +24,7 @@ import {
   Afterburner,
   AfterburnerBatch,
   afterburner_pass,
-} from "r3f-afterburner";
+} from "@aeronautic/afterburner";
 import { useEffect, useMemo } from "react";
 import { bloom } from "three/addons/tsl/display/BloomNode.js";
 import { RenderPipeline, type WebGPURenderer } from "three/webgpu";

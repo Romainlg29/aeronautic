@@ -152,7 +152,7 @@ stored anywhere.
   ```
 
 - **Then on npmjs.com**, in the package's settings:
-  - Add a trusted publisher: GitHub Actions, `Romainlg29/afterburner`,
+  - Add a trusted publisher: GitHub Actions, `Romainlg29/aeronautic`,
     workflow `release.yml`, environment `npm`.
   - Set publishing access to **Require two-factor authentication and disallow
     tokens**. Trusted publishing still works with this on, and nothing else
