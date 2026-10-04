@@ -48,6 +48,27 @@ html {
   pointer-events: none;
 }
 
+.example-sky {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  background: rgb(10 13 20 / 0.7);
+  backdrop-filter: blur(8px);
+  color: #e6e9ef;
+  font: 12px var(--font-sans);
+  cursor: pointer;
+}
+
+.example-sky:hover {
+  background: rgb(24 30 42 / 0.8);
+}
+
 .example-fallback {
   display: grid;
   place-items: center;

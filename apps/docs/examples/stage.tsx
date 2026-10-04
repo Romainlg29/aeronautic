@@ -1,4 +1,5 @@
 import { OrbitControls } from "@react-three/drei";
+import { Moon, Sun } from "lucide-react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
   type FC,
@@ -11,6 +12,9 @@ import {
 } from "react";
 import {
   AgXToneMapping,
+  Color,
+  type DirectionalLight,
+  type HemisphereLight,
   type Scene,
   type Texture,
   type Vector3Tuple,
@@ -96,6 +100,65 @@ export const Reflections: FC<{ intensity?: number }> = ({
   return null;
 };
 
+// The two skies an example can be under, and how long it takes to go between
+const NIGHT = { background: "#05070b", hemisphere: 0.6, sun: 1.2 };
+const DAY = { background: "#6f9fd8", hemisphere: 1.6, sun: 3 };
+const FADE_S = 0.6;
+
+/**
+ * Light the scene under a night or a daylit sky, easing from one to the other
+ * rather than rebuilding anything.
+ * @param props Whether it is day
+ * @returns The lights
+ */
+const Sky: FC<{ day: boolean }> = ({ day }) => {
+  const { scene } = useThree();
+  const hemisphere = useRef<HemisphereLight>(null);
+  const sun = useRef<DirectionalLight>(null);
+  const shade = useRef(day ? 1 : 0);
+  const colors = useMemo(
+    () => ({
+      night: new Color(NIGHT.background),
+      day: new Color(DAY.background),
+      now: new Color(),
+    }),
+    [],
+  );
+
+  useEffect(() => {
+    const previous = scene.background;
+
+    scene.background = colors.now;
+
+    return () => {
+      scene.background = previous;
+    };
+  }, [scene, colors]);
+
+  useFrame((_, delta) => {
+    const goal = day ? 1 : 0;
+    const step = Math.min(delta / FADE_S, 1);
+
+    shade.current += Math.max(-step, Math.min(step, goal - shade.current));
+
+    const t = shade.current;
+    const mix = (a: number, b: number) => a + (b - a) * t;
+
+    colors.now.lerpColors(colors.night, colors.day, t);
+
+    if (hemisphere.current)
+      hemisphere.current.intensity = mix(NIGHT.hemisphere, DAY.hemisphere);
+    if (sun.current) sun.current.intensity = mix(NIGHT.sun, DAY.sun);
+  });
+
+  return (
+    <>
+      <hemisphereLight ref={hemisphere} args={["#8090b0", "#101010"]} />
+      <directionalLight ref={sun} position={[-5, 10, 5]} />
+    </>
+  );
+};
+
 type StageProps = {
   children: ReactNode;
   camera?: Vector3Tuple;
@@ -107,7 +170,7 @@ type StageProps = {
   overlay?: ReactNode;
   // An environment map, for a loaded model's metal
   reflections?: boolean;
-  // A daylit sky rather than the night the plumes are graded for
+  // Start under a daylit sky rather than the night the plumes are graded for
   daylight?: boolean;
 };
 
@@ -128,6 +191,7 @@ export const Stage: FC<StageProps> = ({
 }) => {
   const frame = useRef<HTMLDivElement>(null);
   const [visible, set_visible] = useState(false);
+  const [day, set_day] = useState(daylight);
 
   useEffect(() => {
     const element = frame.current;
@@ -161,12 +225,7 @@ export const Stage: FC<StageProps> = ({
           return renderer;
         }}
       >
-        <color attach="background" args={[daylight ? "#6f9fd8" : "#05070b"]} />
-        <hemisphereLight args={["#8090b0", "#101010", daylight ? 1.6 : 0.6]} />
-        <directionalLight
-          position={[-5, 10, 5]}
-          intensity={daylight ? 3 : 1.2}
-        />
+        <Sky day={day} />
         {floor !== null && (
           <gridHelper
             args={[200, 100, "#1c2230", "#121620"]}
@@ -180,6 +239,15 @@ export const Stage: FC<StageProps> = ({
         <Grade />
       </Canvas>
       {overlay}
+      <button
+        type="button"
+        className="example-sky"
+        onClick={() => set_day(!day)}
+        aria-label={`Switch to ${day ? "night" : "day"}`}
+      >
+        {day ? <Moon size={14} /> : <Sun size={14} />}
+        {day ? "Night" : "Day"}
+      </button>
     </div>
   );
 };
