@@ -1,0 +1,90 @@
+{
+  "name": "@aeronautic/controls",
+  "version": "0.1.0",
+  "description": "Control surfaces that move with the flight: ailerons, elevons, rudders, flaps, air brakes, thrust vectoring, nozzles and landing gear on a glTF model, found from its rig or its mesh names, for three.js and React Three Fiber",
+  "keywords": [
+    "aircraft",
+    "control-surfaces",
+    "elevon",
+    "flight",
+    "gltf",
+    "landing-gear",
+    "r3f",
+    "react-three-fiber",
+    "rudder",
+    "three",
+    "three.js",
+    "threejs",
+    "thrust-vectoring"
+  ],
+  "homepage": "https://romainlg29.github.io/aeronautic/",
+  "bugs": {
+    "url": "https://github.com/Romainlg29/aeronautic/issues"
+  },
+  "license": "MIT",
+  "author": "Romain Le Gall (https://github.com/Romainlg29)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Romainlg29/aeronautic.git",
+    "directory": "packages/controls"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "@aeronautic/core": "workspace:^"
+  },
+  "devDependencies": {
+    "@react-three/fiber": "^9.8.1",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.3.0",
+    "@types/three": "~0.186.0",
+    "react": "^19.3.0",
+    "three": "~0.186.1",
+    "tsdown": "^0.23.0",
+    "typescript": "~6.0.2",
+    "vitest": "^4.1.4"
+  },
+  "peerDependencies": {
+    "@react-three/fiber": "^9.0.0 || ^10.0.0-alpha.0",
+    "react": "^19.0.0",
+    "three": ">=0.186.0 <0.187.0"
+  },
+  "peerDependenciesMeta": {
+    "@react-three/fiber": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
+  }
+}
