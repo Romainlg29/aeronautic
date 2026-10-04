@@ -1,6 +1,6 @@
 {
   "name": "@aeronautic/wing-vapor",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Physically based wing vapor for three.js and React Three Fiber: wingtip and leading-edge vortex trails, shock vapor over the wing and the transonic vapor cone, raymarched in TSL for WebGPU",
   "keywords": [
     "aircraft",
