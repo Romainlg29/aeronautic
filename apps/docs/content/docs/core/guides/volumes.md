@@ -16,7 +16,7 @@ premultiplied, so any number of them share the one target. The upsample is
 whose scene is at about the same depth, so a canopy or a nozzle in front of a
 flame keeps its edge.
 
-On the [On a model](../../../afterburner/tutorial/on-a-model/) page at
+Drawn this way, the [On a model](../../../afterburner/tutorial/on-a-model/) page at
 2560×1440, the effects went from 0.59 ms to 0.15 ms of GPU a frame.
 
 ## With React
