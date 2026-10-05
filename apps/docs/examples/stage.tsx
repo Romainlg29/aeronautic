@@ -274,6 +274,31 @@ const Sky: FC<{ day: boolean; floor: number | null }> = ({ day, floor }) => {
   );
 };
 
+/**
+ * Whether an element is on screen, so its canvas only draws while it is.
+ * @returns The ref to put on it, and whether it is
+ */
+export const useOnScreen = () => {
+  const frame = useRef<HTMLDivElement>(null);
+  const [visible, set_visible] = useState(false);
+
+  useEffect(() => {
+    const element = frame.current;
+
+    if (!element) return;
+
+    const observer = new IntersectionObserver(([entry]) =>
+      set_visible(entry?.isIntersecting ?? false),
+    );
+
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, []);
+
+  return [frame, visible] as const;
+};
+
 type StageProps = {
   children: ReactNode;
   camera?: Vector3Tuple;
@@ -304,23 +329,8 @@ export const Stage: FC<StageProps> = ({
   reflections = false,
   daylight = false,
 }) => {
-  const frame = useRef<HTMLDivElement>(null);
-  const [visible, set_visible] = useState(false);
+  const [frame, visible] = useOnScreen();
   const [day, set_day] = useState(daylight);
-
-  useEffect(() => {
-    const element = frame.current;
-
-    if (!element) return;
-
-    const observer = new IntersectionObserver(([entry]) =>
-      set_visible(entry?.isIntersecting ?? false),
-    );
-
-    observer.observe(element);
-
-    return () => observer.disconnect();
-  }, []);
 
   return (
     <div ref={frame} className="example">

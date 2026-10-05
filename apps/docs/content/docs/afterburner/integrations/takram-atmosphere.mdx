@@ -1,0 +1,37 @@
+---
+title: Takram's atmosphere
+description: "A plume under @takram/three-atmosphere's sky, at the exposure its light units give it."
+---
+
+<Example name="atmosphere-plume" />
+
+One engine under [`@takram/three-atmosphere`](https://www.npmjs.com/package/@takram/three-atmosphere)'s
+sky. Drop the sun to the horizon and the camera opens up for the dimmer
+sky, so the same flame comes up brighter against it. Climb, and the sky
+darkens over thinner air while the plume reads the same flight's air.
+
+The setup, the volume pass with the aerial perspective as its backdrop and
+the scene's place on the earth, is on [core's page](/docs/core/integrations/takram-atmosphere).
+For the plume, one number: its exposure.
+
+## The plume's exposure
+
+The atmosphere draws in units of its `luminanceScale`, one unit on screen
+being about 75 700 cd/m². A plume's radiance is in units of a 2000 K
+blackbody's, about 4.8 × 10⁵ cd/m², so in the atmosphere's units it is drawn
+at
+
+```ts
+import { AtmosphereParameters } from "@takram/three-atmosphere/webgpu";
+
+const exposure = 4.8e5 * new AtmosphereParameters().luminanceScale; // ≈ 6.3
+
+<AfterburnerBatch preset="afterburner" profile={{ exposure }}>
+  <Afterburner />
+</AfterburnerBatch>
+```
+
+whatever the preset was graded at. The camera's own exposure, metered from
+the sky, does the rest.
+
+<Source file="atmosphere-plume.tsx" />

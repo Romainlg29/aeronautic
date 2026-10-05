@@ -16,6 +16,8 @@
     "@aeronautic/wing-vapor": "workspace:*",
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.1",
+    "@takram/three-atmosphere": "0.19.1",
+    "@takram/three-geospatial": "0.9.1",
     "@tanstack/react-hotkeys": "^0.12.1",
     "fumadocs-core": "16.15.17",
     "fumadocs-mdx": "15.4.5",

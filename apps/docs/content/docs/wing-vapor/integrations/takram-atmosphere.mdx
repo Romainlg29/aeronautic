@@ -1,0 +1,52 @@
+---
+title: Takram's atmosphere
+description: "Vapor lit by the sunlight and skylight @takram/three-atmosphere works out where the aircraft is."
+---
+
+<Example name="atmosphere-vapor" />
+
+Vapor is white because it scatters, so under
+[`@takram/three-atmosphere`](https://www.npmjs.com/package/@takram/three-atmosphere)
+it should scatter the atmosphere's own light. Bring the sun down: the
+sunlight through more air reddens and dims, the sky goes from blue to dusk,
+and the vapor follows both, at the exposure the sky meters.
+
+The setup, the volume pass with the aerial perspective as its backdrop and
+the scene's place on the earth, is on [core's page](/docs/core/integrations/takram-atmosphere).
+
+## The light at the aircraft
+
+The vapor's look takes the sun as an irradiance, scattered through the
+droplets' phase function, and the sky as a radiance, the same from every
+direction. Takram's `getSplitScalarIlluminance(point, sunDirection)` gives
+both at a point from the tables the sky is drawn with; a one-thread compute
+pass reads them back at the aircraft whenever the sun or the altitude move.
+
+- **The sun** is its `direct`: the solar irradiance through the air above,
+  in the atmosphere's units. Its colour is the sunset.
+- **The sky** is its `indirect` / 2π, E<sub>h</sub>, the dome's horizontal
+  illuminance. As a radiance the dome is E<sub>h</sub> / π, and the ground
+  below, lit by sun and sky, is albedo × (E<sub>sun</sub> sin e + E<sub>h</sub>) / π,
+  with takram's ground albedo of 0.3. The vapor's single sky is the mean of
+  the two.
+
+```ts
+<WingVapor
+  capture={scene}
+  look={{
+    sunDirection, // towards the sun, world space
+    sunColor: lighting.sun,
+    sunIntensity: 1,
+    skyColor: lighting.sky,
+    skyIntensity: 1,
+  }}
+/>
+```
+
+Both are already in the atmosphere's units, so the look's own `exposure`
+stays at 1 and the camera photographs the vapor with the sky.
+
+The vapor gets no aerial perspective of its own: within a few hundred metres
+the air in front of it takes about 1 % of its light.
+
+<Source file="atmosphere-vapor.tsx" />
