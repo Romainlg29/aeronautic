@@ -78,7 +78,7 @@ burner, 1024×768), the worst case went from 11.1 ms to about
 
 ### Half resolution
 
-The rest of the cost is the pixel count, so `afterburner_pass` draws the plumes
+The rest of the cost is the pixel count, so `volume_pass` draws the plumes
 at half of it. The plumes go in a scene of their own. That scene is cleared to
 transparent black whatever the renderer's clear colour, and drawn after the
 opaque scene, so the material reads the scene's depth and colour (for the

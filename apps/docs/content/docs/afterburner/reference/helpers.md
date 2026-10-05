@@ -10,13 +10,15 @@ description: "afterburner_pass, presets, the atmosphere, propellants and the jet
 ## `afterburner_pass(scene, camera, options?)`
 
 Draws the plumes in a pass of their own, at a share of the frame, and
-composites them depth-aware. See [Half resolution](../../guides/half-resolution/).
+composites them depth-aware: `@aeronautic/core`'s
+[`volume_pass`](../../../core/reference/scene/), with its volumes' target also
+named `plumePass`. See [Half resolution](../../guides/half-resolution/).
 
 | option            | default | what it is                                  |
 | ----------------- | ------- | ------------------------------------------- |
 | `resolutionScale` | `0.5`   | The plumes' resolution against the frame's. |
 
-It returns an `AfterburnerPass`: `{ output, scene, backdrop, scenePass, plumePass }`.
+It returns an `AfterburnerPass`: `{ output, scene, backdrop, scenePass, volumePass, plumePass }`.
 
 ## Presets
 
