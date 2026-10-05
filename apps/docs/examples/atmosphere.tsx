@@ -49,10 +49,11 @@ const PARAMETERS = new AtmosphereParameters();
 const BLACKBODY_2000K_CD_M2 = 4.8e5;
 export const PLUME_EXPOSURE = BLACKBODY_2000K_CD_M2 * PARAMETERS.luminanceScale;
 
-// An incident light meter's calibration constant, in lux at ISO 100, and how
-// far over a metered exposure the brightest unclipped luminance sits
-// (Lagarde and de Rousiers, "Moving Frostbite to PBR", 2014)
-const INCIDENT_METER_C = 250;
+// An incident light meter's calibration constant for a hemispherical
+// receptor, in lux at ISO 100 (ISO 2720 gives 320 to 540), and how far over
+// a metered exposure the brightest unclipped luminance sits (Lagarde and de
+// Rousiers, "Moving Frostbite to PBR", 2014)
+const INCIDENT_METER_C = 330;
 const ISO = 100;
 const SATURATION = 1.2;
 
@@ -374,12 +375,21 @@ export const Atmosphere: FC<AtmosphereProps> = ({
           return (dome / Math.PI + ground / Math.PI) / 2;
         }) as Vector3Tuple;
 
-        // The meter, held level under the sky: luminance-weighted
-        const horizontal =
-          0.2126 * (direct[0] * sin_elevation + indirect[0] / (2 * Math.PI)) +
-          0.7152 * (direct[1] * sin_elevation + indirect[1] / (2 * Math.PI)) +
-          0.0722 * (direct[2] * sin_elevation + indirect[2] / (2 * Math.PI));
-        const lux = horizontal / PARAMETERS.luminanceScale;
+        // The meter's dome, pointing up: from a direction θ off its axis it
+        // shows (1 + cos θ) / 2 of its full face. The sun counts below the
+        // level too, as it does when the aircraft flies above the horizon's
+        // dip; the sky above sums to 1.5 E_h, the ground below to half its
+        // exitance
+        const dome_response = (1 + Math.sin(elevation)) / 2;
+        const metered = direct.map((sun_lux, i) => {
+          const dome = indirect[i] / (2 * Math.PI);
+          const ground = GROUND_ALBEDO * (sun_lux * sin_elevation + dome);
+
+          return sun_lux * dome_response + 1.5 * dome + 0.5 * ground;
+        });
+        const lux =
+          (0.2126 * metered[0] + 0.7152 * metered[1] + 0.0722 * metered[2]) /
+          PARAMETERS.luminanceScale;
 
         // EV = log2(E S / C), at ISO 100
         const ev100 = Math.log2((lux * ISO) / INCIDENT_METER_C);

@@ -113,9 +113,16 @@ in those units, so one exposure photographs it all:
   dome above, at E<sub>h</sub> / π from its horizontal illuminance, and the
   sunlit ground below, at albedo × (E<sub>sun</sub> sin e + E<sub>h</sub>) / π,
   averaged.
-- **The camera.** An incident-light meter at the aircraft: EV₁₀₀ =
-  log₂(E · 100 / 250), from the same illuminance held level, and an exposure
-  of 1 / (1.2 · 2<sup>EV</sup> · luminanceScale). A clear noon meters about
+- **The camera.** An incident-light meter at the aircraft, its dome
+  pointing up. From θ off its axis the dome shows (1 + cos θ) / 2 of its
+  face, so it reads E<sub>sun</sub> (1 + sin e) / 2, plus 1.5 E<sub>h</sub>
+  from the sky and half the ground's exitance. The sun still counts a little
+  below the level, as it should: from 12 km the horizon dips 3.5°, and a sun
+  at −2° still lights the aircraft. A flat sensor held level would read only
+  the twilight sky there, and overexpose the sunlit aircraft by some seven
+  stops. Then EV₁₀₀ = log₂(E · 100 / 330), a hemispherical receptor's
+  constant (ISO 2720 gives 320 to 540), and the exposure is
+  1 / (1.2 · 2<sup>EV</sup> · luminanceScale). A clear noon meters about
   EV 15, sunny sixteen.
 
 ## The light
