@@ -64,6 +64,19 @@ const GROUND_ALBEDO = PARAMETERS.groundAlbedo.x;
 // sunny sixteen
 const START_EV100 = 15;
 
+// The share of the light a camera lens scatters across the frame, its veiling
+// glare: a few percent for a photographic lens (ISO 9358). The sun's disc is
+// some 1.6e9 cd/m², so the glow round it is that share of it, no more
+const VEILING_GLARE = 0.02;
+
+// Three's bloom adds its five blurred levels, each weighted
+// mix(f, 1.2 - f, radius): their sum is how much of the light it adds back
+const BLOOM_RADIUS = 0.2;
+const BLOOM_WEIGHTS = [1, 0.8, 0.6, 0.4, 0.2].reduce(
+  (sum, factor) => sum + factor + (1.2 - 2 * factor) * BLOOM_RADIUS,
+  0,
+);
+
 /**
  * The camera's exposure for a metered EV, in the atmosphere's units.
  * @param ev100 The exposure value at ISO 100
@@ -300,8 +313,18 @@ export const Atmosphere: FC<AtmosphereProps> = ({
   const pipeline = useMemo(() => {
     const render_pipeline = new RenderPipeline(renderer);
 
-    render_pipeline.outputNode = split.output.add(
-      bloom(split.output, 0.3, 0.2, 1),
+    // The lens's glare: what it scatters leaves the image and lands round it,
+    // from every pixel, the light conserved
+    const glare = bloom(
+      split.output,
+      VEILING_GLARE / BLOOM_WEIGHTS,
+      BLOOM_RADIUS,
+      0,
+    );
+
+    render_pipeline.outputNode = vec4(
+      split.output.rgb.mul(1 - VEILING_GLARE).add(glare.rgb),
+      1,
     );
 
     return render_pipeline;
