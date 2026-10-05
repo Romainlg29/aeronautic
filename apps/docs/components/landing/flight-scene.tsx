@@ -400,11 +400,14 @@ const FlightScene: FC<{ sky: Sky; flight: Flight } & Pilot> = ({
       />
       <Reflections intensity={SKIES.day.reflections} />
       {/* Context doesn't cross into the canvas: the same flight again */}
-      <FlightProvider flight={flight}>
-        <Suspense fallback={null}>
-          <Fighter dusk={dusk} keys={keys} levers={levers} />
-        </Suspense>
-      </FlightProvider>
+      {/* Its plumes and vapour drawn at half resolution, then graded */}
+      <Grade>
+        <FlightProvider flight={flight}>
+          <Suspense fallback={null}>
+            <Fighter dusk={dusk} keys={keys} levers={levers} />
+          </Suspense>
+        </FlightProvider>
+      </Grade>
       <OrbitControls
         // Looking a little below it, so it sits above the page's title
         target={[0, -3, 4]}
@@ -414,7 +417,6 @@ const FlightScene: FC<{ sky: Sky; flight: Flight } & Pilot> = ({
         maxDistance={90}
         makeDefault
       />
-      <Grade />
     </Canvas>
   );
 };

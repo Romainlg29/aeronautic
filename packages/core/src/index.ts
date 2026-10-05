@@ -40,3 +40,22 @@ export {
 } from "./flight";
 export { check_renderer, dev_warn, THREE_REVISION } from "./dev";
 export { deg, to_deg } from "./units";
+export {
+  create_scene_fog,
+  fog_factor,
+  SCENE_FOG_DENSITY,
+  SCENE_FOG_NONE,
+  SCENE_FOG_RANGE,
+  scene_color,
+  scene_depth,
+  scene_fog_factor,
+  scene_view_z,
+  write_scene_fog,
+  type SceneFogUniforms,
+} from "./scene";
+export {
+  volume_pass,
+  type SceneBackdrop,
+  type VolumePass,
+  type VolumePassOptions,
+} from "./volume-pass";

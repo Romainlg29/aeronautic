@@ -417,24 +417,27 @@ out on the CPU.
 ### Half resolution
 
 A raymarch costs per pixel, and a plume is soft enough to lose little at half
-the resolution. `afterburner_pass` draws the plumes in a pass of their own at a
-share of the frame and lays them back over the scene. The upsample is weighted
-by depth, so a nozzle's edge stays sharp. Close up and astern of a fighter it takes
-the worst case from 6.8 ms to 2.7 ms.
+the resolution. `@aeronautic/core`'s `volume_pass` draws the plumes, and any
+wing's vapor with them, in a pass of their own at a share of the frame and lays
+them back over the scene. The upsample is weighted by depth, so a nozzle's edge
+stays sharp. Close up and astern of a fighter it takes the worst case from
+6.8 ms to 2.7 ms.
 
 ```tsx
-import { afterburner_pass } from "@aeronautic/afterburner";
+import { volume_pass } from "@aeronautic/core";
+import { VolumePassContext } from "@aeronautic/core/react";
 
-const split = afterburner_pass(scene, camera, { resolutionScale: 0.5 });
+const split = volume_pass(scene, camera, { resolutionScale: 0.5 });
 
 render_pipeline.outputNode = split.output; // then bloom it, grade it…
 
-<AfterburnerBatch pass={split}>…</AfterburnerBatch>;
+<VolumePassContext value={split}>…</VolumePassContext>;
 ```
 
 `split.output` replaces your scene pass: it is the scene with the plumes on it.
-Without React, give `AfterburnerBatch` `backdrop: split.backdrop` and add
-its mesh to `split.scene`.
+Every plume inside the context draws in the pass. Without React, give
+`AfterburnerBatch` `backdrop: split.backdrop` and add its mesh to
+`split.scene`. `afterburner_pass` is the same pass, under its older name.
 
 ## How it works
 

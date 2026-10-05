@@ -1,5 +1,7 @@
 import type { AfterburnerBatch } from "@aeronautic/afterburner";
 import type { VaporLook, WingVapor } from "@aeronautic/wing-vapor";
+import { volume_pass } from "@aeronautic/core";
+import { useVolumePass, VolumePassContext } from "@aeronautic/core/react";
 import { OrbitControls } from "@react-three/drei";
 import { Moon, Sun } from "lucide-react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
@@ -18,12 +20,12 @@ import {
   type DirectionalLight,
   type GridHelper,
   type HemisphereLight,
+  type Object3D,
   type Scene,
   type Texture,
   type Vector3Tuple,
 } from "three";
 import { bloom } from "three/addons/tsl/display/BloomNode.js";
-import { pass } from "three/tsl";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { PMREMGenerator, RenderPipeline, WebGPURenderer } from "three/webgpu";
 import { NO_SHADOWS } from "@/lib/no-shadows";
@@ -34,21 +36,28 @@ import { NO_SHADOWS } from "@/lib/no-shadows";
 
 /**
  * Draw the frame through bloom, then AgX.
- * @returns Nothing; it takes over rendering
+ *
+ * The plumes and the vapour inside are raymarched at half the frame's
+ * resolution, in a pass of their own, and laid back over the scene: a march
+ * costs per pixel, and at 1440p each effect took 10 to 12 ms of a frame at
+ * full resolution
+ * @param props What is drawn in it
+ * @returns Its children, their volumes drawn at half resolution
  */
-export const Grade: FC = () => {
+export const Grade: FC<{ children?: ReactNode }> = ({ children }) => {
   const { gl, scene, camera } = useThree();
   const renderer = gl as unknown as WebGPURenderer;
 
+  const split = useMemo(() => volume_pass(scene, camera), [scene, camera]);
+
   const pipeline = useMemo(() => {
-    const color = pass(scene, camera).getTextureNode("output");
-    const glow = bloom(color, 0.3, 0.2, 1);
+    const glow = bloom(split.output, 0.3, 0.2, 1);
     const render_pipeline = new RenderPipeline(renderer);
 
-    render_pipeline.outputNode = color.add(glow);
+    render_pipeline.outputNode = split.output.add(glow);
 
     return render_pipeline;
-  }, [renderer, scene, camera]);
+  }, [renderer, split]);
 
   useEffect(() => {
     renderer.toneMapping = AgXToneMapping;
@@ -57,7 +66,7 @@ export const Grade: FC = () => {
 
   useFrame(() => pipeline.render(), 1);
 
-  return null;
+  return <VolumePassContext value={split}>{children}</VolumePassContext>;
 };
 
 /**
@@ -173,6 +182,7 @@ const mix_rgb = (
  */
 const Sky: FC<{ day: boolean; floor: number | null }> = ({ day, floor }) => {
   const { scene } = useThree();
+  const volumes = useVolumePass();
   const hemisphere = useRef<HemisphereLight>(null);
   const sun = useRef<DirectionalLight>(null);
   const grid = useRef<GridHelper>(null);
@@ -225,8 +235,9 @@ const Sky: FC<{ day: boolean; floor: number | null }> = ({ day, floor }) => {
     }
 
     // Written whenever one is off, so a plume or a vapor that arrives late,
-    // or has its profile set again, comes under the sky too
-    scene.traverse((object) => {
+    // or has its profile set again, comes under the sky too. They are drawn
+    // in the volume pass's scene, not this one
+    const light = (object: Object3D) => {
       const batch = object.userData.afterburnerBatch as
         | AfterburnerBatch
         | undefined;
@@ -255,7 +266,10 @@ const Sky: FC<{ day: boolean; floor: number | null }> = ({ day, floor }) => {
         skyColor: mix_rgb(NIGHT.look.skyColor, DAY.look.skyColor, t),
         skyIntensity: mix(NIGHT.look.skyIntensity, DAY.look.skyIntensity),
       } satisfies Partial<VaporLook>);
-    });
+    };
+
+    scene.traverse(light);
+    volumes?.scene.traverse(light);
   });
 
   return (
@@ -340,12 +354,13 @@ export const Stage: FC<StageProps> = ({
           return renderer;
         }}
       >
-        <Sky day={day} floor={floor} />
-        {reflections && <Reflections />}
-        {/* A loaded model streams in, the plumes around it waiting for it */}
-        <Suspense fallback={null}>{children}</Suspense>
+        <Grade>
+          <Sky day={day} floor={floor} />
+          {reflections && <Reflections />}
+          {/* A loaded model streams in, the plumes around it waiting for it */}
+          <Suspense fallback={null}>{children}</Suspense>
+        </Grade>
         <OrbitControls target={target} makeDefault />
-        <Grade />
       </Canvas>
       {overlay}
       <button

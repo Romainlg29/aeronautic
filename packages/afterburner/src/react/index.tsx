@@ -2,12 +2,14 @@ import {
   check_renderer,
   type Flight,
   type FlightValues,
+  type VolumePass,
 } from "@aeronautic/core";
 import {
   shared_context,
   useFlightStore,
   useShallowStable,
   useThrust,
+  useVolumePass,
 } from "@aeronautic/core/react";
 import { createPortal, useThree, type ThreeElements } from "@react-three/fiber";
 import {
@@ -36,6 +38,7 @@ import type {
 } from "../presets";
 import type { AfterburnerParams } from "../types";
 import type { AfterburnerPass } from "../afterburner-pass";
+import type { AfterburnerBackdrop } from "../afterburner-material";
 import { AFTERBURNER_MAX_THROTTLE } from "../plume-profile";
 
 // The friendly API
@@ -80,9 +83,11 @@ export type AfterburnerBatchProps = Omit<
 
   /**
    * Draw the plumes in passes of their own, from `afterburner_pass`: at a
-   * lower resolution, composited over the scene. Changing it rebuilds the batch
+   * lower resolution, composited over the scene. Changing it rebuilds the
+   * batch. By default the nearest `<VolumePassContext>`'s; null draws in the
+   * scene itself
    */
-  pass?: AfterburnerPass;
+  pass?: AfterburnerPass | VolumePass | null;
 
   /** Seconds of flame per second, one being real time */
   timeScale?: number;
@@ -121,12 +126,14 @@ export const AfterburnerBatch: FC<AfterburnerBatchProps> = ({
   minScreenFraction: min_screen_fraction = 0.001,
   detailDistanceM: detail_distance_m = 900,
   cheapDistanceM: cheap_distance_m = 3000,
-  pass,
+  pass: pass_prop,
   source,
   ref,
   children,
 }) => {
   const scene = useThree((state) => state.scene);
+  const provided_pass = useVolumePass();
+  const pass = pass_prop === undefined ? provided_pass : pass_prop;
   const gl = useThree((state) => state.gl);
   const provided = useFlightStore();
   const flight = source === undefined ? provided : source;
@@ -215,6 +222,7 @@ const acquire_shared = (
   scene: Object3D,
   preset: AfterburnerPresetName | AfterburnerPreset | undefined,
   source: Flight | null,
+  backdrop?: AfterburnerBackdrop,
 ): [Batch, () => void] => {
   let presets = shared_batches.get(scene);
 
@@ -233,7 +241,7 @@ const acquire_shared = (
   let shared = batches.get(source);
 
   if (shared === undefined) {
-    const batch = new Batch({ preset, source });
+    const batch = new Batch({ preset, source, backdrop });
 
     scene.add(batch.mesh);
 
@@ -388,6 +396,7 @@ export const Afterburner: FC<AfterburnerProps> = ({
   const scene = useThree((state) => state.scene);
   const gl = useThree((state) => state.gl);
   const above = useContext(BatchContext);
+  const volume_pass = useVolumePass();
 
   useLayoutEffect(() => check_renderer(gl, "<Afterburner>"), [gl]);
   const provided = useFlightStore();
@@ -501,7 +510,12 @@ export const Afterburner: FC<AfterburnerProps> = ({
     let batch = explicit_batch ?? above ?? undefined;
 
     if (batch === undefined) {
-      [batch, release] = acquire_shared(scene, preset, flight);
+      [batch, release] = acquire_shared(
+        volume_pass?.scene ?? scene,
+        preset,
+        flight,
+        volume_pass?.backdrop,
+      );
     }
 
     const nozzle = batch.add({
@@ -519,7 +533,16 @@ export const Afterburner: FC<AfterburnerProps> = ({
       nozzle_ref.current = null;
       release?.();
     };
-  }, [scene, above, explicit_batch, preset, waiting, target, flight]);
+  }, [
+    scene,
+    volume_pass,
+    above,
+    explicit_batch,
+    preset,
+    waiting,
+    target,
+    flight,
+  ]);
 
   // A new way of reading it, or a new number, is taken up at once rather
   // than at the flight's next change

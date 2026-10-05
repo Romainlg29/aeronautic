@@ -143,6 +143,22 @@ renderer is needed and the result is the same everywhere. Each function has a
 `run_async` to spread a large model's capture over several frames.
 `@aeronautic/wing-vapor` shapes its pressure field from these views.
 
+## Volumes at half resolution
+
+`volume_pass(scene, camera)` draws the effects' raymarched volumes, the
+afterburner's plumes and the wing's vapor, in a pass of their own at half the
+frame's resolution, and composites them over the scene depth-aware, so an edge
+in front of a flame stays sharp. Use its `output` as your render pipeline's,
+and put it in a `VolumePassContext` round the effects:
+
+```tsx
+const split = volume_pass(scene, camera);
+
+render_pipeline.outputNode = split.output; // then bloom it, grade it…
+
+<VolumePassContext value={split}>…</VolumePassContext>;
+```
+
 ## License
 
 MIT

@@ -20,6 +20,7 @@ import {
   type FlightTrackOptions,
   type FlightValues,
 } from "../flight";
+import type { VolumePass } from "../volume-pass";
 
 // The flight, for React
 //
@@ -73,6 +74,24 @@ export const ThrustContext = shared_context<Thrust | null>("thrust", null);
  * @returns It, or null outside an engine
  */
 export const useThrust = (): Thrust | null => useContext(ThrustContext);
+
+/**
+ * The pass the effects inside draw their volumes in, from `volume_pass`:
+ * every plume and wing's vapour that is not given a `pass` of its own goes
+ * into it. Provide one with `<VolumePassContext value={…}>` round the scene,
+ * and render `pass.output`
+ */
+export const VolumePassContext = shared_context<VolumePass | null>(
+  "volume-pass",
+  null,
+);
+
+/**
+ * The pass the nearest `<VolumePassContext>` gives.
+ * @returns It, or null outside one: the effects draw in the scene itself
+ */
+export const useVolumePass = (): VolumePass | null =>
+  useContext(VolumePassContext);
 
 /**
  * The flight the nearest `<FlightProvider>` holds.
