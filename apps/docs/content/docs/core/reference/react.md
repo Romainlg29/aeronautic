@@ -1,6 +1,6 @@
 ---
 title: React
-description: "FlightProvider, useFlight, useFlightFrame, useFlightStore, ThrustContext, useThrust and webgpu_gl."
+description: "FlightProvider, useFlight, useFlightFrame, useFlightStore, ThrustContext, useThrust, VolumePassContext, useVolumePass and webgpu_gl."
 ---
 
 ```ts
@@ -11,6 +11,8 @@ import {
   useFlightFrame,
   useFlightStore,
   useThrust,
+  useVolumePass,
+  VolumePassContext,
   webgpu_gl,
 } from "@aeronautic/core/react";
 ```
@@ -66,6 +68,18 @@ import { webgpu_gl } from "@aeronautic/core/react";
 <Canvas gl={webgpu_gl()}>…</Canvas>;
 <Canvas gl={webgpu_gl({ trackTimestamp: true })}>…</Canvas>;
 ```
+
+## `VolumePassContext` and `useVolumePass()`
+
+A `volume_pass` for the effects inside to draw in. `<Afterburner>`,
+`<AfterburnerBatch>` and `<WingVapor>` read the nearest; the last two also take
+it as a `pass` prop, `null` to opt out. `useVolumePass()` returns it, or null.
+
+```tsx
+<VolumePassContext value={split}>{children}</VolumePassContext>
+```
+
+See [Volumes at half resolution](../../guides/volumes/).
 
 ## `ThrustContext` and `useThrust()`
 

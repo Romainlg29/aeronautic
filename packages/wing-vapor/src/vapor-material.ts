@@ -19,14 +19,19 @@ import {
   type UniformNode,
 } from "three/webgpu";
 import {
+  create_scene_fog,
+  scene_fog_factor,
+  scene_view_z,
+  type SceneBackdrop,
+  type SceneFogUniforms,
+} from "@aeronautic/core";
+import {
   Break,
   Continue,
   Discard,
   Fn,
   If,
   Loop,
-  cameraFar,
-  cameraNear,
   cameraProjectionMatrix,
   clamp,
   dot,
@@ -35,11 +40,9 @@ import {
   fract,
   highpModelViewMatrix,
   int,
-  logarithmicDepthToViewZ,
   max,
   min,
   mix,
-  perspectiveDepthToViewZ,
   positionGeometry,
   pow,
   screenCoordinate,
@@ -50,7 +53,7 @@ import {
   vec2,
   vec3,
   vec4,
-  viewportDepthTexture,
+  screenUV,
 } from "three/tsl";
 import { CONDENSATION_MIN_RATIO, CONDENSATION_TEXELS } from "./condensation";
 import {
@@ -236,6 +239,9 @@ export type VaporUniforms = {
 
   /** The most iterations the march may take */
   maxSteps: UniformNode<"int", number>;
+
+  /** The fog of the scene it is drawn in, written every render */
+  fog: SceneFogUniforms;
 };
 
 /**
@@ -272,6 +278,7 @@ export const create_vapor_uniforms = (): VaporUniforms => {
     stepScale: uniform(1) as FloatUniform,
     detail: uniform(1) as FloatUniform,
     maxSteps: uniform(160, "int") as UniformNode<"int", number>,
+    fog: create_scene_fog(),
   };
 };
 
@@ -466,22 +473,14 @@ export type VaporMaterialOptions = {
   trails: DataTexture;
 
   effects: VaporEffects;
+
+  /**
+   * The opaque scene, drawn in a pass of its own, for vapour drawn in another:
+   * at a lower resolution, say, by core's `volume_pass`. Left out, the vapour
+   * reads the frame it is drawn into
+   */
+  backdrop?: SceneBackdrop;
 };
-
-/**
- * How far in front of the camera the opaque scene sits, in view space.
- * @returns The view space depth, negative
- */
-const scene_view_z = (): F =>
-  (
-    Fn((builder: { renderer: { logarithmicDepthBuffer: boolean } }) => {
-      const depth = viewportDepthTexture().x;
-
-      return builder.renderer.logarithmicDepthBuffer
-        ? logarithmicDepthToViewZ(depth, cameraNear, cameraFar)
-        : perspectiveDepthToViewZ(depth, cameraNear, cameraFar);
-    }) as unknown as () => F
-  )();
 
 /**
  * Henyey and Greenstein's phase function.
@@ -506,7 +505,7 @@ const henyey_greenstein = (cosine: F, g: F): F => {
 export const create_vapor_material = (
   options: VaporMaterialOptions,
 ): MeshBasicNodeMaterial => {
-  const { uniforms: u, table, shape, trails, effects } = options;
+  const { uniforms: u, table, shape, trails, effects, backdrop } = options;
   const f = u.field as unknown as VaporFieldNodes;
 
   const box_min = u.boxMin as unknown as V3;
@@ -532,7 +531,10 @@ export const create_vapor_material = (
     // Where the opaque scene is along this ray, in metres: view space and the
     // canonical frame differ by a rotation only
     const view_direction = v_view.normalize();
-    const scene_t = scene_view_z().div(min(view_direction.z, -1e-6));
+    const depth_per_metre = max(view_direction.z.negate(), 1e-6);
+    const scene_t = scene_view_z(backdrop?.depth.sample(screenUV))
+      .negate()
+      .div(depth_per_metre);
 
     // The box's slab test
     const safe = (component: F) =>
@@ -599,6 +601,10 @@ export const create_vapor_material = (
 
     const light = vec3(0).toVar();
     const transmittance = float(1).toVar();
+
+    // How much of what the vapour hides is fog in front of it, rather than
+    // the scene behind: what each sample stops, times the fog at its depth
+    const fogged = float(0).toVar();
 
     const t = enter.toVar();
 
@@ -724,8 +730,14 @@ export const create_vapor_material = (
             .add(sun_multiple.mul(exp(shade.mul(-MULTIPLE_SHADE))))
             .add(sky);
 
-          // Every droplet scatters what it stops: an albedo of one
-          light.addAssign(source.mul(transmittance.mul(through.oneMinus())));
+          // Every droplet scatters what it stops: an albedo of one. Fog
+          // between it and the camera takes its share of that, and puts its
+          // own colour in for the share of the backdrop it hides
+          const stopped = transmittance.mul(through.oneMinus()).toVar();
+          const fog = scene_fog_factor(u.fog, t.mul(depth_per_metre)).toVar();
+
+          light.addAssign(source.mul(stopped).mul(fog.oneMinus()));
+          fogged.addAssign(stopped.mul(fog));
           transmittance.mulAssign(through);
         });
 
@@ -743,7 +755,15 @@ export const create_vapor_material = (
       Discard();
     });
 
-    return vec4(light.mul(u.exposure as unknown as F), coverage);
+    // The fog the vapour stands in front of, which the blend takes out of what
+    // is behind with the rest of it: for a fog that falls off as a
+    // transmittance, this and the scene's own fog make the fog the camera sees
+    return vec4(
+      light
+        .mul(u.exposure as unknown as F)
+        .add(vec3(u.fog.color as unknown as V3).mul(fogged)),
+      coverage,
+    );
   });
 
   // Premultiplied: what the vapour scatters, over what it lets through

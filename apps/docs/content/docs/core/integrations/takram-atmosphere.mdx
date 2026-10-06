@@ -1,0 +1,170 @@
+---
+title: Takram's atmosphere
+description: "The plumes and the vapor under @takram/three-atmosphere's sky: one volume pass, one frame on the earth, one set of light units."
+---
+
+<Example name="atmosphere-vapor" />
+
+[`@takram/three-atmosphere`](https://www.npmjs.com/package/@takram/three-atmosphere)
+draws a physically based sky, sunlight and aerial perspective from
+precomputed scattering tables. Three things tie it to the aeronautic
+effects: where the volumes go in its frame, where the scene is on the earth,
+and what one unit of light on screen means. This page sets up all three; the
+[afterburner](/docs/afterburner/integrations/takram-atmosphere) and
+[wing vapor](/docs/wing-vapor/integrations/takram-atmosphere) pages light
+their effect in it.
+
+```bash
+pnpm add @takram/three-atmosphere @takram/three-geospatial
+```
+
+Import from `@takram/three-atmosphere/webgpu` only. The package's main entry
+is the WebGL one and needs `postprocessing` installed.
+
+### On three r186
+
+Takram 0.19 is built against three r184. Under r186 it needs two fixes, which
+these docs carry as pnpm patches in the repository's `patches/`:
+
+- `struct()` hands back the struct type behind a proxy, not a function
+  holding it as `layout`, so takram reads `.layout.name` off `undefined`.
+  Both packages fall back to the type itself.
+- The scattering tables' radius was left unnamed. r186 declares it inside
+  the first branch that reads it, so the rays that meet the ground read a
+  radius of 0, and the ground drew black. Takram's patch declares it once,
+  before the branches.
+
+## The volumes go over the aerial perspective
+
+Takram's `aerialPerspective(color, depth)` fogs the opaque scene by the air
+between it and the camera, and draws the sky wherever the depth is clear.
+Put it after the volumes and it draws the sky straight over every plume seen
+against the sky, since a volume writes no depth. Put it in the volume pass's
+`backdropNode` instead: the opaque scene is graded first, and the plumes and
+the vapor are laid over the result, refracting it where they are hot.
+
+```ts
+import { volume_pass } from "@aeronautic/core";
+import { aerialPerspective } from "@takram/three-atmosphere/webgpu";
+
+const split = volume_pass(scene, camera, {
+  backdropNode: ({ color, depth }) => aerialPerspective(color, depth),
+});
+
+pipeline.outputNode = split.output;
+```
+
+The volumes themselves get no aerial perspective. At sea level the air's
+extinction is about 1.8 × 10⁻⁵ per metre in green (Rayleigh 1.35 × 10⁻⁵,
+aerosols 4.4 × 10⁻⁶, takram's defaults), so a plume 500 m away keeps 99 % of
+its light, and 98 % in blue. Seen from kilometres away it would need it.
+
+## Where the scene is on the earth
+
+The atmosphere wants the scene's frame in ECEF, the earth-centred one.
+Put the scene's origin at the aircraft, with +X north, +Y up and +Z east,
+from `@takram/three-geospatial`:
+
+```ts
+import { Ellipsoid, Geodetic, radians } from "@takram/three-geospatial";
+
+Ellipsoid.WGS84.getNorthUpEastFrame(
+  new Geodetic(
+    radians(longitude),
+    radians(latitude),
+    flight.values.altitudeM,
+  ).toECEF(),
+  atmosphere.matrixWorldToECEF.value,
+);
+```
+
+Its height is the flight's altitude, so the sky darkens and the ground falls
+away as the altitude slider climbs, in the same air the plumes and the
+vapor read from the flight. The sun is a direction in the same frame:
+
+```ts
+const sun = new Vector3(
+  Math.cos(elevation) * Math.cos(azimuth), // north
+  Math.sin(elevation), // up
+  Math.cos(elevation) * Math.sin(azimuth), // east
+);
+
+atmosphere.sunDirectionECEF.value
+  .copy(sun)
+  .transformDirection(atmosphere.matrixWorldToECEF.value);
+```
+
+For the sun at a date and place, the main entry's `getSunDirectionECEF(date)`
+does it, with `postprocessing` installed.
+
+## One unit of light
+
+The atmosphere draws in units of its `luminanceScale`: one unit on screen is
+1 / luminanceScale, about 75 700 cd/m². Everything else in the frame is put
+in those units, so one exposure photographs it all:
+
+- **The plumes.** A plume's radiance is in units of a 2000 K blackbody's,
+  about 4.8 × 10⁵ cd/m², so its exposure is 4.8 × 10⁵ × luminanceScale,
+  about 6.3.
+- **The vapor.** Takram's `getSplitScalarIlluminance` gives the sun's
+  illuminance and the sky's at a point, from the same tables the sky is drawn
+  with. A compute pass reads them at the aircraft. The sun's is the vapor's
+  sun directly. Its sky is a radiance, the same from every direction: the
+  dome above, at E<sub>h</sub> / π from its horizontal illuminance, and the
+  sunlit ground below, at albedo × (E<sub>sun</sub> sin e + E<sub>h</sub>) / π,
+  averaged.
+- **The camera.** An incident-light meter at the aircraft, its dome
+  pointing up. From θ off its axis the dome shows (1 + cos θ) / 2 of its
+  face, so it reads E<sub>sun</sub> (1 + sin e) / 2, plus 1.5 E<sub>h</sub>
+  from the sky and half the ground's exitance. The sun still counts a little
+  below the level, as it should: from 12 km the horizon dips 3.5°, and a sun
+  at −2° still lights the aircraft. A flat sensor held level would read only
+  the twilight sky there, and overexpose the sunlit aircraft by some seven
+  stops. Then EV₁₀₀ = log₂(E · 100 / 330), a hemispherical receptor's
+  constant (ISO 2720 gives 320 to 540), and the exposure is
+  1 / (1.2 · 2<sup>EV</sup> · luminanceScale). A clear noon meters about
+  EV 15, sunny sixteen.
+- **The lens.** The sun's disc is drawn at its own 1.6 × 10⁹ cd/m², so the
+  glow round it is the lens's veiling glare, a few percent of the light
+  (ISO 9358), and not a bloom's. Three's `bloom` adds its five blurred levels
+  back at weights summing to 3 at a radius of 0.2, so a glare of 2 % is a
+  strength of 0.02 / 3, a threshold of 0, and the image dimmed by the 2 % it
+  scattered.
+
+## The light
+
+Install takram's light node once, add an `AtmosphereLight` for the sun, and
+let `skyEnvironment()` light everything else. It leaves the sun out, so the
+light's own sky term is turned off:
+
+```ts
+renderer.library.addLight(AtmosphereLightNode, AtmosphereLight);
+
+const sun = new AtmosphereLight();
+sun.indirect.value = false;
+scene.add(sun);
+
+scene.environmentNode = skyEnvironment();
+```
+
+The atmosphere is found through the renderer's context, by compute passes as
+well as materials:
+
+```ts
+const atmosphere = new AtmosphereContext();
+atmosphere.camera = camera;
+// Its noise wants temporal antialiasing to smooth it
+atmosphere.raymarchScattering = false;
+
+renderer.contextNode = context({
+  ...renderer.contextNode.value,
+  getAtmosphere: () => atmosphere,
+});
+```
+
+## The whole of it
+
+The examples' `<Atmosphere>` does all of the above round its children, and
+hands them the light at the aircraft through `useAtmosphereLighting()`.
+
+<Source file="atmosphere.tsx" />

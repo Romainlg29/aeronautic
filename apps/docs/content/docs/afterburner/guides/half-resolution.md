@@ -4,8 +4,9 @@ description: "Draw the plumes in their own pass at a share of the frame, depth-a
 ---
 
 A raymarch costs per pixel, and a plume is soft enough to lose little at half
-the resolution. `afterburner_pass` draws the plumes in a pass of their own at
-a share of the frame, then lays them back over the full-resolution scene.
+the resolution. `@aeronautic/core`'s `volume_pass` draws the plumes, and any
+wing's vapor with them, in a pass of their own at a share of the frame, then
+lays them back over the full-resolution scene.
 
 The upsample is **weighted by depth**: a low-resolution texel only lends its
 plume to pixels whose scene is at about the same depth. A nozzle's edge, or a
@@ -16,12 +17,13 @@ Close up and astern of a fighter, it takes the worst case from **6.8 ms to 2.7 m
 ## With React
 
 Make the pass from the R3F scene and camera. Use its `output` in place of your
-scene pass, and hand the pass to the batch:
+scene pass, and put it in a `VolumePassContext` round the plumes:
 
 ```tsx
 import { useFrame, useThree } from "@react-three/fiber";
-import { afterburner_pass } from "@aeronautic/afterburner";
-import { Afterburner, AfterburnerBatch } from "@aeronautic/afterburner/react";
+import { volume_pass } from "@aeronautic/core";
+import { VolumePassContext } from "@aeronautic/core/react";
+import { Afterburner } from "@aeronautic/afterburner/react";
 import { useEffect, useMemo } from "react";
 import { bloom } from "three/addons/tsl/display/BloomNode.js";
 import { RenderPipeline, type WebGPURenderer } from "three/webgpu";
@@ -30,10 +32,7 @@ const Scene = () => {
   const { gl, scene, camera } = useThree();
   const renderer = gl as unknown as WebGPURenderer;
 
-  const split = useMemo(
-    () => afterburner_pass(scene, camera, { resolutionScale: 0.5 }),
-    [scene, camera],
-  );
+  const split = useMemo(() => volume_pass(scene, camera), [scene, camera]);
 
   const pipeline = useMemo(() => {
     const pipeline = new RenderPipeline(renderer);
@@ -48,33 +47,25 @@ const Scene = () => {
   useFrame(() => pipeline.render(), 1);
 
   return (
-    <AfterburnerBatch preset="afterburner" pass={split}>
+    <VolumePassContext value={split}>
       <Afterburner />
-    </AfterburnerBatch>
+    </VolumePassContext>
   );
 };
 ```
 
-The plumes must be in an `<AfterburnerBatch pass={split}>`. A nozzle outside
-one draws in the main scene as usual, at full resolution.
+Every `<Afterburner>` and `<AfterburnerBatch>` inside the context draws in the
+pass. A batch also takes it as `pass={split}`, or `pass={null}` to draw in the
+main scene at full resolution. Changing a batch's pass rebuilds it.
 
-## Options
+The pass, its options and what it returns are on
+[Volumes at half resolution](../../../core/guides/volumes/).
 
-| option            | default | what it is                                                                    |
-| ----------------- | ------- | ----------------------------------------------------------------------------- |
-| `resolutionScale` | `0.5`   | The plumes' resolution against the frame's. `0.5` is a quarter of the pixels. |
+## `afterburner_pass`
 
-## What it returns
-
-| field       | what it is                                                                       |
-| ----------- | -------------------------------------------------------------------------------- |
-| `output`    | The scene with the plumes composited, at full resolution. Your pipeline's input. |
-| `scene`     | The plumes' own scene. A batch given the pass puts its mesh here.                |
-| `backdrop`  | The opaque scene's colour and depth, for the plume material to read.             |
-| `scenePass` | The opaque scene at full resolution, without plumes.                             |
-| `plumePass` | The plumes alone, premultiplied, at the reduced resolution.                      |
-
-Changing `pass` on a batch rebuilds it.
+`afterburner_pass(scene, camera, options?)` from `@aeronautic/afterburner` is
+the same pass, with its volumes' target also named `plumePass`. It takes the
+same options and goes wherever a `volume_pass` does.
 
 ## Without React
 
@@ -82,7 +73,7 @@ Give the core batch the backdrop, and add its mesh to the pass's scene rather
 than yours:
 
 ```ts
-const split = afterburner_pass(scene, camera, { resolutionScale: 0.5 });
+const split = volume_pass(scene, camera);
 
 const batch = new AfterburnerBatch({
   preset: "afterburner",

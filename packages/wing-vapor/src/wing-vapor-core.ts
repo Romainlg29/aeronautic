@@ -16,6 +16,8 @@ import {
   capture_views,
   type CaptureOptions,
   type Flight,
+  type SceneBackdrop,
+  write_scene_fog,
 } from "@aeronautic/core";
 import { condensation_table } from "./condensation";
 import {
@@ -108,6 +110,13 @@ export type WingVaporOptions = {
 
   /** What a frame may spend: a preset's name, or the fields. `high` by default */
   quality?: VaporQualityName | Partial<VaporQuality>;
+
+  /**
+   * The opaque scene drawn in a pass of its own, for vapour drawn in another,
+   * as core's `volume_pass` sets up: put `mesh` in `pass.scene` and give
+   * `pass.backdrop` here. Fixed for the vapour's life
+   */
+  backdrop?: SceneBackdrop;
 
   /**
    * A shared flight to read the airspeed, the angles, the altitude and the
@@ -215,6 +224,8 @@ export class WingVapor {
 
   private _frame_number = -1;
 
+  private readonly _backdrop: SceneBackdrop | undefined;
+
   // The source last read, and at which of its writes
   private _read_from: Flight | null = null;
   private _read_version = -1;
@@ -243,6 +254,7 @@ export class WingVapor {
     this._shape_texture = create_shape_texture();
     this._trail_texture = create_trail_texture();
     this._captured = options.shape ?? null;
+    this._backdrop = options.backdrop;
 
     const mesh = new Mesh(
       new BoxGeometry(1, 1, 1),
@@ -252,6 +264,7 @@ export class WingVapor {
         shape: this._shape_texture,
         trails: this._trail_texture,
         effects: this._effects,
+        backdrop: this._backdrop,
       }),
     );
 
@@ -266,8 +279,12 @@ export class WingVapor {
     // Drawn with the transparent things, after the opaque scene it reads
     mesh.renderOrder = 1;
 
-    mesh.onBeforeRender = (renderer, _scene, camera) =>
-      this.update(renderer as unknown as { info: { frame: number } }, camera);
+    mesh.onBeforeRender = (renderer, scene, camera) =>
+      this.update(
+        renderer as unknown as { info: { frame: number } },
+        scene,
+        camera,
+      );
 
     this.mesh = mesh;
 
@@ -451,6 +468,7 @@ export class WingVapor {
       shape: this._shape_texture,
       trails: this._trail_texture,
       effects: next,
+      backdrop: this._backdrop,
     });
 
     previous.dispose();
@@ -716,9 +734,14 @@ export class WingVapor {
   /**
    * Follow the aircraft and the camera, just before the mesh is drawn.
    * @param renderer The renderer drawing it
+   * @param scene The scene it is drawn in, for its fog
    * @param camera The camera it is drawn from
    */
-  private update(renderer: { info: { frame: number } }, camera: Camera) {
+  private update(
+    renderer: { info: { frame: number } },
+    scene: Object3D,
+    camera: Camera,
+  ) {
     // Rigid and in metres: a scaled model scales where the frame sits, not
     // the aircraft's size, which the airframe gives
     const base = this.object?.matrixWorld;
@@ -749,6 +772,8 @@ export class WingVapor {
       .transformDirection(scratch_inverse);
 
     this.budget(camera);
+
+    write_scene_fog(this.uniforms.fog, scene);
 
     // The clock, once a frame however many cameras draw it
     if (renderer.info.frame === this._frame_number) {

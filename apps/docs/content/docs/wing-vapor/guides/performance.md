@@ -37,6 +37,19 @@ Self-shadowing costs three more looks at the field for every sample that fogs.
 `effects={{ selfShadow: false }}` saves them, at the cost of a thick cone's
 grey underside.
 
+## Half resolution
+
+The march costs per pixel, and the vapor is soft enough to lose little at half
+the resolution. Inside a `VolumePassContext` from `@aeronautic/core`, the vapor
+is drawn in the context's `volume_pass`, with any plumes, at a share of the
+frame, and composited over the scene depth-aware so the wing's edge stays
+sharp. See [Volumes at half resolution](../../../core/guides/volumes/).
+
+## Fog
+
+The vapor reads the scene's `Fog` or `FogExp2` and fogs each sample at its own
+depth, so a distant aircraft's vapor fades into the haze as its airframe does.
+
 ## Measuring it
 
 Measure GPU time, not FPS. Create the renderer with `trackTimestamp: true` and

@@ -1,12 +1,19 @@
 import { Vector3 } from "three";
 import {
+  create_scene_fog,
+  scene_color,
+  scene_fog_factor,
+  scene_view_z,
+  type SceneBackdrop,
+  type SceneFogUniforms,
+} from "@aeronautic/core";
+import {
   BackSide,
   CustomBlending,
   MeshBasicNodeMaterial,
   OneFactor,
   OneMinusSrcAlphaFactor,
   type Node,
-  type TextureNode,
   type UniformNode,
 } from "three/webgpu";
 import {
@@ -20,8 +27,6 @@ import {
   bool,
   attribute,
   ceil,
-  cameraFar,
-  cameraNear,
   cameraProjectionMatrix,
   clamp,
   cos,
@@ -34,12 +39,10 @@ import {
   highpModelViewMatrix,
   int,
   length,
-  logarithmicDepthToViewZ,
   max,
   min,
   mix,
   normalize,
-  perspectiveDepthToViewZ,
   positionGeometry,
   screenSize,
   screenCoordinate,
@@ -55,8 +58,6 @@ import {
   vec2,
   vec3,
   vec4,
-  viewportDepthTexture,
-  viewportSharedTexture,
 } from "three/tsl";
 import { atmosphere } from "./atmosphere";
 import { blackbody } from "./tsl/blackbody";
@@ -269,15 +270,10 @@ export type AfterburnerMaterialOptions = {
 };
 
 /**
- * The opaque scene behind the plumes, as a separate pass leaves it.
+ * The opaque scene behind the plumes, as a separate pass leaves it: its
+ * colour for the haze to bend, its depth for the flame to stop at.
  */
-export type AfterburnerBackdrop = {
-  /** Its colour, for the haze to bend */
-  color: TextureNode;
-
-  /** Its depth, for the flame to stop at */
-  depth: TextureNode;
-};
+export type AfterburnerBackdrop = SceneBackdrop;
 
 // Every profile dial is a float but the sun's direction
 type ScalarProfileKey = Exclude<keyof AfterburnerProfile, "sunDirection">;
@@ -308,6 +304,9 @@ export type AfterburnerUniforms = {
 
   detailDistance: UniformNode<"float", number>;
   cheapDistance: UniformNode<"float", number>;
+
+  /** The fog of the scene the plumes are drawn in, written every render */
+  fog: SceneFogUniforms;
 };
 
 /**
@@ -367,6 +366,7 @@ export const create_afterburner_uniforms = (
     screenScale: uniform(1) as UniformNode<"float", number>,
     detailDistance: uniform(900) as UniformNode<"float", number>,
     cheapDistance: uniform(3000) as UniformNode<"float", number>,
+    fog: create_scene_fog(),
   };
 
   write_afterburner_profile(uniforms, profile);
@@ -421,25 +421,6 @@ const rotate = (q: V4, v: V3): V3 => {
 
   return v.add(cross(axis, cross(axis, v).add(v.mul(q.w))).mul(2));
 };
-
-/**
- * How far in front of the camera the opaque scene sits, in view space.
- * Negative, as view space depth is; reads the sky as the far plane.
- * @param backdrop The scene drawn in a pass of its own, if it was
- * @returns The view space depth
- */
-const scene_view_z = (backdrop: AfterburnerBackdrop | undefined): F =>
-  (
-    Fn((builder: { renderer: { logarithmicDepthBuffer: boolean } }) => {
-      const depth = backdrop
-        ? (backdrop.depth.sample(screenUV).x as unknown as F)
-        : viewportDepthTexture().x;
-
-      return builder.renderer.logarithmicDepthBuffer
-        ? logarithmicDepthToViewZ(depth, cameraNear, cameraFar)
-        : perspectiveDepthToViewZ(depth, cameraNear, cameraFar);
-    }) as unknown as () => F
-  )();
 
 /**
  * Build the material every plume in one batch is drawn with.
@@ -746,7 +727,16 @@ export const create_afterburner_material = (
     };
 
     // How far along this ray the opaque scene sits
-    const scene_t = scene_view_z(backdrop).mul(along_ray).div(v_dir.w);
+    const scene_t = scene_view_z(backdrop?.depth.sample(screenUV))
+      .mul(along_ray)
+      .div(v_dir.w);
+
+    // How deep in view space a point along the ray is, per metre of it: the
+    // fog is three's, worked out from that depth as it is for a surface
+    const depth_per_metre = v_dir.w.negate().div(along_ray);
+
+    const fog_at = (distance: F): F =>
+      scene_fog_factor(uniforms.fog, distance.mul(depth_per_metre));
 
     const span = plume_span(
       origin,
@@ -929,6 +919,10 @@ export const create_afterburner_material = (
     // How much hot gas the ray went through, for the haze
     const column = float(0).toVar();
 
+    // How much of what the plume hides is fog in front of it, rather than
+    // the scene behind: what each sample absorbs, times the fog at its depth
+    const fogged = float(0).toVar();
+
     // Whether the last step was in empty space, where the coarse bound may skip
     const outside = bool(true).toVar();
 
@@ -1010,9 +1004,24 @@ export const create_afterburner_material = (
           step(1e-3, depth),
         );
 
+        // Fog between the camera and the sample takes its share of the light,
+        // and puts its own colour in for the share of the backdrop it hides
+        const fog = fog_at(t).toVar();
+
         light.addAssign(
-          transmittance.mul(sample.emission).mul(share).mul(here),
+          transmittance
+            .mul(sample.emission)
+            .mul(share)
+            .mul(here)
+            .mul(fog.oneMinus()),
         );
+
+        fogged.addAssign(
+          dot(transmittance.mul(through.oneMinus()), vec3(...LUMINANCE)).mul(
+            fog,
+          ),
+        );
+
         transmittance.mulAssign(through);
 
         column.addAssign(
@@ -1111,7 +1120,9 @@ export const create_afterburner_material = (
           .mul(through_lip);
 
         light.addAssign(
-          transmittance.mul(tint.mul(v_glow.x).mul(seen).add(flame)),
+          transmittance
+            .mul(tint.mul(v_glow.x).mul(seen).add(flame))
+            .mul(fog_at(to_exit).oneMinus()),
         );
       },
     );
@@ -1142,7 +1153,12 @@ export const create_afterburner_material = (
         })
       : exposed;
 
-    const out = vec3(lit).toVar();
+    // The fog the plume stands in front of, which the blend takes out of what
+    // is behind with the rest of it: for a fog that falls off as a
+    // transmittance, this and the scene's own fog make the fog the camera sees
+    const out = vec3(lit)
+      .add(vec3(uniforms.fog.color as unknown as V3).mul(fogged))
+      .toVar();
 
     if (haze) {
       // Heat haze: hot exhaust is thinner than the air, so what is behind it
@@ -1213,7 +1229,7 @@ export const create_afterburner_material = (
         const backdrop_at = (uv: V2) =>
           backdrop
             ? backdrop.color.sample(uv).rgb
-            : viewportSharedTexture(uv).rgb;
+            : scene_color().sample(uv).rgb;
 
         const behind = backdrop_at(screenUV as unknown as V2);
         const displaced = backdrop_at(screenUV.add(uv_offset) as unknown as V2);

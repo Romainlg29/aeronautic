@@ -13,7 +13,11 @@ import {
   Vector3,
 } from "three";
 import type { MeshBasicNodeMaterial } from "three/webgpu";
-import type { Flight, FlightValues } from "@aeronautic/core";
+import {
+  write_scene_fog,
+  type Flight,
+  type FlightValues,
+} from "@aeronautic/core";
 import {
   AFTERBURNER_ATTRIBUTES,
   create_afterburner_material,
@@ -560,8 +564,12 @@ export class AfterburnerBatch {
     // Drawn with the transparent things, after the opaque scene it reads
     mesh.renderOrder = 1;
 
-    mesh.onBeforeRender = (renderer, _scene, camera) =>
-      this.update(renderer as unknown as { info: { frame: number } }, camera);
+    mesh.onBeforeRender = (renderer, scene, camera) =>
+      this.update(
+        renderer as unknown as { info: { frame: number } },
+        scene,
+        camera,
+      );
 
     this.mesh = mesh;
 
@@ -831,9 +839,14 @@ export class AfterburnerBatch {
   /**
    * Bring the instances up to date, just before the mesh is drawn.
    * @param renderer The renderer drawing it
+   * @param scene The scene it is drawn in, for its fog
    * @param camera The camera it is drawn from
    */
-  private update(renderer: { info: { frame: number } }, camera: Camera) {
+  private update(
+    renderer: { info: { frame: number } },
+    scene: Object3D,
+    camera: Camera,
+  ) {
     // Per camera: what the projection makes of a metre
     const projection = camera.projectionMatrix.elements;
     const screen_scale = projection[15] === 0 ? 2 / projection[5] : 1;
@@ -842,6 +855,9 @@ export class AfterburnerBatch {
     this.uniforms.minScreenSpan.value = screen_scale * this.minScreenFraction;
     this.uniforms.detailDistance.value = this.detailDistanceM;
     this.uniforms.cheapDistance.value = this.cheapDistanceM;
+
+    // Per scene: one batch may be drawn into more than one
+    write_scene_fog(this.uniforms.fog, scene);
 
     this._camera = camera;
 

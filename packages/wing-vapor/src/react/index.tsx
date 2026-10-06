@@ -1,5 +1,14 @@
-import { check_renderer, dev_warn, type Flight } from "@aeronautic/core";
-import { useFlightStore, useShallowStable } from "@aeronautic/core/react";
+import {
+  check_renderer,
+  dev_warn,
+  type Flight,
+  type VolumePass,
+} from "@aeronautic/core";
+import {
+  useFlightStore,
+  useShallowStable,
+  useVolumePass,
+} from "@aeronautic/core/react";
 import { createPortal, useThree, type ThreeElements } from "@react-three/fiber";
 import {
   useEffect,
@@ -113,6 +122,14 @@ export type WingVaporProps = Omit<ThreeElements["group"], "ref"> & {
    */
   source?: Flight | null;
 
+  /**
+   * Draw the vapour in passes of its own, from core's `volume_pass`: at a
+   * share of the frame's resolution, with any plumes given the same pass.
+   * Changing it rebuilds the vapour. By default the nearest
+   * `<VolumePassContext>`'s; null draws in the scene itself
+   */
+  pass?: VolumePass | null;
+
   /** The vapour itself, to drive every frame or read its state */
   ref?: Ref<WingVaporHandle | null>;
 };
@@ -138,6 +155,7 @@ export const WingVapor: FC<WingVaporProps> = ({
   onCaptured: on_captured,
   onCaptureError: on_capture_error,
   source,
+  pass: pass_prop,
   ref,
   children,
   ...group_props
@@ -145,6 +163,8 @@ export const WingVapor: FC<WingVaporProps> = ({
   const scene = useThree((state) => state.scene);
   const gl = useThree((state) => state.gl);
   const provided = useFlightStore();
+  const provided_pass = useVolumePass();
+  const pass = pass_prop === undefined ? provided_pass : pass_prop;
 
   useLayoutEffect(() => check_renderer(gl, "<WingVapor>"), [gl]);
 
@@ -173,16 +193,20 @@ export const WingVapor: FC<WingVaporProps> = ({
   initial.current = { airframe, flight, air, look, effects, quality };
 
   useLayoutEffect(() => {
-    const created = new Core({ ...initial.current, object: group.current });
+    const created = new Core({
+      ...initial.current,
+      object: group.current,
+      backdrop: pass?.backdrop,
+    });
 
-    scene.add(created.mesh);
+    (pass?.scene ?? scene).add(created.mesh);
     set_vapor(created);
 
     return () => {
       set_vapor(null);
       created.dispose();
     };
-  }, [scene]);
+  }, [scene, pass]);
 
   useLayoutEffect(() => {
     if (vapor) {

@@ -13,7 +13,9 @@ scene.add(vapor.mesh);
 ```
 
 It needs three's `WebGPURenderer` (either backend) and reads the scene's
-depth, so the vapor stops at the wing it sits on.
+depth, so the vapor stops at the wing it sits on. In a
+[`volume_pass`](../../../core/guides/volumes/), give it the pass's `backdrop`
+and add its mesh to the pass's `scene`.
 
 ### Options
 
@@ -29,6 +31,7 @@ Every group is over its defaults.
 | `object`   | `Object3D \| null`                          | What it follows. None: the world's origin, or wherever `frame` puts it.                                |
 | `frame`    | `WingVaporFrame`                            | `position`, `forward` and `up` of the airframe on what it follows.                                     |
 | `shape`    | `WingShape \| null`                         | The wing as a table, from `capture_airframe`, in place of the trapezoid.                               |
+| `backdrop` | `SceneBackdrop`                             | The opaque scene's depth, from `volume_pass`, in place of the frame's. Fixed for life.                 |
 | `quality`  | `VaporQualityName \| Partial<VaporQuality>` | The most iterations a pixel's march may take. `"high"`, 160, by default; `setQuality` changes it live. |
 
 ### Fields

@@ -348,6 +348,11 @@ timestamps can resolve a frame or more late, and are coarse, so add them up
 over a few seconds and divide by the frames drawn (`renderer.info.frame`), or
 take a trimmed mean, rather than reading one frame at a time.
 
+Inside a `VolumePassContext` from `@aeronautic/core`, the vapor is drawn in
+the context's `volume_pass`, at half the frame's resolution with any plumes,
+and composited depth-aware. Give `<WingVapor>` `pass={null}` to keep it in the
+scene.
+
 ### What it leaves out
 
 - The vapor shades itself, but the aircraft doesn't shade it.

@@ -1,0 +1,21 @@
+diff --git a/build/webgpu.js b/build/webgpu.js
+index 30408f0256a1d08e53e2b7fbdbc54e6624fdfeae..1b6fdfeee3f9af138fd1ee25dca17664c251e9a6 100644
+--- a/build/webgpu.js
++++ b/build/webgpu.js
+@@ -329,10 +329,13 @@ const Tn = (...s) => new Dt(...s), bn = (s) => {
+ function Je(s) {
+   if (typeof s == "string")
+     return s;
+-  if ("layout" in s && s.layout instanceof Os) {
+-    if (s.layout.name == null)
++  // three r186 returns the struct type itself, behind a proxy, not a function
++  // holding it as layout
++  const l = "layout" in s ? s.layout : s;
++  if (l instanceof Os || (l != null && l.isStructTypeNode === !0)) {
++    if (l.name == null)
+       throw new Error("Struct name is required.");
+-    return s.layout.name;
++    return l.name;
+   }
+   throw new Error(`Unsupported layout type: ${s}`);
+ }

@@ -23,7 +23,7 @@ new AfterburnerBatch(options?: AfterburnerBatchOptions)
 | `hooks`     | `AfterburnerHooks`                           | TSL to change the plume.                                                  |
 | `capacity`  | `number`                                     | How many nozzles to make room for up front. It grows past this.           |
 | `responseS` | `number`                                     | Seconds a plume takes to follow its throttle. Default 0.25; 0 is at once. |
-| `backdrop`  | `AfterburnerBackdrop`                        | From `afterburner_pass`. Fixed for the batch's life.                      |
+| `backdrop`  | `AfterburnerBackdrop`                        | From `volume_pass` or `afterburner_pass`. Fixed for life.                 |
 
 ### Members
 
