@@ -76,6 +76,7 @@ walk `split.scene` as well: the effects' meshes are there, not in yours.
 | option            | default | what it is                                                                     |
 | ----------------- | ------- | ------------------------------------------------------------------------------ |
 | `resolutionScale` | `0.5`   | The volumes' resolution against the frame's. `0.5` is a quarter of the pixels. |
+| `backdropNode`    | none    | What the opaque scene becomes before the volumes go over it. See below.        |
 
 ## What it returns
 
@@ -83,7 +84,7 @@ walk `split.scene` as well: the effects' meshes are there, not in yours.
 | ------------ | --------------------------------------------------------------------------------- |
 | `output`     | The scene with the volumes composited, at full resolution. Your pipeline's input. |
 | `scene`      | The volumes' own scene. Cleared to transparent black, and fogged as yours is.     |
-| `backdrop`   | The opaque scene's `color` and `depth`, for the volumes' materials to read.       |
+| `backdrop`   | The opaque scene's `color`, as `backdropNode` made it, and its `depth`.           |
 | `scenePass`  | The opaque scene at full resolution, without the volumes.                         |
 | `volumePass` | The volumes alone, premultiplied, at the reduced resolution.                      |
 
@@ -117,6 +118,27 @@ surface at its own depth, cannot fog it. The plumes and the vapor read the
 scene's `Fog` or `FogExp2` themselves and fog each sample at its own depth,
 in a volume pass or out of one. The pass's scene takes your scene's fog every
 frame.
+
+## Grading the scene under the volumes
+
+`backdropNode` takes the opaque scene's colour and depth and returns what
+it should become before the volumes are laid over it: an atmosphere's
+aerial perspective, say, which also draws the sky wherever nothing was
+drawn.
+
+```ts
+const split = volume_pass(scene, camera, {
+  backdropNode: ({ color, depth }) => aerialPerspective(color, depth),
+});
+```
+
+Grading the composited frame instead goes wrong in two ways. A sky drawn
+where the depth is clear would be drawn over every plume and every wisp of
+vapor in front of it, since they write no depth. And a plume's heat haze
+refracts what is behind it, which should be the graded scene, not the raw
+one. With `backdropNode` the grade is drawn once a frame to a texture of
+its own; the volumes read it as their backdrop and are composited over it.
+See [takram's atmosphere](/docs/core/integrations/takram-atmosphere).
 
 ## When not to use it
 

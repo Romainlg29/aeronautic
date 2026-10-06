@@ -1,6 +1,7 @@
 import { Color, type Camera, type Object3D, Scene } from "three";
 import {
   abs,
+  convertToTexture,
   exp2,
   float,
   floor,
@@ -65,6 +66,15 @@ export type VolumePassOptions = {
    * pixels, is seldom seen
    */
   resolutionScale?: number;
+
+  /**
+   * What the opaque scene becomes before the volumes are laid over it, from
+   * its colour and depth: an atmosphere's aerial perspective, its sky where
+   * nothing was drawn. The volumes see through it and are composited over
+   * it, so a sky drawn here is behind them rather than over them. Drawn to a
+   * texture of its own, once a frame. Left out, the scene as it was drawn
+   */
+  backdropNode?: (scene: SceneBackdrop) => Node<"vec4">;
 };
 
 /**
@@ -77,7 +87,10 @@ export type VolumePass = {
    */
   scene: Scene;
 
-  /** What the volumes read the opaque scene from */
+  /**
+   * What the volumes read the opaque scene from: its colour as
+   * `backdropNode` made it, and its depth
+   */
   backdrop: SceneBackdrop;
 
   /** The scene at full resolution, without the volumes */
@@ -119,7 +132,10 @@ export const volume_pass = (
   camera: Camera,
   options: VolumePassOptions = {},
 ): VolumePass => {
-  const { resolutionScale: resolution_scale = 0.5 } = options;
+  const {
+    resolutionScale: resolution_scale = 0.5,
+    backdropNode: backdrop_node,
+  } = options;
 
   const scene_pass = pass(scene, camera);
 
@@ -147,8 +163,15 @@ export const volume_pass = (
 
   volumes_pass.setResolutionScale(resolution_scale);
 
-  const color = scene_pass.getTextureNode("output") as unknown as TextureNode;
+  const drawn = scene_pass.getTextureNode("output") as unknown as TextureNode;
   const depth = scene_pass.getTextureNode("depth") as unknown as TextureNode;
+
+  // What the volumes stand in front of: the scene, or what it was made into
+  const color = backdrop_node
+    ? (convertToTexture(
+        backdrop_node({ color: drawn, depth }),
+      ) as unknown as TextureNode)
+    : drawn;
   const volumes = volumes_pass.getTextureNode(
     "output",
   ) as unknown as TextureNode;
@@ -165,6 +188,9 @@ export const volume_pass = (
     view_z(depth.sample(uv).x as unknown as F, near, far);
 
   const output = Fn(() => {
+    // First, so the backdrop is drawn before the volumes that read it
+    const behind = color.sample(screenUV);
+
     const size = vec2(
       textureSize(volumes, int(0)) as unknown as Node<"ivec2">,
     ) as unknown as V2;
@@ -207,7 +233,6 @@ export const volume_pass = (
     }
 
     const volume = sum.div(max(total, 1e-6));
-    const behind = color.sample(screenUV);
 
     // Premultiplied over: the scene, less what the volumes cover, and their light
     return vec4(behind.rgb.mul(volume.a.oneMinus()).add(volume.rgb), behind.a);
