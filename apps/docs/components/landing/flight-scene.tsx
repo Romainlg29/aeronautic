@@ -6,35 +6,70 @@ import {
 } from "@aeronautic/afterburner/react";
 import type { Flight } from "@aeronautic/core";
 import { FlightProvider, useFlightStore } from "@aeronautic/core/react";
+import { Contrails, type ContrailsHandle } from "@aeronautic/contrails/react";
+import { humidity_over_water } from "@aeronautic/contrails/physics";
 import { ControlSurfaces } from "@aeronautic/controls/react";
 import { WingVapor, type WingVaporHandle } from "@aeronautic/wing-vapor/react";
 import { angle_of_attack_for_load } from "@aeronautic/wing-vapor/physics";
-import { type FC, type RefObject, Suspense, useMemo, useRef } from "react";
+import {
+  type FC,
+  type RefObject,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
 import {
   Color,
   type DirectionalLight,
   Euler,
   type Group,
   type HemisphereLight,
+  type Object3D,
   Quaternion,
 } from "three";
 import { WebGPURenderer } from "three/webgpu";
 import { airframe_only, Exhaust, useFighter } from "@/examples/fighter";
 import { DAY_EXPOSURE, Grade, Reflections } from "@/examples/stage";
+import { CAMERA_FAR_M } from "@/lib/camera";
 import { NO_SHADOWS } from "@/lib/no-shadows";
-import { cruise_mach, MOIST, START_THROTTLE } from "./flight-plan";
+import { AIR, cruise_mach, START_THROTTLE } from "./flight-plan";
 import type { Keys, Levers } from "./pilot";
 
 // The docs' fighter on a humid summer day, flown from the keyboard. It turns
 // freely about its own axes but goes nowhere: the keys write a flight it only
 // seems to fly, its speed following the throttle and its g and rates the
 // stick, and everything on it reads that flight, the control surfaces, the
-// plumes and the vapor
+// plumes, the vapor and the contrails
 
 // Where the sun is, for the skin and the vapor both
 const SUN: [number, number, number] = [5, 10, 5];
 
 export type Sky = "day" | "night";
+
+// Where it flies: low over the sea, or at the tropopause
+export type Level = "low" | "high";
+
+// The ISA tropopause, -56.5 °C, in air 112 % saturated over ice: cold enough
+// for the engines' exhaust to make a contrail, humid enough for it to stay.
+// Down low, on the summer day, the exhaust is far too warm to make one
+const TROPOPAUSE_M = 11_000;
+const TROPOPAUSE_K = 216.65;
+const ICE_HUMIDITY = 1.12;
+
+const HIGH_AIR = {
+  altitudeM: TROPOPAUSE_M,
+  temperatureOffsetK: 0,
+  relativeHumidity: humidity_over_water(ICE_HUMIDITY, TROPOPAUSE_K),
+};
+
+// Where the camera goes when it climbs or descends: astern and to the right
+// for the plumes down low, ahead and to the right up high, the trails
+// running away behind it towards the sun
+const VIEWS: Record<Level, [number, number, number]> = {
+  low: [16, 5, 24],
+  high: [30, 8, -45],
+};
 
 const SKIES = {
   day: {
@@ -211,12 +246,19 @@ type Pilot = { keys: RefObject<Keys>; levers: Levers };
  * @returns The model, its moving parts, its plumes and its vapor
  */
 const Fighter: FC<{ dusk: Dusk } & Pilot> = ({ dusk, keys, levers }) => {
-  const { scene, animations } = useFighter();
+  const { scene, nodes, animations } = useFighter();
   const flight = useFlightStore();
   const attitude = useRef<Group>(null);
   const body = useRef<Group>(null);
   const vapor = useRef<WingVaporHandle>(null);
   const batch = useRef<AfterburnerBatchHandle>(null);
+  const trails = useRef<ContrailsHandle>(null);
+
+  // The model's nozzle exits: the trails start where they are
+  const airframe = useMemo(
+    () => ({ engines: [nodes.FX_Exhaust_L, nodes.FX_Exhaust_R] as Object3D[] }),
+    [nodes],
+  );
 
   // What the fake carries from frame to frame
   const state = useMemo(
@@ -237,21 +279,24 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({ dusk, keys, levers }) => {
     const delta = Math.min(frame_delta, 0.1);
     const input = keys.current;
 
-    // The plumes' exposure and the vapor's light follow the sky as it fades
+    // The plumes' exposure, and the vapor's and the trails' light, follow
+    // the sky as it fades
     if (dusk.moved) {
       const night = dusk.night;
       const day = SKIES.day.look;
       const dark = SKIES.night.look;
-
-      batch.current?.updateProfile({
-        exposure: mix(SKIES.day.exposure, SKIES.night.exposure, night),
-      });
-      vapor.current?.updateLook({
+      const look = {
         sunColor: mix_rgb(day.sunColor, dark.sunColor, night),
         sunIntensity: mix(day.sunIntensity, dark.sunIntensity, night),
         skyColor: mix_rgb(day.skyColor, dark.skyColor, night),
         skyIntensity: mix(day.skyIntensity, dark.skyIntensity, night),
+      };
+
+      batch.current?.updateProfile({
+        exposure: mix(SKIES.day.exposure, SKIES.night.exposure, night),
       });
+      vapor.current?.updateLook(look);
+      trails.current?.updateLook(look);
     }
 
     if (!flight || !attitude.current || !body.current) return;
@@ -275,7 +320,8 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({ dusk, keys, levers }) => {
 
     state.mach += (mach_target - state.mach) * ease(delta, SPEED_S);
 
-    const airspeed_m_s = state.mach * MOIST.soundMPerS;
+    // In the air it is flying in, low or high
+    const airspeed_m_s = state.mach * flight.values.soundMPerS;
     // The g a full stick gives grows with the dynamic pressure
     const authority = (state.mach / 0.9) ** 2;
     const load_factor = clamp(
@@ -287,7 +333,12 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({ dusk, keys, levers }) => {
     // The angle of attack it takes the wing to pull that g, at that speed
     const airframe = vapor.current?.airframe;
     const alpha = airframe
-      ? angle_of_attack_for_load(airframe, load_factor, airspeed_m_s, MOIST)
+      ? angle_of_attack_for_load(
+          airframe,
+          load_factor,
+          airspeed_m_s,
+          flight.air,
+        )
       : 0;
 
     state.alpha = clamp(alpha, -8 * DEG, 25 * DEG);
@@ -342,6 +393,8 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({ dusk, keys, levers }) => {
             look={SKIES.day.look}
             forward={[0, 0, -1]}
           />
+          {/* Its flight and its air are the shared flight's */}
+          <Contrails ref={trails} airframe={airframe} look={SKIES.day.look} />
         </group>
       </group>
     </AfterburnerBatch>
@@ -349,13 +402,38 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({ dusk, keys, levers }) => {
 };
 
 /**
+ * Moves the camera to the level's view when the level changes, not before.
+ * @param props Low or high
+ * @returns Nothing
+ */
+const Viewpoint: FC<{ level: Level }> = ({ level }) => {
+  const camera = useThree((three) => three.camera);
+  const controls = useThree((three) => three.controls) as {
+    update: () => void;
+  } | null;
+  const shown = useRef(level);
+
+  useEffect(() => {
+    if (shown.current === level) return;
+
+    shown.current = level;
+    camera.position.set(...VIEWS[level]);
+    controls?.update();
+  }, [camera, controls, level]);
+
+  return null;
+};
+
+/**
  * The landing page's sky: the fighter, fullscreen, flown from the keyboard
  * and looked round with the mouse.
- * @param props Day or night, the flight, and the pilot's keys and levers
+ * @param props Day or night, low or high, the flight, and the pilot's keys
+ *   and levers
  * @returns The canvas
  */
-const FlightScene: FC<{ sky: Sky; flight: Flight } & Pilot> = ({
+const FlightScene: FC<{ sky: Sky; level: Level; flight: Flight } & Pilot> = ({
   sky,
+  level,
   flight,
   keys,
   levers,
@@ -370,12 +448,17 @@ const FlightScene: FC<{ sky: Sky; flight: Flight } & Pilot> = ({
   // Read by the fade on its next frame
   dusk.target = sky === "night" ? 1 : 0;
 
+  // The air it flies in, read by everything on it from the flight
+  useEffect(() => {
+    flight.set(level === "high" ? HIGH_AIR : AIR);
+  }, [flight, level]);
+
   return (
     <Canvas
       dpr={[1, 1.25]}
       shadows={NO_SHADOWS}
       // Astern and to the right, the plumes towards the camera
-      camera={{ position: [16, 5, 24], fov: 40, near: 0.1, far: 5000 }}
+      camera={{ position: VIEWS.low, fov: 40, near: 0.1, far: CAMERA_FAR_M }}
       gl={async (props) => {
         const renderer = new WebGPURenderer({
           ...(props as object),
@@ -414,6 +497,7 @@ const FlightScene: FC<{ sky: Sky; flight: Flight } & Pilot> = ({
         maxDistance={90}
         makeDefault
       />
+      <Viewpoint level={level} />
       <Grade />
     </Canvas>
   );

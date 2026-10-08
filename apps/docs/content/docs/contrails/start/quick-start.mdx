@@ -1,0 +1,81 @@
+---
+title: Quick start
+description: "Contrails on an aircraft in a few lines."
+---
+
+`<Contrails>` is a group where the aircraft's reference point sits, usually
+its model's origin. Put it inside the model, and give it the engines, the
+flight and the day:
+
+```tsx
+import { Canvas } from "@react-three/fiber";
+import { Contrails } from "@aeronautic/contrails/react";
+import { webgpu_gl } from "@aeronautic/core/react";
+
+const Jet = () => (
+  <group>
+    <JetModel />
+    <Contrails
+      // The model flies along its local -Z, with +Y up (the defaults)
+      airframe={{
+        massKg: 20_000,
+        spanM: 14,
+        // Each nozzle's exit, in the model's frame, in metres
+        engines: [
+          [-0.75, 0.05, 7],
+          [0.75, 0.05, 7],
+        ],
+      }}
+      flight={{ airspeedMPerS: 250 }}
+      // The tropopause, in air a little supersaturated over ice
+      air={{ altitudeM: 11_000, relativeHumidity: 0.66 }}
+      look={{ sunDirection: [5, 10, 5] }}
+    />
+  </group>
+);
+
+export const App = () => (
+  <Canvas gl={webgpu_gl()} camera={{ far: 20_000 }}>
+    <Jet />
+  </Canvas>
+);
+```
+
+A trail is kilometres long, so give the camera a far plane to match: a minute
+of trail at cruise is fifteen. `lengthS` draws less.
+
+## Engines on the model
+
+An engine can be a node of the model as well as a position. Its position is
+read every frame, so a trail follows a nozzle that moves:
+
+```tsx
+const { scene, nodes } = useGLTF("/jet.glb");
+const airframe = useMemo(
+  () => ({ engines: [nodes.Exhaust_L, nodes.Exhaust_R] }),
+  [nodes],
+);
+
+<group>
+  <primitive object={scene} />
+  <Contrails airframe={airframe} flight={flight} air={air} />
+</group>;
+```
+
+## Every frame
+
+The trails are laid in the air the aircraft flies through, from its attitude
+and airspeed every frame: move or turn the group and they follow its path. A
+flight that changes every frame is best given by a
+[`<FlightProvider>`](../../../core/guides/one-flight/), or written through the
+ref, which costs no React render:
+
+```tsx
+const trails = useRef<ContrailsHandle>(null);
+
+useFrame(() => {
+  trails.current?.updateFlight({ airspeedMPerS, loadFactor });
+});
+```
+
+Next, [the day](../../guides/the-day/), which decides everything.

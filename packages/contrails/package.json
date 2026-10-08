@@ -1,0 +1,97 @@
+{
+  "name": "@aeronautic/contrails",
+  "version": "0.1.0",
+  "description": "Physically based contrails for three.js and React Three Fiber: the Schmidt–Appleman criterion, the exhaust mixing out as measured behind airliners, and the ice held at saturation, so a trail forms, lasts or fades as the day says, drawn in TSL for WebGPU",
+  "keywords": [
+    "aircraft",
+    "condensation",
+    "contrail",
+    "contrails",
+    "effects",
+    "ice",
+    "r3f",
+    "react-three-fiber",
+    "schmidt-appleman",
+    "shader",
+    "three",
+    "three.js",
+    "threejs",
+    "tsl",
+    "vfx",
+    "wake-vortex",
+    "webgpu"
+  ],
+  "homepage": "https://romainlg29.github.io/aeronautic/docs/contrails/start/introduction/",
+  "bugs": {
+    "url": "https://github.com/Romainlg29/aeronautic/issues"
+  },
+  "license": "MIT",
+  "author": "Romain Le Gall (https://github.com/Romainlg29)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Romainlg29/aeronautic.git",
+    "directory": "packages/contrails"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    },
+    "./physics": {
+      "types": "./dist/physics.d.ts",
+      "default": "./dist/physics.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "pnpm build"
+  },
+  "devDependencies": {
+    "@aeronautic/core": "workspace:^",
+    "@react-three/fiber": "^9.8.1",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.3.0",
+    "@types/three": "~0.186.0",
+    "react": "^19.3.0",
+    "three": "~0.186.1",
+    "tsdown": "^0.23.0",
+    "typescript": "~6.0.2",
+    "vitest": "^4.1.4"
+  },
+  "peerDependencies": {
+    "@aeronautic/core": "workspace:^",
+    "@react-three/fiber": "^9.0.0 || ^10.0.0-alpha.0",
+    "react": "^19.0.0",
+    "three": ">=0.186.0 <0.187.0"
+  },
+  "peerDependenciesMeta": {
+    "@react-three/fiber": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
+  }
+}

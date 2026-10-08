@@ -20,20 +20,22 @@ shows up in the examples straight away, with no build.
 
 ## The layout
 
-| Where                            | What                                                                      |
-| -------------------------------- | ------------------------------------------------------------------------- |
-| `packages/afterburner/src`       | The library: components, the batch, presets, and the CPU-side physics     |
-| `packages/afterburner/src/tsl`   | The shader, in TSL: the jet, the field, the march                         |
-| `packages/wing-vapor/src`        | Wing vapor: moist air, condensation, the lift and its pressure field      |
-| `packages/wing-vapor/src/tsl`    | Its shader, in TSL: the same field, node for node                         |
-| `packages/controls/src`          | Control surfaces, gear and engines: finding parts, mixing, the rig        |
-| `packages/core/src`              | The shared flight, the atmosphere and the depth capture                   |
-| `apps/docs`                      | The docs site (Fumadocs on Next.js, exported static)                      |
-| `apps/docs/examples`             | Each live example. Its page runs the file and shows it as the code        |
-| `apps/docs/scripts/reference.ts` | Generates the params, profile and quality reference pages from `types.ts` |
+| Where                            | What                                                                       |
+| -------------------------------- | -------------------------------------------------------------------------- |
+| `packages/afterburner/src`       | The library: components, the batch, presets, and the CPU-side physics      |
+| `packages/afterburner/src/tsl`   | The shader, in TSL: the jet, the field, the march                          |
+| `packages/wing-vapor/src`        | Wing vapor: moist air, condensation, the lift and its pressure field       |
+| `packages/wing-vapor/src/tsl`    | Its shader, in TSL: the same field, node for node                          |
+| `packages/contrails/src`         | Contrails: the Schmidt–Appleman criterion, the plume, the ice and the wake |
+| `packages/controls/src`          | Control surfaces, gear and engines: finding parts, mixing, the rig         |
+| `packages/core/src`              | The shared flight, the atmosphere and the depth capture                    |
+| `apps/docs`                      | The docs site (Fumadocs on Next.js, exported static)                       |
+| `apps/docs/examples`             | Each live example. Its page runs the file and shows it as the code         |
+| `apps/docs/scripts/reference.ts` | Generates the params, profile and quality reference pages from `types.ts`  |
 
 The docs hold one section per library, `content/docs/afterburner`,
-`content/docs/wing-vapor`, `content/docs/controls` and `content/docs/core`,
+`content/docs/wing-vapor`, `content/docs/contrails`, `content/docs/controls`
+and `content/docs/core`,
 each with its own sidebar. Afterburner's params,
 profile and quality pages are generated from the comments in
 `packages/afterburner/src/types.ts`. Edit the comments there, not the pages.

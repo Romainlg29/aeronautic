@@ -20,7 +20,7 @@ body:
     id: versions
     attributes:
       label: Versions
-      description: "@aeronautic/afterburner, @aeronautic/wing-vapor, three, @react-three/fiber and react"
+      description: "@aeronautic/afterburner, @aeronautic/wing-vapor, @aeronautic/contrails, three, @react-three/fiber and react"
       placeholder: "@aeronautic/afterburner 0.0.1, three 0.186.1, fiber 9.8.1, react 19.3.0"
     validations:
       required: true

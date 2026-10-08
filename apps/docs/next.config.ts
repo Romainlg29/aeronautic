@@ -44,6 +44,11 @@ const config: NextConfig = {
       "@aeronautic/wing-vapor/physics":
         "../../packages/wing-vapor/src/physics.ts",
       "@aeronautic/wing-vapor": "../../packages/wing-vapor/src/index.ts",
+      "@aeronautic/contrails/react":
+        "../../packages/contrails/src/react/index.tsx",
+      "@aeronautic/contrails/physics":
+        "../../packages/contrails/src/physics.ts",
+      "@aeronautic/contrails": "../../packages/contrails/src/index.ts",
     },
   },
 };

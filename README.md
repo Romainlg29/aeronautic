@@ -9,12 +9,13 @@ the day: the look comes out of them.
 
 **[Docs and live examples](https://romainlg29.github.io/aeronautic/)**
 
-| Package                                                  | npm                                                                                                                   | What it draws                                                     |
-| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| [`@aeronautic/afterburner`](packages/afterburner#readme) | [![npm](https://img.shields.io/npm/v/@aeronautic/afterburner)](https://www.npmjs.com/package/@aeronautic/afterburner) | Jet afterburners and rocket exhaust plumes                        |
-| [`@aeronautic/wing-vapor`](packages/wing-vapor#readme)   | [![npm](https://img.shields.io/npm/v/@aeronautic/wing-vapor)](https://www.npmjs.com/package/@aeronautic/wing-vapor)   | Vortex trails, shock vapor and the vapor cone a wing pulls in air |
-| [`@aeronautic/controls`](packages/controls#readme)       | [![npm](https://img.shields.io/npm/v/@aeronautic/controls)](https://www.npmjs.com/package/@aeronautic/controls)       | Control surfaces, gear, nozzles and thrust vectoring on a model   |
-| [`@aeronautic/core`](packages/core#readme)               | [![npm](https://img.shields.io/npm/v/@aeronautic/core)](https://www.npmjs.com/package/@aeronautic/core)               | The shared flight, the atmosphere and the depth capture           |
+| Package                                                  | npm                                                                                                                   | What it draws                                                        |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| [`@aeronautic/afterburner`](packages/afterburner#readme) | [![npm](https://img.shields.io/npm/v/@aeronautic/afterburner)](https://www.npmjs.com/package/@aeronautic/afterburner) | Jet afterburners and rocket exhaust plumes                           |
+| [`@aeronautic/wing-vapor`](packages/wing-vapor#readme)   | [![npm](https://img.shields.io/npm/v/@aeronautic/wing-vapor)](https://www.npmjs.com/package/@aeronautic/wing-vapor)   | Vortex trails, shock vapor and the vapor cone a wing pulls in air    |
+| [`@aeronautic/contrails`](packages/contrails#readme)     | [![npm](https://img.shields.io/npm/v/@aeronautic/contrails)](https://www.npmjs.com/package/@aeronautic/contrails)     | Engine contrails that form, sink, spread and persist as the day says |
+| [`@aeronautic/controls`](packages/controls#readme)       | [![npm](https://img.shields.io/npm/v/@aeronautic/controls)](https://www.npmjs.com/package/@aeronautic/controls)       | Control surfaces, gear, nozzles and thrust vectoring on a model      |
+| [`@aeronautic/core`](packages/core#readme)               | [![npm](https://img.shields.io/npm/v/@aeronautic/core)](https://www.npmjs.com/package/@aeronautic/core)               | The shared flight, the atmosphere and the depth capture              |
 
 Each installs on its own, with the same peers: `@aeronautic/core`, `three`
 0.186, plus `react` 19 and `@react-three/fiber` 9 (or 10) for the components
@@ -101,10 +102,53 @@ export const Jet = () => {
 · [README](packages/wing-vapor/README.md)
 · [How the vapor forms](https://romainlg29.github.io/aeronautic/docs/wing-vapor/how-it-works/the-air/)
 
+## Contrails
+
+![A delta fighter cruising at the tropopause, a contrail forming behind each engine and merging into one, rendered with @aeronautic/contrails](.github/assets/contrails.gif)
+
+The **condensation trails** an aircraft's engines leave at altitude. Each
+forms where its exhaust has cooled past water saturation, freezes, is drawn
+round the wake's vortices and sunk with them, and spreads as it mixes. Whether
+it forms is the **Schmidt–Appleman criterion** for the day and the engines;
+whether it lasts is the air's **humidity over ice**.
+
+```bash
+pnpm add @aeronautic/contrails @aeronautic/core three@~0.186 @react-three/fiber
+```
+
+Put `<Contrails>` at the aircraft's reference point, with its engines:
+
+```tsx
+import { Contrails } from "@aeronautic/contrails/react";
+
+export const Jet = () => (
+  <group>
+    <JetModel />
+    <Contrails
+      airframe={{
+        massKg: 20_000,
+        spanM: 14,
+        engines: [
+          [-0.75, 0.05, 7],
+          [0.75, 0.05, 7],
+        ],
+      }}
+      flight={{ airspeedMPerS: 250 }}
+      air={{ altitudeM: 11_000, relativeHumidity: 0.66 }}
+    />
+  </group>
+);
+```
+
+[Contrails docs](https://romainlg29.github.io/aeronautic/docs/contrails/start/introduction/)
+· [README](packages/contrails/README.md)
+· [How they form](https://romainlg29.github.io/aeronautic/docs/contrails/how-it-works/forming/)
+
 ## The repository
 
 - [`packages/afterburner`](packages/afterburner): `@aeronautic/afterburner`.
 - [`packages/wing-vapor`](packages/wing-vapor): `@aeronautic/wing-vapor`.
+- [`packages/contrails`](packages/contrails): `@aeronautic/contrails`.
 - [`packages/controls`](packages/controls): `@aeronautic/controls`.
 - [`packages/core`](packages/core): `@aeronautic/core`, which the others
   depend on.
@@ -176,7 +220,9 @@ as [SECURITY.md](SECURITY.md) describes.
 
 The docs deploy on every push to `main`. Releases to npm are
 the maintainer's, each package from a tag naming it, `core-v*`, `afterburner-v*`,
-`wing-vapor-v*` or `controls-v*` (see [RELEASING.md](RELEASING.md)).
+`wing-vapor-v*`, `contrails-v*` or `controls-v*` (see [RELEASING.md](RELEASING.md)).
+
+What's planned next is in [ROADMAP.md](ROADMAP.md).
 
 ## License
 

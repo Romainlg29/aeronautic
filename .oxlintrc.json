@@ -45,6 +45,7 @@
         "packages/core/src/**",
         "packages/afterburner/src/**",
         "packages/wing-vapor/src/**",
+        "packages/contrails/src/**",
         "packages/controls/src/**"
       ],
       "rules": {

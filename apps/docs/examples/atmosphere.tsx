@@ -29,6 +29,7 @@ import { bloom } from "three/addons/tsl/display/BloomNode.js";
 import { context, Fn, instancedArray, uniform, vec4 } from "three/tsl";
 import { type Node, RenderPipeline, WebGPURenderer } from "three/webgpu";
 import { NO_SHADOWS } from "@/lib/no-shadows";
+import { CAMERA_FAR_M } from "@/lib/camera";
 import { useOnScreen } from "./stage";
 
 // Takram's atmosphere under the aeronautic effects: its sky, its aerial
@@ -474,7 +475,7 @@ export const AtmosphereStage: FC<AtmosphereStageProps> = ({
         frameloop={visible ? "always" : "never"}
         dpr={[1, 1.5]}
         shadows={NO_SHADOWS}
-        camera={{ position: camera, fov, near: 0.1, far: 5000 }}
+        camera={{ position: camera, fov, near: 0.1, far: CAMERA_FAR_M }}
         gl={async (props) => {
           const renderer = new WebGPURenderer({
             ...(props as object),

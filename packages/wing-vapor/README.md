@@ -358,8 +358,8 @@ scene.
 - The vapor shades itself, but the aircraft doesn't shade it.
 - A roll's and a sideslip's asymmetry is a loading per side, not a
   recomputed lattice: good for the trends, not the last ten per cent.
-- No contrails from the engines' exhaust: the afterburner package's plumes
-  carry no water yet.
+- No contrails from the engines' exhaust: those are
+  [`@aeronautic/contrails`](https://www.npmjs.com/package/@aeronautic/contrails)'s.
 - The numbers are textbook correlations, good to ten or twenty per cent. That
   is far better than the eye can tell in a cloud that appears or not on a
   degree of dew point. `tipCoreRadius`, `tipCoreShare` and
