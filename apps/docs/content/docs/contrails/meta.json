@@ -1,0 +1,20 @@
+{
+  "title": "Contrails",
+  "description": "Condensation trails, formed, carried and spread by the physics",
+  "icon": "Cloud",
+  "root": true,
+  "pages": [
+    "---[Rocket]Start here---",
+    "...start",
+    "---[BookOpen]Guides---",
+    "...guides",
+    "---[Play]Examples---",
+    "...examples",
+    "---[Plug]Integrations---",
+    "...integrations",
+    "---[Braces]Reference---",
+    "...reference",
+    "---[Atom]How it works---",
+    "...how-it-works"
+  ]
+}

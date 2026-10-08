@@ -2,8 +2,8 @@ name: three release
 
 # The library supports one three minor at a time, capped in its peer range,
 # because TSL changes between releases. Every week this looks for a newer
-# three, tries the library against it, and opens an issue to test and widen
-# the cap. One issue per minor: a release already reported is left alone
+# three, tries every package against it, and opens an issue to test and
+# widen the cap. One issue per minor: a release already reported is left alone
 
 on:
   schedule:
@@ -40,7 +40,8 @@ jobs:
         id: versions
         run: |
           latest=$(npm view three version)
-          range=$(node -p "require('./packages/afterburner/package.json').peerDependencies.three")
+          # Every package shares core's range
+          range=$(node -p "require('./packages/core/package.json').peerDependencies.three")
           newer=$(LATEST="$latest" RANGE="$range" node -e '
             const cap = /<\s*(\d+)\.(\d+)\.(\d+)/.exec(process.env.RANGE);
             const at = process.env.LATEST.split(".").map(Number);
@@ -64,7 +65,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "three $latest, supported $range, newer: $newer, reported: $reported"
 
-      # Try it: the library's types and tests against the new three
+      # Try it: every package's types and tests against the new three
       - name: Install the new three
         if: steps.versions.outputs.open == 'true'
         env:
@@ -72,17 +73,20 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           types=$(npm view "@types/three@~$LATEST" version 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d "'")
-          pnpm --filter @aeronautic/afterburner add -D "three@$LATEST" "@types/three@${types:-latest}"
+          pnpm --filter "./packages/*" add -D "three@$LATEST" "@types/three@${types:-latest}"
       - name: Typecheck
         id: typecheck
         if: steps.versions.outputs.open == 'true'
         continue-on-error: true
-        run: pnpm --filter @aeronautic/afterburner typecheck
+        # Built first: the packages resolve @aeronautic/core from its dist
+        run: |
+          pnpm build
+          pnpm --filter "./packages/*" typecheck
       - name: Test
         id: test
         if: steps.versions.outputs.open == 'true'
         continue-on-error: true
-        run: pnpm --filter @aeronautic/afterburner test
+        run: pnpm --filter "./packages/*" test
 
       - name: Open the issue
         if: steps.versions.outputs.open == 'true'
@@ -98,7 +102,7 @@ jobs:
           gh label create three --repo "$GITHUB_REPOSITORY" --color 049ef4 \
             --description "A three.js release to support" --force
           gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --label three --body "$(cat <<EOF
-          three **$LATEST** is out, and the library's peer range is \`$RANGE\`.
+          three **$LATEST** is out, and the packages' peer range is \`$RANGE\`.
 
           Release notes: https://github.com/mrdoob/three.js/releases/tag/$RELEASE
 
@@ -110,8 +114,8 @@ jobs:
           The tests cover the CPU side only. TSL and WebGPU changes show up in
           the browser, so before widening the range:
 
-          - [ ] Bump \`three\` and \`@types/three\` in \`packages/afterburner\` and \`apps/docs\`
-          - [ ] Widen \`peerDependencies.three\` in \`packages/afterburner/package.json\`
+          - [ ] Bump \`three\` and \`@types/three\` in every package under \`packages/\` and in \`apps/docs\`
+          - [ ] Widen \`peerDependencies.three\` in every \`packages/*/package.json\`
           - [ ] \`pnpm test\`, \`pnpm typecheck\`, \`pnpm build:docs\`
           - [ ] Open every docs example with \`pnpm dev\` and check the console for shader errors
           - [ ] Look through the release notes for TSL, node and WebGPURenderer changes

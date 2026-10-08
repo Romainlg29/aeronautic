@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm --filter @aeronautic/core --filter @aeronautic/afterburner --filter @aeronautic/wing-vapor --filter @aeronautic/controls build",
+    "build": "pnpm --filter @aeronautic/core --filter @aeronautic/afterburner --filter @aeronautic/wing-vapor --filter @aeronautic/contrails --filter @aeronautic/controls build",
     "build:docs": "pnpm --filter docs build",
     "dev": "pnpm --filter docs dev",
     "dev:docs": "pnpm --filter docs dev",

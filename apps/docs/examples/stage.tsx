@@ -1,4 +1,5 @@
 import type { AfterburnerBatch } from "@aeronautic/afterburner";
+import type { ContrailLook, Contrails } from "@aeronautic/contrails";
 import type { VaporLook, WingVapor } from "@aeronautic/wing-vapor";
 import { OrbitControls } from "@react-three/drei";
 import { Moon, Sun } from "lucide-react";
@@ -26,6 +27,7 @@ import { bloom } from "three/addons/tsl/display/BloomNode.js";
 import { pass } from "three/tsl";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { PMREMGenerator, RenderPipeline, WebGPURenderer } from "three/webgpu";
+import { CAMERA_FAR_M } from "@/lib/camera";
 import { NO_SHADOWS } from "@/lib/no-shadows";
 
 // What every live example on these pages shares: a WebGPU canvas, the tone
@@ -192,7 +194,7 @@ const Sky: FC<{ day: boolean; floor: number | null }> = ({ day, floor }) => {
   const nights = useMemo(() => new WeakMap<AfterburnerBatch, number>(), []);
 
   // The sky each vapor was last lit for: its colours compare by reference
-  const lit = useMemo(() => new WeakMap<WingVapor, number>(), []);
+  const lit = useMemo(() => new WeakMap<WingVapor | Contrails, number>(), []);
 
   useEffect(() => {
     const previous = scene.background;
@@ -231,6 +233,7 @@ const Sky: FC<{ day: boolean; floor: number | null }> = ({ day, floor }) => {
         | AfterburnerBatch
         | undefined;
       const vapor = object.userData.wingVapor as WingVapor | undefined;
+      const trails = object.userData.contrails as Contrails | undefined;
 
       if (batch) {
         let night = nights.get(batch);
@@ -246,14 +249,23 @@ const Sky: FC<{ day: boolean; floor: number | null }> = ({ day, floor }) => {
           batch.updateProfile({ exposure });
       }
 
-      if (!vapor || lit.get(vapor) === t) return;
-
-      lit.set(vapor, t);
-      vapor.updateLook({
+      const sky = {
         sunColor: mix_rgb(NIGHT.look.sunColor, DAY.look.sunColor, t),
         sunIntensity: mix(NIGHT.look.sunIntensity, DAY.look.sunIntensity),
         skyColor: mix_rgb(NIGHT.look.skyColor, DAY.look.skyColor, t),
         skyIntensity: mix(NIGHT.look.skyIntensity, DAY.look.skyIntensity),
+      };
+
+      if (trails && lit.get(trails) !== t) {
+        lit.set(trails, t);
+        trails.updateLook(sky satisfies Partial<ContrailLook>);
+      }
+
+      if (!vapor || lit.get(vapor) === t) return;
+
+      lit.set(vapor, t);
+      vapor.updateLook({
+        ...sky,
       } satisfies Partial<VaporLook>);
     });
   });
@@ -338,7 +350,7 @@ export const Stage: FC<StageProps> = ({
         frameloop={visible ? "always" : "never"}
         dpr={[1, 1.5]}
         shadows={NO_SHADOWS}
-        camera={{ position: camera, fov, near: 0.1, far: 5000 }}
+        camera={{ position: camera, fov, near: 0.1, far: CAMERA_FAR_M }}
         gl={async (props) => {
           const renderer = new WebGPURenderer({
             ...(props as object),

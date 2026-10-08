@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@aeronautic/afterburner": "workspace:*",
+    "@aeronautic/contrails": "workspace:*",
     "@aeronautic/controls": "workspace:*",
     "@aeronautic/core": "workspace:*",
     "@aeronautic/wing-vapor": "workspace:*",

@@ -1,0 +1,65 @@
+---
+title: Takram's atmosphere
+description: "Contrails lit by the sunlight and skylight @takram/three-atmosphere works out at the aircraft's altitude."
+---
+
+<Example name="atmosphere-contrails" />
+
+A contrail is white because its ice scatters, so under
+[`@takram/three-atmosphere`](https://www.npmjs.com/package/@takram/three-atmosphere)
+it should scatter the atmosphere's own light. Bring the sun down: the
+sunlight through more air reddens and dims, the sky darkens, and the trails
+follow both, at the exposure the sky meters. Change the altitude and the sky
+is the one at that height, as the trails are.
+
+The setup, the volume pass with the aerial perspective as its backdrop and
+the scene's place on the earth, is on [core's page](/docs/core/integrations/takram-atmosphere).
+`<Contrails>` finds the volume pass through its `<VolumePassContext>`, as
+the plumes and the vapor do, and draws over the atmosphere's backdrop.
+
+## The light at the aircraft
+
+The trails take the light as the vapor does: the sun as an irradiance,
+scattered through the crystals' phase function, and the sky as a radiance,
+the same from every direction. Takram's `getSplitScalarIlluminance` gives
+both at the aircraft, from the tables the sky is drawn with.
+
+- **The sun** is its `direct`: the solar irradiance through the air above.
+- **The sky** is the mean of the dome above, E<sub>h</sub> / π from its
+  horizontal illuminance, and the sunlit ground below.
+
+```ts
+<Contrails
+  airframe={airframe}
+  look={{
+    sunDirection, // towards the sun, world space
+    sunColor: lighting.sun,
+    sunIntensity: 1,
+    skyColor: lighting.sky,
+    skyIntensity: 1,
+  }}
+/>
+```
+
+Both are already in the atmosphere's units, so the look's `exposure` stays
+at 1 and the camera photographs the trails with the sky.
+
+The light is read once, at the aircraft, for the whole trail. A trail sinks
+with its wake, at most some 100 m behind the docs' fighter, and the light a
+few hundred metres lower is the same to well under 1 %.
+
+## The air in front of it
+
+A trail is kilometres long, so the air between it and the camera is worth
+working out. The trails get no aerial perspective of their own: at the
+tropopause, with takram's defaults, the air's extinction is about
+3.6 × 10⁻³ per kilometre in green and 8.4 × 10⁻³ in blue (Rayleigh at
+e<sup>−11/8</sup> of its sea-level 1.36 × 10⁻², almost no aerosol above its
+1.2 km scale height, and a little ozone). Five kilometres of it, the far end
+of the example's trail, keep 98 % of the light in green and 96 % in blue. At
+6 km, the bottom of the altitude slider, they keep 97 % and 93 %.
+
+Seen from the ground, through tens of kilometres of the denser air below,
+the trails would need it.
+
+<Source file="atmosphere-contrails.tsx" />

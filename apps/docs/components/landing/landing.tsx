@@ -3,13 +3,13 @@
 import { Flight } from "@aeronautic/core";
 import { FlightProvider, useFlight } from "@aeronautic/core/react";
 import { HotkeysProvider } from "@tanstack/react-hotkeys";
-import { BookOpen, Moon, Play, Sun } from "lucide-react";
+import { BookOpen, Moon, Mountain, Play, Sun, Waves } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { type FC, type ReactNode, useState } from "react";
 import { app_name, repository, tagline } from "@/lib/shared";
 import { AIR, START_THROTTLE } from "./flight-plan";
-import type { Sky } from "./flight-scene";
+import type { Level, Sky } from "./flight-scene";
 import { Legend, usePilot } from "./pilot";
 
 const FlightScene = dynamic(() => import("./flight-scene"), { ssr: false });
@@ -96,6 +96,7 @@ const Readout: FC = () => {
  */
 const Page: FC = () => {
   const [sky, set_sky] = useState<Sky>("day");
+  const [level, set_level] = useState<Level>("low");
   const [flight] = useState(() => new Flight(START));
   const { keys, levers } = usePilot();
 
@@ -109,7 +110,13 @@ const Page: FC = () => {
         }}
       >
         <div className="absolute inset-0">
-          <FlightScene sky={sky} flight={flight} keys={keys} levers={levers} />
+          <FlightScene
+            sky={sky}
+            level={level}
+            flight={flight}
+            keys={keys}
+            levers={levers}
+          />
         </div>
 
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
@@ -130,8 +137,8 @@ const Page: FC = () => {
               {app_name}
             </h1>
             <p className="mt-2 max-w-xl text-sm text-white/80 md:text-base">
-              {tagline} An afterburner and the vapor a wing pulls out of humid
-              air, both from the physics.
+              {tagline} An afterburner, the vapor a wing pulls out of humid air,
+              and the contrails it leaves at altitude, all from the physics.
             </p>
           </div>
           <nav className="pointer-events-auto flex flex-wrap items-center gap-2">
@@ -150,6 +157,18 @@ const Page: FC = () => {
             >
               {sky === "day" ? <Moon /> : <Sun />}
               {sky === "day" ? "Night" : "Day"}
+            </Button>
+            {/* Down low the exhaust is too warm for a contrail */}
+            <Button
+              onClick={() => set_level(level === "low" ? "high" : "low")}
+              label={
+                level === "low"
+                  ? "Climb to the tropopause"
+                  : "Descend to the sea"
+              }
+            >
+              {level === "low" ? <Mountain /> : <Waves />}
+              {level === "low" ? "Climb" : "Descend"}
             </Button>
             <span className="ml-auto hidden sm:block">
               <Readout />
