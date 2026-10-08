@@ -1,6 +1,6 @@
 # Roadmap
 
-What's planned after `@aeronautic/contrails`, in the same spirit as the rest:
+What's planned after `@aeronautic/lights`, in the same spirit as the rest:
 each effect worked out from the physics and from measured data, its dials
 physical quantities in SI units, never a look tuned by eye. A package lands
 when it can say where every number comes from.
@@ -8,26 +8,6 @@ when it can say where every number comes from.
 Nothing here has a date. Ideas, data sources and pull requests are welcome:
 open an issue to discuss one before starting, as
 [CONTRIBUTING.md](CONTRIBUTING.md) asks.
-
-## `@aeronautic/lights`
-
-Aircraft lighting, as the regulations specify it and as the eye sees it at
-night and at range.
-
-- **Navigation lights**: red to the left, green to the right, white astern,
-  each over the arcs and with the minimum intensities of the airworthiness
-  rules (CS/FAR 25.1385–1397), so a light seen from outside its arc fades the
-  way the real one does.
-- **Anti-collision beacons and strobes**: their flash rates (40 to 100 a
-  minute, CS/FAR 25.1401) and pulse shapes, with the eye's response to a short flash
-  (Blondel–Rey), so a strobe reads as bright as its effective intensity, not
-  its peak.
-- **Landing and taxi lights**: their beams as photometric cones, lighting the
-  ground and the fog, and the scattering through the day's air that makes a
-  beam visible.
-- **Glare and bloom** from the source's real luminance and the camera's
-  exposure, with the same atmosphere as the other packages, so a light dims
-  and reddens through haze as it should.
 
 ## `@aeronautic/countermeasures`
 

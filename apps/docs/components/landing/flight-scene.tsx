@@ -9,6 +9,7 @@ import { FlightProvider, useFlightStore } from "@aeronautic/core/react";
 import { Contrails, type ContrailsHandle } from "@aeronautic/contrails/react";
 import { humidity_over_water } from "@aeronautic/contrails/physics";
 import { ControlSurfaces } from "@aeronautic/controls/react";
+import { Lights, type LightsHandle } from "@aeronautic/lights/react";
 import { WingVapor, type WingVaporHandle } from "@aeronautic/wing-vapor/react";
 import { angle_of_attack_for_load } from "@aeronautic/wing-vapor/physics";
 import {
@@ -30,7 +31,12 @@ import {
 } from "three";
 import { WebGPURenderer } from "three/webgpu";
 import { airframe_only, Exhaust, useFighter } from "@/examples/fighter";
-import { DAY_EXPOSURE, Grade, Reflections } from "@/examples/stage";
+import {
+  BLACKBODY_2000K_CD_M2,
+  DAY_EXPOSURE,
+  Grade,
+  Reflections,
+} from "@/examples/stage";
 import { CAMERA_FAR_M } from "@/lib/camera";
 import { NO_SHADOWS } from "@/lib/no-shadows";
 import { AIR, cruise_mach, START_THROTTLE } from "./flight-plan";
@@ -40,7 +46,7 @@ import type { Keys, Levers } from "./pilot";
 // freely about its own axes but goes nowhere: the keys write a flight it only
 // seems to fly, its speed following the throttle and its g and rates the
 // stick, and everything on it reads that flight, the control surfaces, the
-// plumes, the vapor and the contrails
+// plumes, the vapor, the contrails and the lights
 
 // Where the sun is, for the skin and the vapor both
 const SUN: [number, number, number] = [5, 10, 5];
@@ -207,6 +213,12 @@ const DEG = Math.PI / 180;
 // Where the plumes and the vapor start; `SkyFade` takes them on from there
 const DAY_PROFILE = { exposure: SKIES.day.exposure };
 
+// The plumes' exposure is per 2000 K blackbody's radiance, the lights' per
+// cd/m²: the same camera, in the lights' units
+const lights_exposure = (plume_exposure: number) =>
+  plume_exposure / BLACKBODY_2000K_CD_M2;
+const DAY_LIGHTS_LOOK = { exposure: lights_exposure(SKIES.day.exposure) };
+
 // How the fake flies: what the gear, the flaps and the air brake cost off the
 // Mach number its throttle settles at, from `flight-plan`
 const DRAG_MACH = { gear: 0.1, flaps: 0.05, airbrake: 0.15 };
@@ -253,12 +265,35 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({ dusk, keys, levers }) => {
   const vapor = useRef<WingVaporHandle>(null);
   const batch = useRef<AfterburnerBatchHandle>(null);
   const trails = useRef<ContrailsHandle>(null);
+  const lights = useRef<LightsHandle>(null);
 
   // The model's nozzle exits: the trails start where they are
   const airframe = useMemo(
     () => ({ engines: [nodes.FX_Exhaust_L, nodes.FX_Exhaust_R] as Object3D[] }),
     [nodes],
   );
+
+  // Its lights on the anchors the model gives them. The landing and taxi
+  // lamps are on the nose leg, lit only with the gear down
+  const lamps = useMemo(() => {
+    const node = (name: string) => nodes[name] as Object3D;
+
+    return {
+      navigation: [
+        { side: "left", at: node("LIGHT_Nav_L_Anchor") },
+        { side: "right", at: node("LIGHT_Nav_R_Anchor") },
+        { side: "aft", at: node("LIGHT_Nav_Tail_C_Anchor") },
+      ],
+      anticollision: [
+        { at: node("LIGHT_Strobe_Top_C_Anchor"), color: "white" },
+        { at: node("LIGHT_Strobe_Bottom_C_Anchor"), color: "red", phaseS: 0.5 },
+      ],
+      beams: [
+        { at: node("LIGHT_Landing_C_Anchor"), lamp: "landing", onGear: true },
+        { at: node("LIGHT_Taxi_C_Anchor"), lamp: "taxi", onGear: true },
+      ],
+    } as const;
+  }, [nodes]);
 
   // What the fake carries from frame to frame
   const state = useMemo(
@@ -292,9 +327,10 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({ dusk, keys, levers }) => {
         skyIntensity: mix(day.skyIntensity, dark.skyIntensity, night),
       };
 
-      batch.current?.updateProfile({
-        exposure: mix(SKIES.day.exposure, SKIES.night.exposure, night),
-      });
+      const exposure = mix(SKIES.day.exposure, SKIES.night.exposure, night);
+
+      batch.current?.updateProfile({ exposure });
+      lights.current?.updateLook({ exposure: lights_exposure(exposure) });
       vapor.current?.updateLook(look);
       trails.current?.updateLook(look);
     }
@@ -395,6 +431,8 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({ dusk, keys, levers }) => {
           />
           {/* Its flight and its air are the shared flight's */}
           <Contrails ref={trails} airframe={airframe} look={SKIES.day.look} />
+          {/* Its gear and its altitude are the shared flight's too */}
+          <Lights ref={lights} airframe={lamps} look={DAY_LIGHTS_LOOK} />
         </group>
       </group>
     </AfterburnerBatch>

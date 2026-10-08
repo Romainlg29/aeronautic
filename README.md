@@ -14,6 +14,7 @@ the day: the look comes out of them.
 | [`@aeronautic/afterburner`](packages/afterburner#readme) | [![npm](https://img.shields.io/npm/v/@aeronautic/afterburner)](https://www.npmjs.com/package/@aeronautic/afterburner) | Jet afterburners and rocket exhaust plumes                           |
 | [`@aeronautic/wing-vapor`](packages/wing-vapor#readme)   | [![npm](https://img.shields.io/npm/v/@aeronautic/wing-vapor)](https://www.npmjs.com/package/@aeronautic/wing-vapor)   | Vortex trails, shock vapor and the vapor cone a wing pulls in air    |
 | [`@aeronautic/contrails`](packages/contrails#readme)     | [![npm](https://img.shields.io/npm/v/@aeronautic/contrails)](https://www.npmjs.com/package/@aeronautic/contrails)     | Engine contrails that form, sink, spread and persist as the day says |
+| [`@aeronautic/lights`](packages/lights#readme)           | [![npm](https://img.shields.io/npm/v/@aeronautic/lights)](https://www.npmjs.com/package/@aeronautic/lights)           | Navigation, anti-collision, landing and taxi lights, to the rule     |
 | [`@aeronautic/controls`](packages/controls#readme)       | [![npm](https://img.shields.io/npm/v/@aeronautic/controls)](https://www.npmjs.com/package/@aeronautic/controls)       | Control surfaces, gear, nozzles and thrust vectoring on a model      |
 | [`@aeronautic/core`](packages/core#readme)               | [![npm](https://img.shields.io/npm/v/@aeronautic/core)](https://www.npmjs.com/package/@aeronautic/core)               | The shared flight, the atmosphere and the depth capture              |
 
@@ -144,11 +145,53 @@ export const Jet = () => (
 · [README](packages/contrails/README.md)
 · [How they form](https://romainlg29.github.io/aeronautic/docs/contrails/how-it-works/forming/)
 
+## Lights
+
+The **lights** the airworthiness rules give an aircraft, as the eye sees them
+at night and at range. The navigation lights over their arcs and with their
+intensities (**CS/FAR 25.1385–1397**), the anti-collision lights flashing at
+their **Blondel–Rey** effective intensity, the landing and taxi beams lighting
+the ground and showing in the air, and the **glare** the eye spreads round
+each, dimmed and reddened by the day's haze.
+
+```bash
+pnpm add @aeronautic/lights @aeronautic/core three@~0.186 @react-three/fiber
+```
+
+Put `<Lights>` at the aircraft's reference point, with its lights:
+
+```tsx
+import { Lights } from "@aeronautic/lights/react";
+
+export const Jet = () => (
+  <group>
+    <JetModel />
+    <Lights
+      airframe={{
+        navigation: [
+          { side: "left", at: [-6.8, -0.27, 4.46] },
+          { side: "right", at: [6.8, -0.27, 4.46] },
+          { side: "aft", at: [0, 0.03, 6.71] },
+        ],
+        anticollision: [{ at: [0, 0.47, 3.7], color: "white" }],
+        beams: [{ at: [0, -1.3, -6.2], lamp: "taxi" }],
+      }}
+      air={{ visibilityM: 4000 }}
+    />
+  </group>
+);
+```
+
+[Lights docs](https://romainlg29.github.io/aeronautic/docs/lights/start/introduction/)
+· [README](packages/lights/README.md)
+· [How it works](https://romainlg29.github.io/aeronautic/docs/lights/how-it-works/the-rule/)
+
 ## The repository
 
 - [`packages/afterburner`](packages/afterburner): `@aeronautic/afterburner`.
 - [`packages/wing-vapor`](packages/wing-vapor): `@aeronautic/wing-vapor`.
 - [`packages/contrails`](packages/contrails): `@aeronautic/contrails`.
+- [`packages/lights`](packages/lights): `@aeronautic/lights`.
 - [`packages/controls`](packages/controls): `@aeronautic/controls`.
 - [`packages/core`](packages/core): `@aeronautic/core`, which the others
   depend on.
@@ -220,7 +263,7 @@ as [SECURITY.md](SECURITY.md) describes.
 
 The docs deploy on every push to `main`. Releases to npm are
 the maintainer's, each package from a tag naming it, `core-v*`, `afterburner-v*`,
-`wing-vapor-v*`, `contrails-v*` or `controls-v*` (see [RELEASING.md](RELEASING.md)).
+`wing-vapor-v*`, `contrails-v*`, `lights-v*` or `controls-v*` (see [RELEASING.md](RELEASING.md)).
 
 What's planned next is in [ROADMAP.md](ROADMAP.md).
 

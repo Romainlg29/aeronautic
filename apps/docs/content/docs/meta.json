@@ -1,3 +1,10 @@
 {
-  "pages": ["afterburner", "wing-vapor", "contrails", "controls", "core"]
+  "pages": [
+    "afterburner",
+    "wing-vapor",
+    "contrails",
+    "lights",
+    "controls",
+    "core"
+  ]
 }
