@@ -10,14 +10,15 @@ ice.
 
 ## `ContrailAirframe`
 
-| field           | default                               | what it is                                                                                                                         |
-| --------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `massKg`        | `20_000`                              | Its mass. With the load factor, the lift the wake carries.                                                                         |
-| `spanM`         | `14`                                  | Tip to tip. The vortices trail π/4 of it apart.                                                                                    |
-| `liftToDrag`    | `9`                                   | Lift over drag at cruise, at 1 g. The thrust is the drag: about 18 for an airliner, 9 for a fighter.                               |
-| `fuelPerThrust` | `22.7e-6`                             | Fuel per newton of thrust per second, kg/(N s): 15 mg for a modern fan at cruise, 23 for a fighter's.                              |
-| `maxThrustN`    | `117_680`                             | Each engine's most thrust, sea-level static with reheat, newtons: 12 tonnes-force. It lapses with altitude and caps a hard pull's. |
-| `engines`       | `[[-0.75, 0.05, 7], [0.75, 0.05, 7]]` | Where each exhaust leaves: a position in the group's frame, or a node of the model.                                                |
+| field           | default                               | what it is                                                                                                                       |
+| --------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `massKg`        | `20_000`                              | Its mass. With the load factor, the lift the wake carries.                                                                       |
+| `spanM`         | `14`                                  | Tip to tip. The vortices trail π/4 of it apart.                                                                                  |
+| `liftToDrag`    | `9`                                   | Lift over drag at cruise, at 1 g. The thrust is the drag: about 18 for an airliner, 9 for a fighter.                             |
+| `fuelPerThrust` | `22.7e-6`                             | Fuel per newton of thrust per second, kg/(N s): 15 mg for a modern fan at cruise, 23 for a fighter's.                            |
+| `maxThrustN`    | `117_680`                             | Each engine's most thrust, sea-level static with full reheat, newtons: 12 tonnes-force. It lapses with altitude.                 |
+| `dryThrustN`    | `70_608`                              | And dry, at military power: 0.6 of it. It caps a hard pull's until the burner lights. `maxThrustN` for an engine with no reheat. |
+| `engines`       | `[[-0.75, 0.05, 7], [0.75, 0.05, 7]]` | Where each exhaust leaves: a position in the group's frame, or a node of the model.                                              |
 
 ## `ContrailFuel`
 
@@ -37,6 +38,7 @@ ice.
 | `angleOfAttackRad` | `0`     | Nose above the flight path. The trails stream along the path.    |
 | `sideslipRad`      | `0`     | The oncoming air from the right, positive, as a `Flight` has it. |
 | `loadFactor`       | `1`     | Lift over weight, in g.                                          |
+| `throttle`         | `1`     | 0 idle, 1 military power, 1.1 full reheat, as a `Flight` has it. |
 
 ## `ContrailAir`
 

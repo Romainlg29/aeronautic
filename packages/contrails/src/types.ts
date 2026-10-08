@@ -9,7 +9,9 @@ import type { ColorRepresentation, Object3D } from "three";
 // `ContrailFuel` is what it burns: how much water and heat a kilogram of it
 // gives, and how many crystals its soot makes
 //
-// `ContrailFlight` is what it is doing, and `ContrailAir` the day. Whether a
+// `ContrailFlight` is what it is doing, the throttle with it: a lit
+// afterburner burns several times the fuel, and lays its trail with all of
+// that fuel's water. `ContrailAir` is the day. Whether a
 // contrail forms at all is in the air's temperature; whether it lasts is in
 // its humidity over ice
 //
@@ -48,11 +50,17 @@ export type ContrailAirframe = {
   fuelPerThrust: number;
 
   /**
-   * Each engine's most thrust, sea-level static, in newtons: with reheat if
-   * it has it. It lapses with the air's pressure at altitude, and caps the
-   * thrust a hard pull asks for
+   * Each engine's most thrust, sea-level static, in newtons: with full reheat
+   * if it has it. It lapses with the air's pressure at altitude
    */
   maxThrustN: number;
+
+  /**
+   * Each engine's most thrust dry, at military power, sea-level static, in
+   * newtons. It caps the thrust a hard pull asks for until the burner lights.
+   * As much as `maxThrustN` for an engine with no reheat to light
+   */
+  dryThrustN: number;
 
   /**
    * Where each engine's exhaust leaves, in the component's frame: forward
@@ -121,6 +129,16 @@ export type ContrailFlight = {
 
   /** Lift over weight, in g */
   loadFactor: number;
+
+  /**
+   * How hard the engines run, as a `Flight` and the afterburner read it: 0 at
+   * idle, 1 at military power, on to 1.1 at full reheat
+   *
+   * Dry, the engines hold the flight, their thrust the drag. Past the detent
+   * the burner lights as the afterburner's does, and its thrust is what the
+   * burner makes, its fuel what the burner burns
+   */
+  throttle: number;
 };
 
 /**
@@ -193,6 +211,10 @@ export const default_contrail_airframe = (): ContrailAirframe => ({
   // fighter's engine, an F110's or an F100's class
   maxThrustN: 117_680,
 
+  // And 0.6 of it dry, as Mattingly's lapse has a low-bypass engine's
+  // military power: an F110-GE-129's 17 000 lbf against its 29 000 is 0.59
+  dryThrustN: 70_608,
+
   // The model's FX_Exhaust_L and FX_Exhaust_R
   engines: [
     [-0.75, 0.05, 7],
@@ -201,7 +223,7 @@ export const default_contrail_airframe = (): ContrailAirframe => ({
 });
 
 /**
- * Cruising level.
+ * Cruising level, dry.
  * @returns A fresh flight state
  */
 export const default_contrail_flight = (): ContrailFlight => ({
@@ -209,6 +231,7 @@ export const default_contrail_flight = (): ContrailFlight => ({
   angleOfAttackRad: 0,
   sideslipRad: 0,
   loadFactor: 1,
+  throttle: 1,
 });
 
 /**

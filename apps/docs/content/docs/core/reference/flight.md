@@ -46,6 +46,21 @@ What can be written. Defaults are `default_flight_input()`'s.
 | `temperatureOffsetK` | 0       | K        | how much warmer than the standard day        |
 | `relativeHumidity`   | 0.6     | 0 to 1   |                                              |
 
+## The throttle
+
+The throttle's travel, and how much reheat it lights, shared by every effect
+that reads it: the afterburner draws the burner from it and the contrails burn
+its fuel.
+
+| export                            | what it is                                                                                |
+| --------------------------------- | ----------------------------------------------------------------------------------------- |
+| `THROTTLE_MAX`                    | 1.1: full reheat, the end of the travel                                                   |
+| `REHEAT_DETENT`                   | 1: military power, where a jet's burner lights                                            |
+| `reheat_share(throttle, detent?)` | how much of the burner is lit, 0 dry to 1. A detent at or under 0 is a rocket, always lit |
+| `REHEAT_FIRST_ZONE`               | 0.35: how much lights at once past the detent, the burner's first zone                    |
+| `REHEAT_LIGHT_OFF`                | 0.03: over how much throttle that first zone lights                                       |
+| `clamp_throttle(throttle)`        | the throttle held in its travel, anything not finite read as idle                         |
+
 ## `FlightValues`
 
 `FlightInput`, and what follows from it:

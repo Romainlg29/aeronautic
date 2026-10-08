@@ -67,22 +67,72 @@ describe("Contrails", () => {
     );
   });
 
-  it("burns no more in a hard pull than its engines have up there", () => {
+  it("burns no more in a hard pull than its engines make dry up there", () => {
     const level = new Contrails().state.fuelPerMetreKg;
     const pulled = new Contrails({ flight: { loadFactor: 9 } }).state;
 
-    // Both engines' 118 kN, 0.36 of it at 11 km and Mach 0.85, over the
-    // 21.8 kN it takes level: about 3.9 times
-    expect(pulled.fuelPerMetreKg / level).toBeGreaterThan(3.5);
-    expect(pulled.fuelPerMetreKg / level).toBeLessThan(4.2);
+    // Both engines' 70.6 kN dry, 0.36 of it at 11 km and Mach 0.85, over the
+    // 21.8 kN it takes level: about 2.3 times
+    expect(pulled.fuelPerMetreKg / level).toBeGreaterThan(2.1);
+    expect(pulled.fuelPerMetreKg / level).toBeLessThan(2.5);
 
     // Without the cap the drag polar would ask for (3 + 81) / 4 = 21 times
     const unbounded = new Contrails({
-      airframe: { maxThrustN: Infinity },
+      airframe: { maxThrustN: Infinity, dryThrustN: Infinity },
       flight: { loadFactor: 9 },
     }).state;
 
     expect(unbounded.fuelPerMetreKg / level).toBeCloseTo(21, 6);
+  });
+
+  it("burns the reheat's fuel, and lays that fuel's water", () => {
+    const dry = new Contrails().state;
+    const lit = new Contrails({ flight: { throttle: 1.1 } }).state;
+
+    expect(dry.reheat).toBe(0);
+    expect(lit.reheat).toBeCloseTo(1, 9);
+
+    // Both engines' 118 kN at full reheat, 0.36 of it up here, at 1.58 times
+    // the dry consumption: about six times the fuel of cruise
+    expect(lit.thrustN).toBeCloseTo(2 * 117_680 * 0.358, -3);
+    expect(lit.fuelPerMetreKg / dry.fuelPerMetreKg).toBeGreaterThan(5.5);
+    expect(lit.fuelPerMetreKg / dry.fuelPerMetreKg).toBeLessThan(6.5);
+
+    // Less of its heat pushes, so the mixing line is shallower: a colder
+    // threshold, and a plume that takes longer to cool to it
+    expect(lit.efficiency).toBeCloseTo(0.16, 2);
+    expect(lit.criterion.thresholdK).toBeLessThan(dry.criterion.thresholdK);
+    expect(lit.formation.dilution).toBeGreaterThan(dry.formation.dilution);
+  });
+
+  it("lights the burner on a core already at military power", () => {
+    const dry = new Contrails({ flight: { throttle: 1 } }).state;
+    const just = new Contrails({ flight: { throttle: 1.001 } }).state;
+    const lit = new Contrails({ flight: { throttle: 1.03 } }).state;
+
+    // Past the detent it is lit before it is staged
+    expect(just.thrustN).toBeGreaterThan(dry.thrustN);
+    expect(lit.thrustN).toBeGreaterThan(2 * 70_608 * 0.358);
+
+    let last = 0;
+
+    for (let throttle = 1; throttle <= 1.1; throttle += 0.005) {
+      const state = new Contrails({ flight: { throttle } }).state;
+
+      expect(state.fuelPerMetreKg).toBeGreaterThanOrEqual(last);
+      last = state.fuelPerMetreKg;
+    }
+  });
+
+  it("has no burner to light on an engine without reheat", () => {
+    const dry = new Contrails().state;
+    const pushed = new Contrails({
+      airframe: { dryThrustN: 117_680 },
+      flight: { throttle: 1.1 },
+    }).state;
+
+    expect(pushed.reheat).toBe(0);
+    expect(pushed.fuelPerMetreKg).toBeCloseTo(dry.fuelPerMetreKg, 12);
   });
 
   it("forms nothing low down on a mild day", () => {
@@ -97,6 +147,7 @@ describe("Contrails", () => {
     const flight = new Flight({
       airspeedMPerS: 220,
       loadFactor: 2,
+      throttle: 1.1,
       altitudeM: 9500,
       relativeHumidity: 0.4,
     });
@@ -107,6 +158,8 @@ describe("Contrails", () => {
 
     expect(trails.flight.airspeedMPerS).toBe(220);
     expect(trails.flight.loadFactor).toBe(2);
+    expect(trails.flight.throttle).toBe(1.1);
+    expect(trails.state.reheat).toBeCloseTo(1, 9);
     expect(trails.air.altitudeM).toBe(9500);
     expect(trails.air.relativeHumidity).toBe(0.4);
   });

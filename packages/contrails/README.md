@@ -22,6 +22,8 @@ Each engine trails its own:
   with the vortex pair until the stratification stops it.
 - **Spreading** at the rate measured behind airliners at cruise, wider and
   thinner as it ages.
+- **Thicker in reheat**, laid with all the fuel the lit burner burns: six
+  times cruise's at full reheat, where less of its heat pushes.
 - **Lasting** seconds in dry air, or for as long as it is drawn in air
   supersaturated over ice, where it grows.
 
@@ -98,12 +100,13 @@ from `@aeronautic/contrails/physics` turn one into the other.
 
 Each is a physical quantity in SI units:
 
-- **`airframe`**: `massKg`, `spanM`, `liftToDrag`, `fuelPerThrust` and
-  `engines`. Thrust is the drag, so the mass and the lift-to-drag set the fuel
-  burnt; the consumption sets the engines' efficiency; the span sets the wake.
+- **`airframe`**: `massKg`, `spanM`, `liftToDrag`, `fuelPerThrust`,
+  `maxThrustN`, `dryThrustN` and `engines`. Dry, thrust is the drag, so the
+  mass and the lift-to-drag set the fuel burnt; the consumption sets the
+  engines' efficiency; the span sets the wake.
 - **`fuel`**: `"kerosene"`, `"hydrogen"`, or `{ waterIndex, heatJPerKg, iceIndex }`.
 - **`flight`**: `airspeedMPerS`, `angleOfAttackRad`, `sideslipRad`,
-  `loadFactor`.
+  `loadFactor`, `throttle`: 0 idle, 1 military power, 1.1 full reheat.
 - **`air`**: `altitudeM`, `temperatureOffsetK`, `relativeHumidity`.
 - **`look`**: the sun and the sky, and the crystals' anisotropy.
 
@@ -117,6 +120,12 @@ forms and persists.
   contrail forms if it crosses water saturation: the Schmidt–Appleman
   criterion (Schumann, 1996), solved on Murphy and Koop's saturation curves.
   The trail starts at the dilution where the plume first saturates.
+- **The engines.** Dry, the thrust is the drag, capped by what the engines
+  make at military power, lapsing with altitude by Mattingly's law. Past the
+  detent the burner lights as the afterburner's does, on a core at military
+  power, and burns (1.6 + 0.27 M) / (0.9 + 0.30 M) times the fuel per newton
+  (Mattingly, Heiser and Pratt, 2002). The efficiency is the thrust's power
+  over the fuel's: a quarter dry, a sixth at full reheat.
 - **The plume.** The mass of air a kilogram of fuel's exhaust has mixed with
   grows as 7000 t^0.8 (Schumann et al., 1998). From it come the plume's
   temperature, its width, and its ice, held at saturation over ice and shared
@@ -136,6 +145,10 @@ forms and persists.
 - The part of the exhaust left behind at flight level as the wake sinks, and
   the wake's break-up after a few minutes.
 - Wind shear, which spreads an old persistent trail into a sheet.
+- A trail laid in reheat is drawn with the plume's formation and efficiency
+  of now, its fuel per metre of then: what the burner laid stays as thick,
+  but forms where today's exhaust would. And the dilution is the one measured
+  behind airliners at cruise, not a reheat jet's own.
 - Contrails from the wing's own lift, the aerodynamic contrails: those are
   [`@aeronautic/wing-vapor`](https://www.npmjs.com/package/@aeronautic/wing-vapor)'s.
 - The trails don't shadow the aircraft or each other.

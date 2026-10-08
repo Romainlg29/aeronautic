@@ -68,7 +68,8 @@ const { forms, thresholdK } = schmidt_appleman(
 
 ## The engines
 
-| export                  | what it gives                                                                                   |
-| ----------------------- | ----------------------------------------------------------------------------------------------- |
-| `thrust_lapse(p, T, M)` | The share of its sea-level static thrust an engine has at full power: 0.36 at 11 km, Mach 0.85. |
-| `THROTTLE_RATIO`        | 1: the inlet's total temperature the lapse breaks at (Mattingly, Heiser and Pratt, eq. 2.54).   |
+| export                          | what it gives                                                                                                                |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `thrust_lapse(p, T, M, power?)` | The share of its sea-level static thrust an engine has at `"maximum"` power, or `"military"`, dry: 0.36 at 11 km, Mach 0.85. |
+| `THROTTLE_RATIO`                | 1: the inlet's total temperature the lapse breaks at (Mattingly, Heiser and Pratt, eq. 2.54).                                |
+| `reheat_consumption(M)`         | Full reheat's fuel per newton over military power's: (1.6 + 0.27 M) / (0.9 + 0.30 M), 1.58 at Mach 0.85 (ibid., eq. 3.55).   |

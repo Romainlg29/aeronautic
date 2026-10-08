@@ -39,15 +39,24 @@ agrees with Schumann's fit to within a hundredth of a degree.
 
 The more of the fuel's heat pushes the aircraft, the less is left to warm the
 plume, the steeper the line, and the warmer the air it trails in. It follows
-from the airframe: in level flight the thrust is the drag, and
+from the airframe: it is the thrust's power over the fuel's,
 
 ```
-η = V / (TSFC · Q)
+η = V · F / (ṁ · Q)
 ```
 
-for an engine burning `TSFC` kilograms of fuel per newton per second at
-airspeed `V`. A fighter's low-bypass engine is about 25 % efficient at
-cruise, a modern fan about a third: the airliner's threshold is a degree warmer.
+for engines making `F` newtons on `ṁ` kilograms of fuel a second at airspeed
+`V`. Dry, `ṁ = TSFC · F` and it is `V / (TSFC · Q)`: a fighter's low-bypass
+engine is about 25 % efficient at cruise, a modern fan about a third, and the
+airliner's threshold is a degree warmer.
+
+Reheat burns its fuel in the exhaust, at the pressure the turbine left it at,
+and turns far less of it into thrust: each newton costs 1.58 times the dry
+engine's fuel at Mach 0.85 (Mattingly, Heiser and Pratt, 2002, eq. 3.55). The
+fighter at full reheat is 16 % efficient, its mixing line a tenth shallower,
+and its threshold 0.9 °C colder. It trails in a little less of the sky, but
+with six times the water where it does, as
+[Airframes](../../guides/airframes/#reheat) shows.
 
 ## Where along the plume
 

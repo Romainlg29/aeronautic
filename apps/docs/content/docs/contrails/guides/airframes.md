@@ -1,6 +1,6 @@
 ---
 title: Airframes
-description: "A fighter, an airliner, or yours: the five numbers that set its trails."
+description: "A fighter, an airliner, or yours: the numbers that set its trails, and the burner."
 ---
 
 `airframe` is what the aircraft is, and everything about its trails that is
@@ -13,10 +13,12 @@ not the day follows from it:
   that: a quarter less unloaded, the same pushed as pulled.
 - **`fuelPerThrust`** turns that thrust into fuel burnt, and sets the
   engines' efficiency, how much of the fuel's heat pushes the aircraft.
-- **`maxThrustN`** caps it: each engine's sea-level static thrust, in
-  newtons, lapsing with the air's pressure at altitude, to 0.36 of it at
-  11 km and Mach 0.85. A 9 g pull asks for 21 times the level thrust; the
-  default fighter's engines have about 3.9.
+- **`dryThrustN`** caps it: each engine's sea-level static thrust dry, at
+  military power, in newtons, lapsing with the air's pressure at altitude, to
+  0.36 of it at 11 km and Mach 0.85. A 9 g pull asks for 21 times the level
+  thrust; the default fighter's engines have about 2.3 dry.
+- **`maxThrustN`** is the same with full reheat, what the burner adds to it.
+  For an engine with no reheat, give both the same.
 - **`spanM`** spaces the wake's vortex pair, which carries the trails down.
 - **`engines`** are where the trails start, one each.
 
@@ -37,8 +39,9 @@ the vortices on either side.
     liftToDrag: 17,
     // A high-bypass fan at cruise
     fuelPerThrust: 16e-6,
-    // A CFM56-7B's 27 300 lbf, in newtons
+    // A CFM56-7B's 27 300 lbf, in newtons, and no reheat
     maxThrustN: 121_400,
+    dryThrustN: 121_400,
     engines: [
       [-5.75, -1.5, 2],
       [5.75, -1.5, 2],
@@ -61,6 +64,39 @@ sink with the wake about a hundred metres.
 | forms behind             | 36 m     | 26 m     |
 | width at 1 min, σ        | 9.0 m    | 10.7 m   |
 | wake sinks, at most      | 89 m     | 107 m    |
+
+## Reheat
+
+`flight.throttle` runs as a `Flight`'s does and the afterburner reads it: 0 at
+idle, 1 at military power, on to 1.1 at full reheat. Dry, the engines hold the
+flight, their thrust the drag, whatever the throttle. Past the detent the
+burner lights as the afterburner's does, its first zone with a thump and the
+rest staging in to the stop, on a core pushed to military power. Its thrust is
+then what the burner makes, and its fuel what the burner burns, at reheat's
+dearer consumption.
+
+```tsx
+<Contrails flight={{ airspeedMPerS: 250, throttle: 1.1 }} />
+```
+
+Read from a shared `Flight`, the trail lights with the plume: the throttle
+that lights the afterburner lays its fuel's water too.
+
+| the fighter at 11 km, Mach 0.85 | dry, at cruise | full reheat |
+| ------------------------------- | -------------- | ----------- |
+| thrust, both engines            | 21.8 kN        | 84.1 kN     |
+| fuel per metre, each            | 0.99 g         | 6.05 g      |
+| efficiency                      | 25 %           | 16 %        |
+| threshold                       | -51.5 °C       | -52.4 °C    |
+| forms behind                    | 36 m           | 47 m        |
+| width at 1 min, σ               | 9.0 m          | 22.1 m      |
+| optical depth across, at 1 min  | 0.22           | 0.54        |
+
+Six times the fuel lays six times the water and the soot to freeze it on, in
+a plume that mixed with six times the air: two and a half times as wide and as
+dense. Less of the heat pushes, so the threshold is a degree colder and the
+plume takes longer to cool to it. What is laid while the burner is lit stays
+as thick once it goes out, behind the aircraft where it was flown.
 
 ## Engines that move
 
