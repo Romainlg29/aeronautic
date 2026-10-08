@@ -40,6 +40,15 @@ const FLIGHTS = {
 
 type FlightName = keyof typeof FLIGHTS;
 
+// The throttle, as a `Flight` and the afterburner read it: dry, the engines
+// hold the flight; at the stop the burner burns six times the fuel
+const ENGINES = {
+  dry: { label: "Dry", throttle: 1 },
+  reheat: { label: "Full reheat", throttle: 1.1 },
+} as const;
+
+type EnginesName = keyof typeof ENGINES;
+
 const FUELS = {
   kerosene: "Kerosene",
   hydrogen: "Hydrogen",
@@ -49,6 +58,7 @@ type FuelName = keyof typeof FUELS;
 
 export type Settings = {
   flight: FlightName;
+  engines: EnginesName;
   altitude_m: number;
   ice_humidity: number;
   fuel: FuelName;
@@ -57,6 +67,7 @@ export type Settings = {
 // Cruise at the tropopause, in air a little supersaturated over ice
 export const START_SETTINGS: Settings = {
   flight: "cruise",
+  engines: "dry",
   altitude_m: 11_000,
   ice_humidity: 1.12,
   fuel: "kerosene",
@@ -133,6 +144,7 @@ export const ContrailsFighter: FC<{
       : `${(state.air.temperatureK - 273.15).toFixed(1)} °C, under the ` +
         `${(state.criterion.thresholdK - 273.15).toFixed(1)} °C threshold · ` +
         `forms ${behind_m.toFixed(0)} m behind · ` +
+        `${(state.fuelPerMetreKg * 1000).toFixed(1)} g of fuel a metre · ` +
         `${(state.iceHumidity * 100).toFixed(0)} % over ice: ` +
         (state.persistent ? "it persists" : "it fades");
   });
@@ -149,7 +161,11 @@ export const ContrailsFighter: FC<{
         <Contrails
           ref={trails}
           airframe={airframe}
-          flight={{ airspeedMPerS: AIRSPEED_M_S, loadFactor: load }}
+          flight={{
+            airspeedMPerS: AIRSPEED_M_S,
+            loadFactor: load,
+            throttle: ENGINES[settings.engines].throttle,
+          }}
           air={{
             altitudeM: settings.altitude_m,
             relativeHumidity: relative_humidity,
@@ -164,7 +180,7 @@ export const ContrailsFighter: FC<{
 };
 
 /**
- * The flight, the fuel, the altitude and the humidity over ice.
+ * The flight, the engines, the fuel, the altitude and the humidity over ice.
  * @param props The settings, how to change them, and any controls to add
  * @returns The controls
  */
@@ -184,6 +200,21 @@ export const ContrailsControls: FC<{
         }
       >
         {Object.entries(FLIGHTS).map(([key, value]) => (
+          <option key={key} value={key}>
+            {value.label}
+          </option>
+        ))}
+      </select>
+    </label>
+    <label>
+      engines
+      <select
+        value={settings.engines}
+        onChange={(event) =>
+          change({ engines: event.target.value as EnginesName })
+        }
+      >
+        {Object.entries(ENGINES).map(([key, value]) => (
           <option key={key} value={key}>
             {value.label}
           </option>

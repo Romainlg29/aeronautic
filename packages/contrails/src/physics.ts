@@ -35,7 +35,12 @@ export {
   wake_descent,
   type Wake,
 } from "./wake";
-export { THROTTLE_RATIO, thrust_lapse } from "./thrust";
+export {
+  reheat_consumption,
+  THROTTLE_RATIO,
+  thrust_lapse,
+  type EnginePower,
+} from "./thrust";
 export {
   TRAIL_POINTS_PER_EFOLD,
   TRAIL_MIN_AGE_S,

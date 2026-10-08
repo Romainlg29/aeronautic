@@ -16,6 +16,8 @@ import {
   type Flight,
   moist_air,
   type MoistAir,
+  REHEAT_FIRST_ZONE,
+  reheat_share,
   type SceneBackdrop,
   write_scene_fog,
 } from "@aeronautic/core";
@@ -63,7 +65,7 @@ import {
   type ContrailQualityName,
 } from "./types";
 import { fit_puff_levels, write_puffs } from "./puffs";
-import { thrust_lapse } from "./thrust";
+import { reheat_consumption, thrust_lapse } from "./thrust";
 import { buoyancy_frequency, wake, type Wake } from "./wake";
 
 // One aircraft's contrails, drawn as one mesh in the scene
@@ -146,7 +148,7 @@ export type ContrailsOptions = {
 
   /**
    * A shared flight to read the airspeed, the angles, the load factor, the
-   * altitude and the day from, every frame. What it gives wins over `flight`
+   * throttle, the altitude and the day from, every frame. What it gives wins over `flight`
    * and `air`
    */
   source?: Flight | null;
@@ -170,6 +172,12 @@ export type ContrailsState = {
 
   /** How much of the fuel's heat pushes the aircraft */
   efficiency: number;
+
+  /** How much of the burner is lit, as the afterburner's: 0 dry to 1 */
+  reheat: number;
+
+  /** The engines' thrust, all of them, newtons */
+  thrustN: number;
 
   /** Fuel burnt per metre, each engine, kilograms */
   fuelPerMetreKg: number;
@@ -521,28 +529,55 @@ export class Contrails {
 
     const speed = Math.max(flight.airspeedMPerS, 0);
 
-    // Thrust is the drag. A jet cruises for range where its drag polar's
-    // parasite drag is three times the drag due to lift, C_D0 = 3 k C_L², so
-    // at the same speed and n g the drag is D₁ (3 + n²) / 4: a quarter less
-    // unloaded, pushed or pulled the same either way, and with the g's
-    // square in a hard pull. The engines' share of the fuel's heat that
-    // pushes is the thrust's power over the fuel's
+    // Dry, the thrust is the drag. A jet cruises for range where its drag
+    // polar's parasite drag is three times the drag due to lift,
+    // C_D0 = 3 k C_L², so at the same speed and n g the drag is D₁ (3 + n²) / 4:
+    // a quarter less unloaded, pushed or pulled the same either way, and with
+    // the g's square in a hard pull
     const level_drag_n =
       (airframe.massKg * G0) / Math.max(airframe.liftToDrag, 1);
     const drag_n = (level_drag_n * (3 + flight.loadFactor ** 2)) / 4;
     const engines = Math.max(airframe.engines.length, 1);
 
-    // But no more than the engines have at this height and speed: past it
-    // the aircraft slows, burning no more
+    // But no more than the engines make dry at this height and speed: past
+    // it the aircraft slows, burning no more
+    const mach = speed / air.soundMPerS;
     const most_n =
       Math.max(airframe.maxThrustN, 0) *
       engines *
-      thrust_lapse(air.pressurePa, air.temperatureK, speed / air.soundMPerS);
-    const thrust_n = Math.min(drag_n, most_n);
-    const fuel_rate = thrust_n * Math.max(airframe.fuelPerThrust, 0);
+      thrust_lapse(air.pressurePa, air.temperatureK, mach);
+    const dry_most_n = Math.min(
+      Math.max(airframe.dryThrustN, 0) *
+        engines *
+        thrust_lapse(air.pressurePa, air.temperatureK, mach, "military"),
+      most_n,
+    );
+
+    // Lit, the core runs at military power, pushed there as the throttle
+    // passes the detent, and the burner adds what it is staged to at the
+    // dearer consumption reheat has: its fuel follows its thrust, from
+    // military power's to full reheat's
+    const consumption = Math.max(airframe.fuelPerThrust, 0);
+    const reheat = most_n > dry_most_n ? reheat_share(flight.throttle) : 0;
+    const light_off = Math.min(reheat / REHEAT_FIRST_ZONE, 1);
+    const held_n = Math.min(drag_n, dry_most_n);
+    const core_n =
+      light_off > 0 ? held_n + (dry_most_n - held_n) * light_off : held_n;
+    const burner_n = reheat > 0 ? (most_n - dry_most_n) * reheat : 0;
+    const burner_fuel =
+      reheat > 0
+        ? (most_n * reheat_consumption(mach) - dry_most_n) *
+          consumption *
+          reheat
+        : 0;
+    const thrust_n = core_n + burner_n;
+    const fuel_rate = core_n * consumption + burner_fuel;
+
+    // The engines' share of the fuel's heat that pushes is the thrust's power
+    // over the fuel's: a quarter dry, a sixth at full reheat
     const efficiency = Math.min(
       Math.max(
-        speed / (Math.max(airframe.fuelPerThrust, 1e-9) * fuel.heatJPerKg),
+        (speed * thrust_n) / Math.max(fuel_rate * fuel.heatJPerKg, 1e-9),
         0,
       ),
       0.9,
@@ -587,6 +622,8 @@ export class Contrails {
         criterion,
         formation,
         efficiency,
+        reheat,
+        thrustN: thrust_n,
         fuelPerMetreKg: fuel_per_metre,
         wake: wake_now,
         visible:
@@ -699,6 +736,7 @@ export class Contrails {
     flight.angleOfAttackRad = values.angleOfAttackRad;
     flight.sideslipRad = values.sideslipRad;
     flight.loadFactor = values.loadFactor;
+    flight.throttle = values.throttle;
 
     air.altitudeM =
       Math.round(values.altitudeM / SOURCE_ALTITUDE_STEP_M) *

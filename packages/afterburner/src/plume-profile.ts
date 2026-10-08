@@ -1,3 +1,10 @@
+import {
+  clamp_throttle,
+  REHEAT_FIRST_ZONE,
+  REHEAT_LIGHT_OFF,
+  reheat_share,
+  THROTTLE_MAX,
+} from "@aeronautic/core";
 import { atmosphere } from "./atmosphere";
 import { nozzle_outline_fit } from "./nozzle-outline";
 import type { AfterburnerParams, AfterburnerProfile } from "./types";
@@ -134,26 +141,12 @@ const smoothstep = (low: number, high: number, value: number): number => {
   return t * t * (3 - 2 * t);
 };
 
-// The throttle's travel. Zero is idle and one is military power, the most the
-// dry engine makes; past the detent is reheat, full at the end of the travel
-export const AFTERBURNER_MAX_THROTTLE = 1.1;
-
-// How much reheat lights as the throttle passes the threshold
-// A burner does not creep in: its first zone lights with a thump, and the rest
-// stage in behind it as the throttle goes on to the stop
-export const PLUME_MIN_REHEAT = 0.35;
-
-// Over how much throttle that first zone lights: a few slider steps, so it
-// fades in rather than popping, and the batch eases it in over time as well
-export const PLUME_LIGHT_OFF = 0.03;
-
-/**
- * Hold a throttle inside its travel, reading anything else as idle.
- * @param throttle The throttle
- * @returns 0 to `AFTERBURNER_MAX_THROTTLE`
- */
-export const clamp_throttle = (throttle: number): number =>
-  Number.isFinite(throttle) ? clamp(throttle, 0, AFTERBURNER_MAX_THROTTLE) : 0;
+// The throttle's travel, and how the burner stages in along it: core's, so
+// the contrails burn the fuel of the same burner the plume draws
+export const AFTERBURNER_MAX_THROTTLE = THROTTLE_MAX;
+export const PLUME_MIN_REHEAT = REHEAT_FIRST_ZONE;
+export const PLUME_LIGHT_OFF = REHEAT_LIGHT_OFF;
+export { clamp_throttle };
 
 /**
  * How much of the afterburner is lit at one throttle setting.
@@ -169,23 +162,7 @@ export const clamp_throttle = (throttle: number): number =>
 export const burner_lit = (
   throttle: number,
   profile: AfterburnerProfile,
-): number => {
-  const threshold = profile.burnerThreshold;
-
-  if (threshold <= 0) {
-    return 1;
-  }
-
-  const lit = smoothstep(threshold, threshold + PLUME_LIGHT_OFF, throttle);
-
-  const staged = smoothstep(
-    threshold,
-    Math.max(threshold + PLUME_LIGHT_OFF, AFTERBURNER_MAX_THROTTLE),
-    throttle,
-  );
-
-  return lit * (PLUME_MIN_REHEAT + (1 - PLUME_MIN_REHEAT) * staged);
-};
+): number => reheat_share(throttle, profile.burnerThreshold);
 
 /**
  * How far the burner has lit, as far as the eye can tell: zero on dry thrust,

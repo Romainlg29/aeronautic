@@ -45,5 +45,3 @@ Helicopter and tiltrotor effects, from the rotor's disc loading.
 - **Shockwaves**: the shock pattern off an aircraft past Mach one, seen
   through the refraction of the density step (Schlieren) and in the
   condensation it can trigger.
-- **The afterburner's water**: the plumes' own exhaust carrying the water
-  `@aeronautic/contrails` uses, so a lit afterburner's trail follows from it.

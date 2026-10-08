@@ -39,6 +39,14 @@ export {
   type FlightValues,
 } from "./flight";
 export { check_renderer, dev_warn, THREE_REVISION } from "./dev";
+export {
+  clamp_throttle,
+  REHEAT_DETENT,
+  REHEAT_FIRST_ZONE,
+  REHEAT_LIGHT_OFF,
+  reheat_share,
+  THROTTLE_MAX,
+} from "./reheat";
 export { deg, to_deg } from "./units";
 export {
   create_scene_fog,

@@ -49,6 +49,11 @@ const Jet = ({ gltf }) => (
 );
 ```
 
+The throttle runs from 0 at idle to 1 at military power, on to 1.1 at full
+reheat. `reheat_share` says how much of the burner that lights, the same for
+every effect: the afterburner draws the burner from it, and the contrails burn
+its fuel.
+
 Write to it from a flight model, as often as you like. A write costs a few
 property assignments. The air is only worked out again when the altitude or the
 day changes.

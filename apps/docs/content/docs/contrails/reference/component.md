@@ -68,16 +68,18 @@ holds.
 
 ### `state`
 
-| field            | type                | what it is                                                      |
-| ---------------- | ------------------- | --------------------------------------------------------------- |
-| `air`            | `MoistAir`          | The day's air, from core.                                       |
-| `iceHumidity`    | `number`            | Its humidity over ice. Over 1, the trail persists.              |
-| `criterion`      | `ContrailFormation` | `forms`, `slopePaPerK`, `tangentK` and `thresholdK`.            |
-| `formation`      | `PlumeFormation`    | The dilutions at which the plume saturates, and freezes.        |
-| `efficiency`     | `number`            | How much of the fuel's heat pushes the aircraft.                |
-| `fuelPerMetreKg` | `number`            | Each engine's fuel burnt per metre flown.                       |
-| `wake`           | `Wake`              | The vortex pair: spacing, circulation, descent, stratification. |
-| `visible`        | `boolean`           | Whether a trail forms.                                          |
-| `persistent`     | `boolean`           | Whether it lasts.                                               |
+| field            | type                | what it is                                                       |
+| ---------------- | ------------------- | ---------------------------------------------------------------- |
+| `air`            | `MoistAir`          | The day's air, from core.                                        |
+| `iceHumidity`    | `number`            | Its humidity over ice. Over 1, the trail persists.               |
+| `criterion`      | `ContrailFormation` | `forms`, `slopePaPerK`, `tangentK` and `thresholdK`.             |
+| `formation`      | `PlumeFormation`    | The dilutions at which the plume saturates, and freezes.         |
+| `efficiency`     | `number`            | How much of the fuel's heat pushes the aircraft.                 |
+| `reheat`         | `number`            | How much of the burner is lit, 0 dry to 1, as the afterburner's. |
+| `thrustN`        | `number`            | All the engines' thrust.                                         |
+| `fuelPerMetreKg` | `number`            | Each engine's fuel burnt per metre flown.                        |
+| `wake`           | `Wake`              | The vortex pair: spacing, circulation, descent, stratification.  |
+| `visible`        | `boolean`           | Whether a trail forms.                                           |
+| `persistent`     | `boolean`           | Whether it lasts.                                                |
 
 The defaults of every dial are on [Dials](../dials/).
