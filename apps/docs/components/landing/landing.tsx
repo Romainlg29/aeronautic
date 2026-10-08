@@ -138,7 +138,8 @@ const Page: FC = () => {
             </h1>
             <p className="mt-2 max-w-xl text-sm text-white/80 md:text-base">
               {tagline} An afterburner, the vapor a wing pulls out of humid air,
-              and the contrails it leaves at altitude, all from the physics.
+              the contrails it leaves at altitude and its lights at night, all
+              from the physics.
             </p>
           </div>
           <nav className="pointer-events-auto flex flex-wrap items-center gap-2">

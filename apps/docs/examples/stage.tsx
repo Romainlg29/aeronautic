@@ -1,5 +1,6 @@
 import type { AfterburnerBatch } from "@aeronautic/afterburner";
 import type { ContrailLook, Contrails } from "@aeronautic/contrails";
+import type { Lights } from "@aeronautic/lights";
 import type { VaporLook, WingVapor } from "@aeronautic/wing-vapor";
 import { OrbitControls } from "@react-three/drei";
 import { Moon, Sun } from "lucide-react";
@@ -137,7 +138,7 @@ const FADE_S = 0.6;
 // 4.8e5 cd/m² (the old candela's platinum, at 2042 K, was 6e5). A clear sky
 // away from the sun is about 6000 cd/m², and it is drawn here at the
 // background's linear luminance, so one unit on screen is 6000 over that
-const BLACKBODY_2000K_CD_M2 = 4.8e5;
+export const BLACKBODY_2000K_CD_M2 = 4.8e5;
 const CLEAR_SKY_CD_M2 = 6000;
 const day_sky = new Color(DAY.background);
 export const DAY_EXPOSURE =
@@ -156,6 +157,12 @@ export const DAY_EXPOSURE =
 const exposure_under = (night: number, shade: number) =>
   night * (Math.min(night, DAY_EXPOSURE) / night) ** shade;
 
+// The aircraft's lights are in cd/m² already: by day the camera is set by the
+// same clear sky, drawn at the background's luminance
+const LIGHTS_DAY_EXPOSURE =
+  (0.2126 * day_sky.r + 0.7152 * day_sky.g + 0.0722 * day_sky.b) /
+  CLEAR_SKY_CD_M2;
+
 const mix_rgb = (
   from: readonly number[],
   to: readonly number[],
@@ -173,7 +180,11 @@ const mix_rgb = (
  * @param props Whether it is day, and where the grid is
  * @returns The lights and the grid
  */
-const Sky: FC<{ day: boolean; floor: number | null }> = ({ day, floor }) => {
+const Sky: FC<{ day: boolean; floor: number | null; lamps: boolean }> = ({
+  day,
+  floor,
+  lamps,
+}) => {
   const { scene } = useThree();
   const hemisphere = useRef<HemisphereLight>(null);
   const sun = useRef<DirectionalLight>(null);
@@ -191,7 +202,13 @@ const Sky: FC<{ day: boolean; floor: number | null }> = ({ day, floor }) => {
   );
 
   // Each plume's exposure at night, its preset's, from when it was first seen
-  const nights = useMemo(() => new WeakMap<AfterburnerBatch, number>(), []);
+  const nights = useMemo(
+    () => new WeakMap<AfterburnerBatch | Lights, number>(),
+    [],
+  );
+
+  // The exposure each aircraft's lights were last given here
+  const written = useMemo(() => new WeakMap<Lights, number>(), []);
 
   // The sky each vapor was last lit for: its colours compare by reference
   const lit = useMemo(() => new WeakMap<WingVapor | Contrails, number>(), []);
@@ -234,6 +251,21 @@ const Sky: FC<{ day: boolean; floor: number | null }> = ({ day, floor }) => {
         | undefined;
       const vapor = object.userData.wingVapor as WingVapor | undefined;
       const trails = object.userData.contrails as Contrails | undefined;
+      const lights = object.userData.lights as Lights | undefined;
+
+      if (lights) {
+        // An exposure the sky did not write is the example's own, for night
+        if (lights.look.exposure !== written.get(lights))
+          nights.set(lights, lights.look.exposure);
+
+        const night = nights.get(lights) ?? lights.look.exposure;
+        const exposure =
+          night * (Math.min(night, LIGHTS_DAY_EXPOSURE) / night) ** t;
+
+        if (exposure !== lights.look.exposure) lights.updateLook({ exposure });
+
+        written.set(lights, exposure);
+      }
 
       if (batch) {
         let night = nights.get(batch);
@@ -272,8 +304,12 @@ const Sky: FC<{ day: boolean; floor: number | null }> = ({ day, floor }) => {
 
   return (
     <>
-      <hemisphereLight ref={hemisphere} args={["#8090b0", "#101010"]} />
-      <directionalLight ref={sun} position={[-5, 10, 5]} />
+      {lamps && (
+        <>
+          <hemisphereLight ref={hemisphere} args={["#8090b0", "#101010"]} />
+          <directionalLight ref={sun} position={[-5, 10, 5]} />
+        </>
+      )}
       {floor !== null && (
         // White, so the material's colour is the line's, and can fade
         <gridHelper
@@ -324,6 +360,9 @@ type StageProps = {
   reflections?: boolean;
   // Start under a daylit sky rather than the night the plumes are graded for
   daylight?: boolean;
+  // The sky's own lights, and the switch between night and day. Off for a
+  // scene that lights itself in physical units
+  sky?: boolean;
 };
 
 /**
@@ -340,6 +379,7 @@ export const Stage: FC<StageProps> = ({
   overlay,
   reflections = false,
   daylight = false,
+  sky = true,
 }) => {
   const [frame, visible] = useOnScreen();
   const [day, set_day] = useState(daylight);
@@ -362,7 +402,7 @@ export const Stage: FC<StageProps> = ({
           return renderer;
         }}
       >
-        <Sky day={day} floor={floor} />
+        <Sky day={day} floor={floor} lamps={sky} />
         {reflections && <Reflections />}
         {/* A loaded model streams in, the plumes around it waiting for it */}
         <Suspense fallback={null}>{children}</Suspense>
@@ -370,15 +410,17 @@ export const Stage: FC<StageProps> = ({
         <Grade />
       </Canvas>
       {overlay}
-      <button
-        type="button"
-        className="example-sky"
-        onClick={() => set_day(!day)}
-        aria-label={`Switch to ${day ? "night" : "day"}`}
-      >
-        {day ? <Moon size={14} /> : <Sun size={14} />}
-        {day ? "Night" : "Day"}
-      </button>
+      {sky && (
+        <button
+          type="button"
+          className="example-sky"
+          onClick={() => set_day(!day)}
+          aria-label={`Switch to ${day ? "night" : "day"}`}
+        >
+          {day ? <Moon size={14} /> : <Sun size={14} />}
+          {day ? "Night" : "Day"}
+        </button>
+      )}
     </div>
   );
 };

@@ -1,0 +1,100 @@
+{
+  "name": "@aeronautic/lights",
+  "version": "0.1.0",
+  "description": "Physically based aircraft lights for three.js and React Three Fiber: navigation lights over the arcs and intensities of CS/FAR 25, anti-collision strobes seen as the eye sees a flash (Blondel–Rey), landing and taxi beams as photometric cones scattering in the day's air, and glare from the eye's own point spread, drawn in TSL for WebGPU",
+  "keywords": [
+    "aircraft",
+    "anti-collision",
+    "aviation",
+    "beacon",
+    "blondel-rey",
+    "effects",
+    "glare",
+    "landing-light",
+    "lights",
+    "navigation-lights",
+    "r3f",
+    "react-three-fiber",
+    "shader",
+    "strobe",
+    "three",
+    "three.js",
+    "threejs",
+    "tsl",
+    "vfx",
+    "webgpu"
+  ],
+  "homepage": "https://romainlg29.github.io/aeronautic/docs/lights/start/introduction/",
+  "bugs": {
+    "url": "https://github.com/Romainlg29/aeronautic/issues"
+  },
+  "license": "MIT",
+  "author": "Romain Le Gall (https://github.com/Romainlg29)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Romainlg29/aeronautic.git",
+    "directory": "packages/lights"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    },
+    "./physics": {
+      "types": "./dist/physics.d.ts",
+      "default": "./dist/physics.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "pnpm build"
+  },
+  "devDependencies": {
+    "@aeronautic/core": "workspace:^",
+    "@react-three/fiber": "^9.8.1",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.3.0",
+    "@types/three": "~0.186.0",
+    "react": "^19.3.0",
+    "three": "~0.186.1",
+    "tsdown": "^0.23.0",
+    "typescript": "~6.0.2",
+    "vitest": "^4.1.4"
+  },
+  "peerDependencies": {
+    "@aeronautic/core": "workspace:^",
+    "@react-three/fiber": "^9.0.0 || ^10.0.0-alpha.0",
+    "react": "^19.0.0",
+    "three": ">=0.186.0 <0.187.0"
+  },
+  "peerDependenciesMeta": {
+    "@react-three/fiber": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
+  }
+}

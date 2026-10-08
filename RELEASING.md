@@ -2,7 +2,8 @@
 
 Only the maintainer publishes to npm. Each package in `packages/` is released
 on its own, from a tag naming it: `core-vX.Y.Z` publishes `@aeronautic/core`,
-and `afterburner-v*`, `wing-vapor-v*`, `contrails-v*` and `controls-v*` the
+and `afterburner-v*`, `wing-vapor-v*`, `contrails-v*`, `lights-v*` and
+`controls-v*` the
 same.
 
 Pushing a tag runs `.github/workflows/release.yml`. It checks the tag against
@@ -172,10 +173,10 @@ Already done for this repo; kept for a fork or a rebuild.
 - **Environment:** Settings → Environments → New environment `npm`, with
   **Required reviewers** set to yourself and **Deployment branches and tags**
   limited to the `core-v*`, `afterburner-v*`, `wing-vapor-v*`,
-  `contrails-v*` and `controls-v*` tag patterns.
+  `contrails-v*`, `lights-v*` and `controls-v*` tag patterns.
 - **Tag ruleset:** Settings → Rules → Rulesets → New tag ruleset targeting
-  `v*`, `core-v*`, `afterburner-v*`, `wing-vapor-v*`, `contrails-v*` and
-  `controls-v*`,
+  `v*`, `core-v*`, `afterburner-v*`, `wing-vapor-v*`, `contrails-v*`,
+  `lights-v*` and `controls-v*`,
   restricting creations, updates and deletions, with no bypass list except
   Repository admin.
 - **Branch ruleset** on `main`: require a pull request and the CI check.

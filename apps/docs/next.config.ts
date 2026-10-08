@@ -49,6 +49,9 @@ const config: NextConfig = {
       "@aeronautic/contrails/physics":
         "../../packages/contrails/src/physics.ts",
       "@aeronautic/contrails": "../../packages/contrails/src/index.ts",
+      "@aeronautic/lights/react": "../../packages/lights/src/react/index.tsx",
+      "@aeronautic/lights/physics": "../../packages/lights/src/physics.ts",
+      "@aeronautic/lights": "../../packages/lights/src/index.ts",
     },
   },
 };

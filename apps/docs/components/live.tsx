@@ -21,6 +21,7 @@ const EXAMPLES = {
   "wing-vapor": load(() => import("@/examples/wing-vapor")),
   "any-shape": load(() => import("@/examples/any-shape")),
   contrails: load(() => import("@/examples/contrails")),
+  lights: load(() => import("@/examples/lights")),
   "one-flight": load(() => import("@/examples/one-flight")),
   "the-controls": load(() => import("@/examples/the-controls")),
   "thrust-vectoring": load(() => import("@/examples/thrust-vectoring")),

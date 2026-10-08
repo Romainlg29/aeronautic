@@ -11,7 +11,7 @@ const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 export const metadata: Metadata = {
   metadataBase: new URL(`${site_url}/`),
   title: {
-    default: `${app_name}: afterburners, wing vapor and control surfaces for three.js`,
+    default: `${app_name}: afterburners, wing vapor, contrails and aircraft lights for three.js`,
     template: `%s · ${app_name}`,
   },
   description,
@@ -25,6 +25,12 @@ export const metadata: Metadata = {
     "wingtip vortex",
     "vapor cone",
     "Prandtl-Glauert",
+    "contrails",
+    "Schmidt-Appleman",
+    "aircraft lights",
+    "navigation lights",
+    "anti-collision strobe",
+    "landing light",
     "control surfaces",
     "thrust vectoring",
     "flight model",

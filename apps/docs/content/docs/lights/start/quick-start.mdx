@@ -1,0 +1,77 @@
+---
+title: Quick start
+description: "Lights on an aircraft in a few lines."
+---
+
+`<Lights>` is a group where the aircraft's reference point sits, usually its
+model's origin. Put it inside the model, and say where the lights are:
+
+```tsx
+import { Canvas } from "@react-three/fiber";
+import { Lights } from "@aeronautic/lights/react";
+import { webgpu_gl } from "@aeronautic/core/react";
+
+// The model flies along its local -Z, with +Y up (the defaults). Positions
+// are in the model's frame, in metres
+const AIRFRAME = {
+  navigation: [
+    { side: "left", at: [-6.8, -0.27, 4.46] },
+    { side: "right", at: [6.8, -0.27, 4.46] },
+    { side: "aft", at: [0, 0.03, 6.71] },
+  ],
+  anticollision: [
+    { at: [0, 0.47, 3.7], color: "white" },
+    { at: [0, -0.83, 3.7], color: "red" },
+  ],
+  beams: [{ at: [0, -1.3, -6.2], lamp: "taxi" }],
+} as const;
+
+const Jet = () => (
+  <group>
+    <JetModel />
+    <Lights airframe={AIRFRAME} />
+  </group>
+);
+
+export const App = () => (
+  <Canvas gl={webgpu_gl()}>
+    <Jet />
+  </Canvas>
+);
+```
+
+Keep the airframe in a constant or a memo: it is compared array by array, and
+a new one rebuilds the lights.
+
+## Lights on the model
+
+A light can be a node of the model as well as a position. Its position is
+read every frame, so a lamp on the landing gear moves with it. A lamp points
+along its node's -Z, unless `direction` says otherwise:
+
+```tsx
+const { scene, nodes } = useGLTF("/jet.glb");
+const airframe = useMemo(
+  () => ({
+    navigation: [
+      { side: "left", at: nodes.Nav_L },
+      { side: "right", at: nodes.Nav_R },
+      { side: "aft", at: nodes.Nav_Tail },
+    ],
+    beams: [{ at: nodes.Landing, lamp: "landing", onGear: true }],
+  }),
+  [nodes],
+);
+```
+
+`onGear` holds a lamp off until the gear is down, as a gear-mounted lamp's
+interlock does: give `gear`, 0 up to 1 down, or let a
+[`<FlightProvider>`](../../../core/guides/one-flight/) give it.
+
+## The exposure
+
+The lights are in candela, and the scene's light in cd/m²: `look.exposure` is
+the number one cd/m² is drawn as. By default it is EV100 3, a floodlit apron
+at night. See [the exposure](../../guides/exposure/) to match it to a scene.
+
+Next, [the airframe](../../guides/the-airframe/).
