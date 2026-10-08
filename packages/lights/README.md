@@ -4,6 +4,10 @@
 [![CI](https://github.com/Romainlg29/aeronautic/actions/workflows/ci.yml/badge.svg)](https://github.com/Romainlg29/aeronautic/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
+<!-- An absolute URL: npm shows this README without the repo around it -->
+
+![A delta fighter on the apron at night, its strobes flashing and its red beacon lit, the navigation lights handing over to the white tail light as the camera goes round, rendered with @aeronautic/lights](https://raw.githubusercontent.com/Romainlg29/aeronautic/main/.github/assets/lights.gif)
+
 Physically based **aircraft lights** for [React Three Fiber](https://r3f.docs.pmnd.rs)
 and three.js, written in TSL for three's `WebGPURenderer`.
 

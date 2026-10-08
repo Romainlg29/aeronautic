@@ -1,6 +1,6 @@
 {
   "name": "@aeronautic/lights",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Physically based aircraft lights for three.js and React Three Fiber: navigation lights over the arcs and intensities of CS/FAR 25, anti-collision strobes seen as the eye sees a flash (Blondel–Rey), landing and taxi beams as photometric cones scattering in the day's air, and glare from the eye's own point spread, drawn in TSL for WebGPU",
   "keywords": [
     "aircraft",
