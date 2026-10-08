@@ -50,24 +50,32 @@ const past_edge = (side: NavigationSide, azimuth: number) => {
 
 describe("navigation_intensity", () => {
   it("meets every minimum inside each light's angle", () => {
+    // Every point under its minimum, asserted once: an expect a point is
+    // most of the sweep's time
+    const under: string[] = [];
+
     for (let azimuth = 0; azimuth <= 110; azimuth += 0.5) {
       for (let elevation = -90; elevation <= 90; elevation += 0.5) {
-        const minimum = forward_minimum(azimuth) * vertical_minimum(elevation);
+        const minimum =
+          forward_minimum(azimuth) * vertical_minimum(elevation) - 1e-9;
 
-        expect(
-          navigation_intensity("left", azimuth, elevation),
-        ).toBeGreaterThanOrEqual(minimum - 1e-9);
-        expect(
-          navigation_intensity("right", -azimuth, elevation),
-        ).toBeGreaterThanOrEqual(minimum - 1e-9);
+        if (navigation_intensity("left", azimuth, elevation) < minimum) {
+          under.push(`left ${azimuth}° ${elevation}°`);
+        }
+
+        if (navigation_intensity("right", -azimuth, elevation) < minimum) {
+          under.push(`right ${-azimuth}° ${elevation}°`);
+        }
       }
     }
 
     for (let azimuth = 110; azimuth <= 250; azimuth += 0.5) {
-      expect(navigation_intensity("aft", azimuth, 0)).toBeGreaterThanOrEqual(
-        20,
-      );
+      if (navigation_intensity("aft", azimuth, 0) < 20) {
+        under.push(`aft ${azimuth}°`);
+      }
     }
+
+    expect(under).toEqual([]);
   });
 
   it("gives the minimum itself where the bands meet", () => {
