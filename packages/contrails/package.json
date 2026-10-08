@@ -1,8 +1,9 @@
 {
   "name": "@aeronautic/contrails",
-  "version": "0.1.0",
-  "description": "Physically based contrails for three.js and React Three Fiber: the Schmidt–Appleman criterion, the exhaust mixing out as measured behind airliners, and the ice held at saturation, so a trail forms, lasts or fades as the day says, drawn in TSL for WebGPU",
+  "version": "0.1.1",
+  "description": "Physically based contrails for three.js and React Three Fiber: the Schmidt–Appleman criterion, the exhaust mixing out as measured behind airliners, and the ice held at saturation, thicker with the fuel a lit afterburner burns, so a trail forms, lasts or fades as the day says, drawn in TSL for WebGPU",
   "keywords": [
+    "afterburner",
     "aircraft",
     "condensation",
     "contrail",
@@ -11,6 +12,7 @@
     "ice",
     "r3f",
     "react-three-fiber",
+    "reheat",
     "schmidt-appleman",
     "shader",
     "three",

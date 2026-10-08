@@ -147,6 +147,8 @@ export const Jet = () => (
 
 ## Lights
 
+![A delta fighter on the apron at night, its strobes flashing and its red beacon lit, the navigation lights handing over to the white tail light as the camera goes round, rendered with @aeronautic/lights](.github/assets/lights.gif)
+
 The **lights** the airworthiness rules give an aircraft, as the eye sees them
 at night and at range. The navigation lights over their arcs and with their
 intensities (**CS/FAR 25.1385–1397**), the anti-collision lights flashing at
