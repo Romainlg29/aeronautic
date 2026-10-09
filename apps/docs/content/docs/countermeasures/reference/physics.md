@@ -48,15 +48,18 @@ Everything the flares and chaff are worked out from, for a tool, a test or a HUD
 
 ## The chaff
 
-| export                       | what it is                                                         |
-| ---------------------------- | ------------------------------------------------------------------ |
-| `CHAFF`                      | The chaff by name: `rr178`.                                        |
-| `chaff_mass(chaff)`          | The payload's mass, kg.                                            |
-| `dipole_count(chaff)`        | How many dipoles it holds, of the typical cut.                     |
-| `chaff_cross_section(chaff)` | The light they all stop, π d L / 4, m².                            |
-| `air_viscosity(T)`           | The air's dynamic viscosity, Sutherland's law, Pa·s.               |
-| `chaff_fall_speed(chaff, T)` | How fast a dipole falls broadside: Stokes's drag on a slender rod. |
-| `chaff_bloom(chaff, age)`    | How far the cloud has bloomed, 0 to 1.                             |
+| export                             | what it is                                                      |
+| ---------------------------------- | --------------------------------------------------------------- |
+| `CHAFF`                            | The chaff by name: `rr178`.                                     |
+| `chaff_mass(chaff)`                | The payload's mass, kg.                                         |
+| `dipole_count(chaff)`              | How many dipoles it holds, of the typical cut.                  |
+| `chaff_cross_section(chaff)`       | The light they all stop, π d L / 4, m².                         |
+| `air_viscosity(T)`                 | The air's dynamic viscosity, Sutherland's law, Pa·s.            |
+| `chaff_fall_speed(chaff, T, ρ)`    | How fast a dipole falls broadside: Lamb's drag in Oseen's flow. |
+| `dipole_tumble_rate(chaff, ε)`     | How fast the air's eddies turn a dipole, rad/s.                 |
+| `glint_share(α, \|s + v\|, sweep)` | The share of its dipoles that glint to the eye over a frame.    |
+| `SUN_RADIUS_RAD`                   | The sun's angular radius.                                       |
+| `chaff_bloom(chaff, age)`          | How far the cloud has bloomed, 0 to 1.                          |
 
 ## The programs
 

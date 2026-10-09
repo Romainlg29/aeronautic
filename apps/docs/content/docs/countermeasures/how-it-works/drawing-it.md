@@ -29,7 +29,10 @@ Each chaff cloud is one quad facing the camera, three σ each way of its
 two axes as they show from where the camera is: its length along its
 path, foreshortened, and its width. The CPU gives its corners the light it
 scatters and its depth through its middle; the GPU spreads that as a
-Gaussian across both axes and shows 1 − e^-τ of it.
+Gaussian across both axes and shows 1 − e^-τ of it. The sun's and the
+flares' share comes by glints: each pixel draws a Poisson count of them for
+the mean its depth and the CPU's count per unit of depth give, from a hash
+of the pixel, the cloud and the step of the clock.
 
 The lights, the glare, the trails, the smoke and the chaff are all drawn from the
 first frame, before any flare leaves: a light added or a material first

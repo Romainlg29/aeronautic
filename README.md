@@ -199,7 +199,8 @@ from the aircraft's speed within a second, and it falls behind and below.
 Each leaves its **smoke**, spreading in the air's turbulence. The dispensers
 fire to a **program**, bursts and salvos, taking turns, of flares or
 **chaff**: 3.7 million aluminised dipoles torn into a cloud in a fifth of a
-second, sinking at half a metre a second where it was let go.
+second, sinking at a fifth of a metre a second where it was let go, glittering in
+the sun.
 
 ```bash
 pnpm add @aeronautic/countermeasures @aeronautic/core three@~0.186 @react-three/fiber

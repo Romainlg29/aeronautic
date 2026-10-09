@@ -54,11 +54,15 @@ import {
   CHAFF,
   CHAFF_SIGMAS,
   CHAFF_VERTICES,
+  SUN_RADIUS_RAD,
   chaff_bloom,
   chaff_cross_section,
   chaff_fall_speed,
   create_chaff_geometry,
   create_chaff_material,
+  dipole_count,
+  dipole_tumble_rate,
+  glint_share,
   type Chaff,
   type ChaffName,
 } from "./chaff";
@@ -236,6 +240,15 @@ type Cloud = {
 
   /** When it left, on the clock, seconds */
   bornS: number;
+
+  /** Its own seed for its glints */
+  seed: number;
+
+  /** The camera from it the frame before, to know how fast it is turning */
+  seen: Vector3;
+
+  /** The frame that was, or -1 */
+  seenFrame: number;
 };
 
 /** What of the renderer the countermeasures read */
@@ -261,6 +274,7 @@ const scratch_sun = new Vector3();
 const scratch_along = new Vector3();
 const scratch_across = new Vector3();
 const section_rgb: [number, number, number] = [0, 0, 0];
+const glint_rgb: [number, number, number] = [0, 0, 0];
 const scratch_transmission: [number, number, number] = [0, 0, 0];
 const scratch_rgb: [number, number, number] = [0, 0, 0];
 
@@ -424,6 +438,9 @@ export class Countermeasures {
 
   // The chaff's, in this air
   private _chaff_fall_m_s = 0;
+  private _chaff_count = 0;
+  private _chaff_tumble_rad_s = 0;
+  private _glint_step = 0;
   private _chaff_section_m2 = 0;
 
   // The day's air
@@ -887,10 +904,19 @@ export class Countermeasures {
     this._smoke_every_s = this._burn_s / (SMOKE_POINTS - 2);
   }
 
-  /** How fast the chaff sinks in this air, and the light it stops */
+  /** How fast the chaff sinks and turns in this air, and the light it stops */
   private writeChaff() {
-    this._chaff_fall_m_s = chaff_fall_speed(this._chaff, this._temperature_k);
+    this._chaff_fall_m_s = chaff_fall_speed(
+      this._chaff,
+      this._temperature_k,
+      this._density_kg_m3,
+    );
     this._chaff_section_m2 = chaff_cross_section(this._chaff);
+    this._chaff_count = dipole_count(this._chaff);
+    this._chaff_tumble_rad_s = dipole_tumble_rate(
+      this._chaff,
+      this._air.turbulenceM2PerS3,
+    );
   }
 
   /** The air's density and extinction */
@@ -1115,6 +1141,9 @@ export class Countermeasures {
         width,
       ),
       bornS: this._time_s - age_s,
+      seed: Math.floor(Math.random() * 16_777_216),
+      seen: new Vector3(),
+      seenFrame: -1,
     });
   }
 
@@ -1179,6 +1208,7 @@ export class Countermeasures {
     this._delta_s =
       this._last_ms >= 0 ? ((now - this._last_ms) / 1000) * this.timeScale : 0;
     this._time_s += this._delta_s;
+    if (this._delta_s > 0) this._glint_step = (this._glint_step + 1) % 4096;
     this._last_ms = now;
     this.placeVelocity();
     this._drift.addScaledVector(this._velocity, -this._delta_s);
@@ -1824,6 +1854,7 @@ export class Countermeasures {
 
     const positions = geometry.getAttribute("position").array as Float32Array;
     const colors = geometry.getAttribute("color").array as Float32Array;
+    const sparks = geometry.getAttribute("glint").array as Float32Array;
     const depths = geometry.getAttribute("chaff").array as Float32Array;
     const look = this._look;
     const fog = (scene as { fog?: Parameters<typeof fog_factor>[0] }).fog;
@@ -1893,14 +1924,79 @@ export class Countermeasures {
             scratch_transmission[2])) /
         3;
 
-      // The sun's and the sky's light, and every flare's: a cloud is one
-      // quad, so each costs little
+      // How far its fibres turn against the half way over the frame: their
+      // own tumbling, and the view turning, which turns h half as much
+      let turning = this._chaff_tumble_rad_s;
+
+      if (cloud.seenFrame === this._frame_number - 1 && this._delta_s > 0) {
+        cloud.seen.addScaledVector(scratch_toward, -distance);
+        turning +=
+          Math.sqrt(
+            Math.max(
+              cloud.seen.lengthSq() - cloud.seen.dot(scratch_toward) ** 2,
+              0,
+            ),
+          ) /
+          distance /
+          this._delta_s /
+          2;
+      }
+
+      cloud.seen.copy(scratch_toward).multiplyScalar(distance);
+      cloud.seenFrame = this._frame_number;
+
+      const sweep = turning * this._delta_s;
+
+      // A pixel's dipoles, for each unit of depth: the cartridge's over its
+      // cross-section, times the pixel's footprint there
+      const footprint = (2 * pixel * distance) ** 2;
+      const per_depth =
+        (this._chaff_count / this._chaff_section_m2) * footprint;
+
+      // The sky lights it from everywhere: no glints. The sun and each flare
+      // are small: their light comes by glints, the share of fibres that
+      // catch each, and their counts are matched by their variance
+      const sun_light = phase * look.sunIntensity;
+
+      scratch_sun.fromArray(look.sunDirection).normalize();
+
+      const sun_k =
+        per_depth *
+        glint_share(
+          SUN_RADIUS_RAD,
+          scratch_next.copy(scratch_sun).add(scratch_toward).length(),
+          sweep,
+        );
+      let light = sun_light;
+      let spread = sun_light > 0 ? (sun_light * sun_light) / sun_k : 0;
       let flares = 0;
 
       for (const flare of this._burning) {
-        flares +=
-          ((flare.light.intensityCd + flare.light.trailCd) * look.exposure) /
-          (at.distanceToSquared(flare.position) + across * across);
+        scratch_next.subVectors(flare.position, at);
+
+        const reach = scratch_next.length();
+        const lit =
+          (phase *
+            (flare.light.intensityCd + flare.light.trailCd) *
+            look.exposure) /
+          (reach * reach + across * across);
+
+        if (lit <= 0) continue;
+
+        const k =
+          per_depth *
+          glint_share(
+            Math.max(flare.light.radiusM, across) / Math.max(reach, 1e-3),
+            scratch_next
+              .multiplyScalar(1 / Math.max(reach, 1e-3))
+              .add(scratch_toward)
+              .length(),
+            sweep,
+          );
+
+        flares += lit;
+        light += lit;
+        spread += (lit * lit) / k;
       }
 
       const albedo = this._chaff.reflectance * kept;
@@ -1909,15 +2005,27 @@ export class Countermeasures {
         section_rgb[channel] =
           albedo *
           scratch_transmission[channel] *
-          (phase * look.sunColor[channel] * look.sunIntensity +
-            look.skyColor[channel] * look.skyIntensity +
-            phase * this._color[channel] * flares);
+          look.skyColor[channel] *
+          look.skyIntensity;
+        glint_rgb[channel] =
+          albedo *
+          scratch_transmission[channel] *
+          (look.sunColor[channel] * sun_light + this._color[channel] * flares);
       }
+
+      // The glints each unit of drawn depth holds: the drawn depth is the
+      // true one dimmed by the haze and the fog
+      const glints =
+        light > 0 && tau > 0
+          ? (((light * light) / spread) * this._chaff_section_m2) /
+            (2 * Math.PI * across * along * tau)
+          : 0;
 
       scratch_along.multiplyScalar(CHAFF_SIGMAS * along);
       scratch_across.multiplyScalar(CHAFF_SIGMAS * across);
 
       const first = laid * CHAFF_VERTICES;
+      const seed = (cloud.seed + this._glint_step * 1_000_003) % 16_777_216;
 
       for (let corner = 0; corner < CHAFF_VERTICES; corner++) {
         // Two triangles: (-,-) (+,-) (+,+), (-,-) (+,+) (-,+)
@@ -1938,9 +2046,14 @@ export class Countermeasures {
         colors[vertex * 3] = section_rgb[0];
         colors[vertex * 3 + 1] = section_rgb[1];
         colors[vertex * 3 + 2] = section_rgb[2];
-        depths[vertex * 3] = u;
-        depths[vertex * 3 + 1] = v;
-        depths[vertex * 3 + 2] = tau;
+        sparks[vertex * 4] = glint_rgb[0];
+        sparks[vertex * 4 + 1] = glint_rgb[1];
+        sparks[vertex * 4 + 2] = glint_rgb[2];
+        sparks[vertex * 4 + 3] = seed;
+        depths[vertex * 4] = u;
+        depths[vertex * 4 + 1] = v;
+        depths[vertex * 4 + 2] = tau;
+        depths[vertex * 4 + 3] = glints;
       }
 
       laid++;
@@ -1948,6 +2061,7 @@ export class Countermeasures {
 
     geometry.getAttribute("position").needsUpdate = true;
     geometry.getAttribute("color").needsUpdate = true;
+    geometry.getAttribute("glint").needsUpdate = true;
     geometry.getAttribute("chaff").needsUpdate = true;
     geometry.setDrawRange(0, laid * CHAFF_VERTICES);
   }

@@ -27,9 +27,10 @@ and three.js, written in TSL for three's `WebGPURenderer`.
   falling behind and below.
 - **Chaff**: an RR-178 class cartridge, 88,775 m of aluminised glass
   fibre, 117 g. The airstream tears it into a cloud in a fifth of a second;
-  it stays where it formed, falling at Stokes's speed for a slender rod,
-  half a metre a second, and spreading as the smoke does. Its fibres' shadow
-  and aluminium light it.
+  it stays where it formed, falling at a fifth of a metre a second as
+  one-mil chaff is measured to, and spreading as the smoke does. Its
+  fibres' shadow and aluminium light it, and each fibre, a mirror
+  cylinder, glints: where the cloud thins it glitters.
 - **Programs**: bursts and salvos, the dispensers taking turns, of flares
   or chaff.
 - **Glare** from the flame's real luminance and the exposure: the eye's own
@@ -123,9 +124,10 @@ Each is a physical quantity in SI units:
   Greenstein's phase. Its optics are estimates.
 - **Chaff.** Its fibres stop light with their shadow, π d L / 4, 1.77 m²,
   and reflect 0.91 of it, every way alike. It blooms to the size US patent
-  4,653,403 gives, 1.75 × 11 m at 244 m/s, then falls at
-  ρ g d² (ln(2L/d) + ½) / 16μ, μ by Sutherland's law. Its throw is an
-  estimate.
+  4,653,403 gives, 1.75 × 11 m at 244 m/s, then falls with
+  Lamb's drag on a cylinder in Oseen's flow. The fibres whose axis is
+  square to the half way between the sun and the eye glint, a Poisson
+  count of them a pixel. Its throw and its fibres' tumbling are estimates.
 - **Glare.** CIE 146's glare spread function times the illuminance at the
   eye, through the haze: the same as `@aeronautic/lights`, from
   `@aeronautic/core`.
@@ -135,8 +137,8 @@ Each is a physical quantity in SI units:
 - Altitude's effect on the flame's temperature: 2100 K everywhere.
 - The flame's shape at the grain: a disc of its area.
 - The smoke's own shadow, and light it scatters more than once.
-- Chaff's glints, its fibres turning broadside as they fall, and what it
-  returns to a radar.
+- Chaff's fibres turning broadside as they fall, and what it returns to a
+  radar.
 
 ## License
 

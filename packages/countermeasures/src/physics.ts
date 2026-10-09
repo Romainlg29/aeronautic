@@ -37,6 +37,9 @@ export {
   chaff_fall_speed,
   chaff_mass,
   dipole_count,
+  dipole_tumble_rate,
+  glint_share,
+  SUN_RADIUS_RAD,
   type Chaff,
   type ChaffName,
 } from "./chaff";

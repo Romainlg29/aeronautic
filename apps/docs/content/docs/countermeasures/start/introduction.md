@@ -23,8 +23,9 @@ description: "What @aeronautic/countermeasures draws, what drives it, and what i
   from the aircraft's speed within a second, falling behind and below.
 - **Chaff**: an RR-178 class cartridge, 3.7 million aluminised glass
   dipoles. The airstream tears them into a cloud in a fifth of a second,
-  which stays where it formed, sinking at half a metre a second, spreading,
-  and lit by its fibres' shadow and their aluminium.
+  which stays where it formed, sinking at a fifth of a metre a second,
+  spreading, and lit by its fibres' shadow and their aluminium, glittering
+  where it is thin.
 - **The programs**: a burst of so many flares or chaff, a salvo of so many bursts, the
   dispensers taking turns.
 - **Glare**: each flame is drawn as the eye sees a bright light, spread by the

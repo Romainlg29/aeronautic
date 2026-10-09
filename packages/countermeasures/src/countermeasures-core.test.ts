@@ -270,7 +270,7 @@ describe("Countermeasures", () => {
 
   it("lays chaff where it left, sinking, until it spreads too thin", () => {
     const countermeasures = new Countermeasures({
-      look: { sunIntensity: 3 },
+      look: { sunIntensity: 3, skyIntensity: 0.1 },
     });
     const camera = new PerspectiveCamera(50, 1, 0.1, 10_000);
 
@@ -307,6 +307,10 @@ describe("Countermeasures", () => {
     expect(geometry.drawRange.count).toBe(6);
     expect(depths.getZ(0)).toBeGreaterThan(SEEN);
     expect(geometry.getAttribute("color").getX(0)).toBeGreaterThan(0);
+
+    // The sun's light comes by glints: so many a pixel for each unit of depth
+    expect(geometry.getAttribute("glint").getX(0)).toBeGreaterThan(0);
+    expect(depths.getW(0)).toBeGreaterThan(0);
 
     // A second at 250 m/s: the aircraft is 250 m on, the cloud behind it
     let z = 0;
