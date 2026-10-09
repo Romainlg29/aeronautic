@@ -3,6 +3,7 @@
 // seeker see it, its flight through the air, and the dispensers' programs
 
 export {
+  airstream_share,
   band_intensity,
   burn_time,
   drag_per_speed2,

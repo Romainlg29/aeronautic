@@ -18,8 +18,9 @@ The flares and their programs are out, in 0.1. Still to come:
 - **Chaff**: a cloud of dipoles blooming from the cartridge, slowing in the
   air and settling at their terminal velocity, glinting where the sun catches
   them.
-- **The flame in the airstream**: how much a flare's intensity drops with
-  its speed through the air and with altitude, from measured data.
+- **The flame in the airstream, measured**: the dimming and the trail are
+  estimates for now; measured data on an MTV flare's intensity against
+  airspeed and altitude would replace them.
 
 ## `@aeronautic/rotor`
 

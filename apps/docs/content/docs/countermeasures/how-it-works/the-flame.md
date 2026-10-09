@@ -21,9 +21,35 @@ The graybody is checked against the old candela: a blackbody at platinum's
 freezing point, 2042 K, was 60 cd/cm², and the integral over the CIE photopic
 curve gives that.
 
+## In the airstream
+
+Static tests measure the flame still. Thrown at hundreds of metres a
+second, the airstream sweeps its hot products off the grain before they
+have radiated, and cools them: the flame at the grain gives less, and what
+was swept off glows on behind it as a trail.
+
+Radiating competes with being carried off, at a rate that grows with the
+speed through the air, so the share left at the grain is 1 / (1 + v / v½).
+The trail gives part of the rest, its light falling off by e every v × τ
+metres as the products cool, so it is long at release and shrinks as the
+flare slows:
+
+| at                | at the grain | trail's e-fold |
+| ----------------- | ------------ | -------------- |
+| 250 m/s, released | 38 %         | 12.5 m         |
+| 60 m/s, after 1 s | 71 %         | 3 m            |
+| 20 m/s, falling   | 88 %         | 1 m            |
+
+The form is the physics'; the numbers are **estimates**. No measured curve
+of an MTV flare's intensity against airspeed is published openly, so v½ is
+150 m/s, τ is 0.05 s, about how long micron-sized oxide stays white-hot in
+cold air, and the trail gives half of what is swept off. All three are
+dials on `flare`: `halfLightMPerS`, `glowTimeS`, `trailShare`.
+
 ## Left out
 
-- **The airstream's toll**: a flame dragged at hundreds of metres a second
-  is cooled and stretched, and gives less. The intensity is the static
-  measurement's at every speed.
+- **Altitude's toll**: thinner air cools the flame less and feeds it less.
+  The airstream's share is the same at every altitude.
+- **The trail's colour**: it cools as it goes, and reddens. It is drawn in
+  the flame's colour.
 - **The smoke**: the magnesium oxide and carbon the flame leaves, to come.

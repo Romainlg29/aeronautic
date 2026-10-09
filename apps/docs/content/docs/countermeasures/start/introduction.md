@@ -13,7 +13,9 @@ description: "What @aeronautic/countermeasures draws, what drives it, and what i
 - **Its flame**: what it radiates a second follows from what it burns a
   second, as the composition's measured efficiency has it. The flame's
   temperature carries that to the eye: a few hundred thousand candela as it
-  lights, fading as the grain shrinks.
+  lights, fading as the grain shrinks. In the airstream it dims at the grain
+  and trails what is swept off it, long at release and shrinking as it
+  slows: estimates, there being no measured curve to follow.
 - **Its flight**: thrown down from the dispenser, then slowed by its own drag
   from the aircraft's speed within a second, falling behind and below.
 - **The programs**: a burst of so many flares, a salvo of so many bursts, the
@@ -24,7 +26,8 @@ description: "What @aeronautic/countermeasures draws, what drives it, and what i
 
 ## What drives it
 
-None of it is drawn to a size, a colour or a timer by eye. A flame's
+None of it is drawn to a size, a colour or a timer by eye; the airstream's
+toll, which no open measurement gives, is an estimate and a dial. A flame's
 brightness on screen is its intensity, in candela, through the air, over the
 distance squared, times the exposure. How long it burns is its grain's
 thinnest side over its burn rate. Where it goes is its drag and its weight.

@@ -20,6 +20,7 @@ is the quality's.
 
 ## Left out
 
-- **The flame's shape**: it is drawn as a disc of its area, not a plume
-  stretched by the airstream.
+- **The flame's shape at the grain**: it is drawn as a disc of its area.
+  The trail behind it is a ribbon facing the camera, as wide as the flame
+  or two pixels, its luminance the trail's light per metre over its width.
 - **A lens's flare**: the glare is the eye's, with no spikes or ghosts.

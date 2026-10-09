@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  airstream_share,
   band_intensity,
   burn_time,
   drag_per_speed2,
@@ -117,5 +118,29 @@ describe("the MJU-7's flight", () => {
   it("falls at a few tens of metres a second", () => {
     expect(terminal_speed(mju7, 1.225)).toBeGreaterThan(20);
     expect(terminal_speed(mju7, 1.225)).toBeLessThan(40);
+  });
+});
+
+describe("the MJU-7's flame in the airstream", () => {
+  const grain = grain_at(mju7, 0);
+  const still = flare_light(mju7, grain);
+
+  it("is as tested when still", () => {
+    expect(airstream_share(mju7, 0)).toBe(1);
+    expect(still.trailCd).toBe(0);
+  });
+
+  it("is halved at its half-light speed, and dimmer faster", () => {
+    expect(airstream_share(mju7, mju7.halfLightMPerS)).toBeCloseTo(0.5);
+    expect(airstream_share(mju7, 250)).toBeLessThan(airstream_share(mju7, 100));
+  });
+
+  it("leaves part of what is swept off in its trail", () => {
+    const flown = flare_light(mju7, grain, undefined, undefined, 250);
+    const swept = still.intensityCd - flown.intensityCd;
+
+    expect(flown.intensityCd).toBeLessThan(still.intensityCd);
+    expect(flown.trailCd).toBeCloseTo(swept * mju7.trailShare);
+    expect(flown.radiusM).toBeLessThan(still.radiusM);
   });
 });

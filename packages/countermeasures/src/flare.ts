@@ -65,6 +65,22 @@ export type Flare = {
 
   /** How fast the cartridge throws it from the dispenser, m/s */
   ejectionMPerS: number;
+
+  /**
+   * The speed through the air that halves the flame's light at the grain,
+   * m/s: the airstream sweeps its hot products away before they radiate.
+   * An estimate, as is the next two: no measured curve is published openly
+   */
+  halfLightMPerS: number;
+
+  /**
+   * How long the swept products glow, seconds: the e-folding time of the
+   * light along the trail they leave
+   */
+  glowTimeS: number;
+
+  /** The share of the light swept off the grain that the trail still gives */
+  trailShare: number;
 };
 
 /**
@@ -125,6 +141,9 @@ export const FLARE = {
     emissivity: 0.95,
     dragCoefficient: 1.05,
     ejectionMPerS: 30.3,
+    halfLightMPerS: 150,
+    glowTimeS: 0.05,
+    trailShare: 0.5,
   },
 } as const satisfies Record<string, Flare>;
 
@@ -223,11 +242,27 @@ export const luminous_per_band = (flare: Flare): number =>
   band_radiance(flare.bandM[0], flare.bandM[1], flare.temperatureK);
 
 /**
+ * The share of the flame's light that stays at the grain at a speed
+ * through the air. Radiation from the flame competes with the airstream
+ * carrying its products off, at a rate that grows with the speed, so the
+ * share is 1 / (1 + v / v½): what static tests measure when still, half at
+ * v½. The form is the competition's; v½ is an estimate (see the make)
+ * @param flare The flare
+ * @param speed_m_s Its speed through the air
+ * @returns From 1 down
+ */
+export const airstream_share = (flare: Flare, speed_m_s: number): number =>
+  1 / (1 + Math.max(speed_m_s, 0) / flare.halfLightMPerS);
+
+/**
  * The flame, as the eye sees it.
  */
 export type FlareLight = {
-  /** Its luminous intensity, candela */
+  /** Its luminous intensity at the grain, candela */
   intensityCd: number;
+
+  /** The luminous intensity of the trail it leaves, all of it, candela */
+  trailCd: number;
 
   /**
    * Its radius, metres: a sphere's whose disc at its radiance gives the
@@ -242,20 +277,25 @@ export type FlareLight = {
  * @param grain The grain now
  * @param per_band `luminous_per_band(flare)`, if worked out already
  * @param target Where to write it
+ * @param speed_m_s Its speed through the air: still, as tested, by default
  * @returns target
  */
 export const flare_light = (
   flare: Flare,
   grain: Grain,
   per_band = luminous_per_band(flare),
-  target: FlareLight = { intensityCd: 0, radiusM: 0 },
+  target: FlareLight = { intensityCd: 0, trailCd: 0, radiusM: 0 },
+  speed_m_s = 0,
 ): FlareLight => {
-  const band = band_intensity(flare, grain);
+  const still = band_intensity(flare, grain);
+  const share = airstream_share(flare, speed_m_s);
+  const band = still * share;
   const radiance =
     flare.emissivity *
     band_radiance(flare.bandM[0], flare.bandM[1], flare.temperatureK);
 
   target.intensityCd = band * per_band;
+  target.trailCd = still * (1 - share) * flare.trailShare * per_band;
   target.radiusM = Math.sqrt(band / (radiance * Math.PI));
 
   return target;

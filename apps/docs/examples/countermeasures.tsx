@@ -34,7 +34,8 @@ const MODEL = `${base_path}/fighter.glb`;
 // gives an upward face its intensity in lux. The flares light the rest
 const MOON_LUX = 0.25;
 
-// The MJU-7's flame when it lights, and how long it burns
+// The MJU-7's flame when it lights, still and thrown at the fighter's
+// speed, and how long it burns
 const mju7 = FLARE.mju7;
 const lit = flare_light(mju7, grain_at(mju7, 0));
 const burn_s = burn_time(mju7);
@@ -108,6 +109,19 @@ const FlaringFighter: FC<{
 
   const exposure = exposure_ev100(settings.ev100);
   const look = useMemo(() => ({ exposure }), [exposure]);
+
+  // As it leaves: the airspeed, and the cartridge's throw square to it
+  const thrown_cd = useMemo(
+    () =>
+      flare_light(
+        mju7,
+        grain_at(mju7, 0),
+        undefined,
+        undefined,
+        Math.hypot(settings.airspeed, mju7.ejectionMPerS),
+      ).intensityCd,
+    [settings.airspeed],
+  );
   const program = useMemo(
     () => ({ salvo: settings.salvo, burst: settings.burst }),
     [settings.salvo, settings.burst],
@@ -120,7 +134,8 @@ const FlaringFighter: FC<{
 
     readout.current.textContent =
       `${current.burning} burning, ${current.pending} to come · ` +
-      `each ${(lit.intensityCd / 1000).toFixed(0)} kcd as it lights, ` +
+      `each ${(lit.intensityCd / 1000).toFixed(0)} kcd still, ` +
+      `${(thrown_cd / 1000).toFixed(0)} kcd at the grain as thrown, ` +
       `for ${burn_s.toFixed(1)} s · falling at ` +
       `${falling_m_s.toFixed(0)} m/s once slowed`;
   });

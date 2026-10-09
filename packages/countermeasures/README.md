@@ -14,6 +14,10 @@ and three.js, written in TSL for three's `WebGPURenderer`.
   composition's measured efficiency. The flame's temperature, 2100 K, carries
   that to the eye: about 250,000 cd as it lights, fading as the grain
   shrinks.
+- **The airstream**: the flame dims as it is swept off the grain, halved
+  at 150 m/s, and what is swept off glows on as a trail behind it, long at
+  release and shrinking as the flare slows. No measured curve is published
+  openly: these numbers are estimates, and dials.
 - **The flight**: thrown down at the cartridge's 30 m/s, then slowed by its
   own drag, a tumbling block's, from the aircraft's speed within a second,
   falling behind and below.
@@ -22,7 +26,8 @@ and three.js, written in TSL for three's `WebGPURenderer`.
   scatter (CIE 146), dimmed and reddened by the day's haze. The brightest
   flares light the scene.
 
-None of it is drawn to a size or a timer by eye. Chaff and smoke are to come.
+None of it is drawn to a size or a timer by eye; the few estimates are
+said to be. Chaff and smoke are to come.
 
 **[Docs](https://romainlg29.github.io/aeronautic/docs/countermeasures/start/introduction/)** ·
 **[Live example on the docs' fighter](https://romainlg29.github.io/aeronautic/docs/countermeasures/examples/at-night/)**
@@ -106,10 +111,11 @@ Each is a physical quantity in SI units:
 
 ### What it leaves out
 
-- The burn rate's dependence on pressure, and the airstream cooling the
-  flame: the measured static figures hold at every speed and altitude.
+- The burn rate's dependence on pressure, and altitude's effect on the
+  airstream's toll.
 - Ignition delay: the grain lights as it leaves the dispenser.
-- The flame's shape: it is drawn as a disc of its area.
+- The flame's shape at the grain: a disc of its area. The trail is a
+  ribbon in the flame's colour.
 
 ## License
 

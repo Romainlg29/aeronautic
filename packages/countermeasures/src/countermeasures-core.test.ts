@@ -138,6 +138,40 @@ describe("Countermeasures", () => {
     expect(flare.y).toBeLessThan(-10);
   });
 
+  it("leaves a trail behind each flare in the airstream", () => {
+    const countermeasures = new Countermeasures();
+    const camera = new PerspectiveCamera(50, 1, 0.1, 10_000);
+
+    camera.position.set(-40, 0, 50);
+    camera.updateMatrixWorld();
+    render(countermeasures, 0);
+    countermeasures.release(0);
+    fly(countermeasures, 0.25);
+
+    const draw = () =>
+      countermeasures.trail.onBeforeRender(
+        {
+          info: { frame },
+          getDrawingBufferSize: (target: {
+            set: (x: number, y: number) => void;
+          }) => target.set(800, 800),
+        } as never,
+        { fog: null } as never,
+        camera,
+        null as never,
+        null as never,
+        null as never,
+      );
+
+    draw();
+    expect(countermeasures.trail.geometry.drawRange.count).toBe(24);
+
+    const colors = countermeasures.trail.geometry.getAttribute("color");
+
+    // Brightest at the grain, fading back along it
+    expect(colors.getX(0)).toBeGreaterThan(colors.getX(1));
+  });
+
   it("lights the scene from its brightest", () => {
     const countermeasures = new Countermeasures({ quality: { lights: 1 } });
     const lights = countermeasures.group.children.filter(

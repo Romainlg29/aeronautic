@@ -47,6 +47,13 @@ import {
   type FlareName,
   type Grain,
 } from "./flare";
+import {
+  create_trail_geometry,
+  create_trail_material,
+  TRAIL_E_FOLDS,
+  TRAIL_SEGMENTS,
+  TRAIL_VERTICES,
+} from "./trail";
 import { default_program, program_releases, type Program } from "./program";
 import {
   default_countermeasures_air,
@@ -159,8 +166,54 @@ const scratch_camera = new Vector3();
 const scratch_view = new Vector3();
 const scratch_direction = new Vector3();
 const scratch_relative = new Vector3();
+const scratch_side = new Vector3();
+const scratch_left = new Vector3();
+const scratch_right = new Vector3();
+const section_rgb: [number, number, number] = [0, 0, 0];
 const scratch_transmission: [number, number, number] = [0, 0, 0];
 const scratch_rgb: [number, number, number] = [0, 0, 0];
+
+/**
+ * A trail's segment is two triangles, corners 0 1 2 and 3 4 5: where each
+ * of its two ends' left and right sides go
+ */
+const START = { left: [0, 3], right: [5] } as const;
+const END = { left: [1], right: [2, 4] } as const;
+
+/**
+ * Write a cross-section of a trail, `scratch_left` and `scratch_right` at
+ * `section_rgb`, as one end of one of its segments.
+ * @param positions The positions
+ * @param colors The luminances
+ * @param trail Which trail
+ * @param segment Which segment
+ * @param end Which of its ends
+ */
+const lay_section = (
+  positions: Float32Array,
+  colors: Float32Array,
+  trail: number,
+  segment: number,
+  end: typeof START | typeof END,
+) => {
+  const first = trail * TRAIL_VERTICES + segment * 6;
+
+  for (const [corners, side] of [
+    [end.left, scratch_left],
+    [end.right, scratch_right],
+  ] as const) {
+    for (const corner of corners) {
+      const at = (first + corner) * 3;
+
+      positions[at] = side.x;
+      positions[at + 1] = side.y;
+      positions[at + 2] = side.z;
+      colors[at] = section_rgb[0];
+      colors[at + 1] = section_rgb[1];
+      colors[at + 2] = section_rgb[2];
+    }
+  }
+};
 
 /**
  * Whether a change would change nothing.
@@ -198,6 +251,9 @@ export class Countermeasures {
 
   /** The glare's mesh. Its `userData.countermeasures` is this */
   readonly glare: Mesh<BufferGeometry, MeshBasicNodeMaterial>;
+
+  /** The trails' mesh: the flames left in the air behind the grains */
+  readonly trail: Mesh<BufferGeometry, MeshBasicNodeMaterial>;
 
   /** How fast its clock runs, one being real time */
   timeScale = 1;
@@ -285,6 +341,26 @@ export class Countermeasures {
 
     this.glare = glare;
     this.group.add(glare);
+
+    const trail = new Mesh(
+      create_trail_geometry(this._quality.flares),
+      create_trail_material(),
+    );
+
+    trail.name = "CountermeasuresTrail";
+    trail.userData.countermeasures = this;
+    trail.frustumCulled = false;
+    trail.renderOrder = 1;
+    trail.material.side = DoubleSide;
+    trail.onBeforeRender = (renderer, scene, camera) =>
+      this.drawTrail(
+        renderer as unknown as Renderer,
+        scene,
+        camera as PerspectiveCamera,
+      );
+
+    this.trail = trail;
+    this.group.add(trail);
 
     this.setFrame(options.frame ?? {});
     this.writeFlare();
@@ -416,10 +492,13 @@ export class Countermeasures {
     if (unchanged(this._quality, next)) return;
 
     const previous = this.glare.geometry;
+    const previous_trail = this.trail.geometry;
 
     this._quality = next;
     this.glare.geometry = create_glare_geometry(next.flares);
+    this.trail.geometry = create_trail_geometry(next.flares);
     previous.dispose();
+    previous_trail.dispose();
     this._burning.splice(0, Math.max(this._burning.length - next.flares, 0));
     this.buildLights();
   }
@@ -514,6 +593,8 @@ export class Countermeasures {
     this.group.removeFromParent();
     this.glare.geometry.dispose();
     this.glare.material.dispose();
+    this.trail.geometry.dispose();
+    this.trail.material.dispose();
 
     for (const light of this._lights) {
       light.removeFromParent();
@@ -680,7 +761,7 @@ export class Countermeasures {
         .addScaledVector(scratch_direction, this._flare.ejectionMPerS),
       ageS: 0,
       grain: grain_at(this._flare, 0),
-      light: { intensityCd: 0, radiusM: 0 },
+      light: { intensityCd: 0, trailCd: 0, radiusM: 0 },
     };
 
     this._burning.push(flare);
@@ -758,7 +839,13 @@ export class Countermeasures {
 
     for (const flare of this._burning) {
       grain_at(this._flare, flare.ageS, flare.grain);
-      flare_light(this._flare, flare.grain, this._per_band, flare.light);
+      flare_light(
+        this._flare,
+        flare.grain,
+        this._per_band,
+        flare.light,
+        flare.velocity.length(),
+      );
     }
 
     this.placeLights();
@@ -792,7 +879,8 @@ export class Countermeasures {
         .addScaledVector(this._velocity, -this._delta_s)
         .add(scratch_origin)
         .applyMatrix4(scratch_matrix);
-      light.intensity = flare.light.intensityCd * this._look.exposure;
+      light.intensity =
+        (flare.light.intensityCd + flare.light.trailCd) * this._look.exposure;
     }
   }
 
@@ -818,6 +906,118 @@ export class Countermeasures {
       if (!found) return;
       picked.push(found);
     }
+  }
+
+  /**
+   * Lay every flare's trail for this camera, just before it is drawn: a
+   * ribbon facing it, back along the flare's path through the air.
+   * @param renderer The renderer
+   * @param scene The scene, for its fog
+   * @param camera The camera
+   */
+  private drawTrail(
+    renderer: Renderer,
+    scene: Object3D,
+    camera: PerspectiveCamera,
+  ) {
+    this.tick(renderer);
+
+    const geometry = this.trail.geometry;
+    const burning = this._burning;
+
+    if (!camera.isPerspectiveCamera || burning.length === 0) {
+      geometry.setDrawRange(0, 0);
+
+      return;
+    }
+
+    const positions = geometry.getAttribute("position").array as Float32Array;
+    const colors = geometry.getAttribute("color").array as Float32Array;
+    const exposure = this._look.exposure;
+    const fog = (scene as { fog?: Parameters<typeof fog_factor>[0] }).fog;
+    const pixel = glare_pixel(renderer, camera);
+    const glow_s = this._flare.glowTimeS;
+
+    scratch_origin.setFromMatrixPosition(this.group.matrixWorld);
+    scratch_camera.setFromMatrixPosition(camera.matrixWorld);
+    scratch_matrix.copy(this.group.matrixWorld).invert();
+
+    let laid = 0;
+
+    for (const flare of burning) {
+      const speed = flare.velocity.length();
+      const e_fold = speed * glow_s;
+
+      // Only what it has left since it lit, and nothing when still
+      const length = Math.min(TRAIL_E_FOLDS * e_fold, speed * flare.ageS);
+
+      if (!(flare.light.trailCd > 0) || !(length > 1e-3)) continue;
+
+      const head = scratch_relative.copy(flare.position).add(scratch_origin);
+      const distance = Math.max(head.distanceTo(scratch_camera), 1e-3);
+
+      // The haze and the scene's fog over the whole trail as at its head
+      transmission(this._extinction, distance, scratch_transmission);
+      scratch_view.copy(head).applyMatrix4(camera.matrixWorldInverse);
+
+      const kept = 1 - fog_factor(fog ?? null, Math.max(-scratch_view.z, 0));
+
+      // Back along its path, and how much of that is across the view: seen
+      // end on, all the trail's light is in one width
+      scratch_direction.copy(flare.velocity).multiplyScalar(-1 / speed);
+      scratch_side.subVectors(head, scratch_camera).normalize();
+
+      const across = scratch_side.cross(scratch_direction).length();
+      const per_metre = flare.light.trailCd / e_fold;
+
+      for (let k = 0; k <= TRAIL_SEGMENTS; k++) {
+        const x = (length * k) / TRAIL_SEGMENTS;
+        const at = scratch_position
+          .copy(head)
+          .addScaledVector(scratch_direction, x);
+
+        // The flame's width, or two pixels' if that is wider, its light
+        // spread over it
+        const width = Math.max(
+          2 * flare.light.radiusM,
+          2 * pixel * at.distanceTo(scratch_camera),
+        );
+        const luminance =
+          (per_metre * Math.exp(-x / e_fold)) /
+          (width * Math.max(across, width / length));
+        const scale = luminance * kept * exposure;
+
+        // Across the trail, square to it and to the view
+        scratch_side.subVectors(at, scratch_camera).cross(scratch_direction);
+
+        if (scratch_side.lengthSq() < 1e-12) {
+          scratch_side.set(0, 1, 0).applyQuaternion(camera.quaternion);
+        }
+
+        scratch_side.setLength(width / 2);
+        scratch_left.copy(at).add(scratch_side).applyMatrix4(scratch_matrix);
+        scratch_right.copy(at).sub(scratch_side).applyMatrix4(scratch_matrix);
+
+        section_rgb[0] = this._color[0] * scratch_transmission[0] * scale;
+        section_rgb[1] = this._color[1] * scratch_transmission[1] * scale;
+        section_rgb[2] = this._color[2] * scratch_transmission[2] * scale;
+
+        // This cross-section ends the segment before it and starts the next
+        if (k > 0) {
+          lay_section(positions, colors, laid, k - 1, END);
+        }
+
+        if (k < TRAIL_SEGMENTS) {
+          lay_section(positions, colors, laid, k, START);
+        }
+      }
+
+      laid++;
+    }
+
+    geometry.getAttribute("position").needsUpdate = true;
+    geometry.getAttribute("color").needsUpdate = true;
+    geometry.setDrawRange(0, laid * TRAIL_VERTICES);
   }
 
   /**

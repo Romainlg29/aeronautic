@@ -29,6 +29,9 @@ The default, `FLARE.mju7`, is an MJU-7 class flare.
 | `emissivity`         | `0.95`             | The flame's, as a graybody.                                                  |
 | `dragCoefficient`    | `1.05`             | A tumbling block's, on its mean projected area: a cube's.                    |
 | `ejectionMPerS`      | `30.3`             | How fast the cartridge throws it: 99.5 ft/s, measured.                       |
+| `halfLightMPerS`     | `150`              | The speed through the air that halves the light at the grain. An estimate.   |
+| `glowTimeS`          | `0.05`             | How long the swept products glow: the trail's e-fold time. An estimate.      |
+| `trailShare`         | `0.5`              | The share of the light swept off that the trail gives. An estimate.          |
 
 ## `CountermeasuresFlight`
 
