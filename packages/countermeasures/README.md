@@ -46,7 +46,8 @@ None of it is drawn to a size or a timer by eye; the few estimates are
 said to be.
 
 **[Docs](https://romainlg29.github.io/aeronautic/docs/countermeasures/start/introduction/)** ·
-**[Live example on the docs' fighter](https://romainlg29.github.io/aeronautic/docs/countermeasures/examples/at-night/)**
+**[Live example on the docs' fighter](https://romainlg29.github.io/aeronautic/docs/countermeasures/examples/at-night/)** ·
+**[Under takram's atmosphere](https://romainlg29.github.io/aeronautic/docs/countermeasures/integrations/takram-atmosphere/)**
 
 ## Install
 

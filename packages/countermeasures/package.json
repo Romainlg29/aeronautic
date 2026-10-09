@@ -1,9 +1,10 @@
 {
   "name": "@aeronautic/countermeasures",
-  "version": "0.1.0",
-  "description": "Physically based aircraft countermeasures for three.js and React Three Fiber: MTV decoy flares thrown at the cartridge's speed, slowed by their own drag and falling, burning down with the light of a graybody flame worked out from the composition's measured radiance, fired in dispenser programs and seen through the eye's glare, for WebGPU",
+  "version": "0.1.1",
+  "description": "Physically based aircraft countermeasures for three.js and React Three Fiber: MTV decoy flares thrown at the cartridge's speed, slowed by their own drag and falling, burning down with the light of a graybody flame worked out from the composition's measured radiance, chaff torn into a glinting cloud by the airstream, fired in dispenser programs and seen through the eye's glare, for WebGPU",
   "keywords": [
     "aircraft",
+    "chaff",
     "countermeasures",
     "decoy",
     "dispenser",
@@ -13,6 +14,7 @@
     "military",
     "r3f",
     "react-three-fiber",
+    "smoke",
     "three",
     "three.js",
     "threejs",
