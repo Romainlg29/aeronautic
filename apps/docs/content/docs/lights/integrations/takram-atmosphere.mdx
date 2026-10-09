@@ -1,0 +1,60 @@
+---
+title: Takram's atmosphere
+description: "Position lights, strobes and landing lights under @takram/three-atmosphere's sky, in its light units."
+---
+
+<Example name="atmosphere-lights" />
+
+The fighter on its approach, 300 m up with the gear down, under
+[`@takram/three-atmosphere`](https://www.npmjs.com/package/@takram/three-atmosphere)'s
+sky, every light on. The sun starts 4° below the horizon, in civil
+twilight. Raise it and the camera stops down for the brighter sky, so the
+same lights fade into it. Lower it and they stand out as the dusk deepens.
+
+The setup, the volume pass with the aerial perspective as its backdrop and
+the scene's place on the earth, is on [core's page](/docs/core/integrations/takram-atmosphere).
+
+## In the volume pass
+
+The atmosphere's aerial perspective draws the sky wherever the opaque scene
+left nothing, so whatever is drawn over the sky in the scene itself is drawn
+over again. `<Lights>` finds the volume pass through its
+`<VolumePassContext>` and draws its beams and its glare there, over the
+atmosphere's backdrop. The spot and point lights stay in the aircraft,
+lighting the scene.
+
+The pass has no depth of its own: the beams and the glare read the opaque
+scene's depth from `pass.backdrop` instead, so the airframe still hides the
+lights behind it. Without React, give `backdrop` to the `Lights` and put its
+`volumes` in `pass.scene`: the glare goes in `volumes` too.
+
+## The light units
+
+The look's `exposure` is the scene's value for 1 cd/m². The atmosphere draws
+one unit on screen as about 75 700 cd/m², so under it the exposure is its
+`luminanceScale`, whatever the camera meters:
+
+```ts
+import { AtmosphereParameters } from "@takram/three-atmosphere/webgpu";
+
+const exposure = new AtmosphereParameters().luminanceScale; // ≈ 1.3 × 10⁻⁵
+
+<Lights look={{ exposure }} />;
+```
+
+The lights are in candelas, the exposure turning them into the
+atmosphere's units. The camera's exposure is the atmosphere's: its meter
+reads the sunlight and the skylight at the aircraft and opens up as the
+sun goes down, as a photographer's would.
+
+## The air in front of them
+
+The pass's contents get no aerial perspective from the atmosphere. The
+lights dim and redden through their own air, from the `air`'s visibility:
+at its default 23 km, Koschmieder's 3.912 / V is 0.17 per kilometre, and the
+example's few tens of metres keep all but a fraction of a percent of the
+light. Takram's air at 300 m is clearer than that. Set `visibilityM` to
+match it if the lights are seen from kilometres off. The beams scatter in
+the same air, so they show more in a mist than on a clear night.
+
+<Source file="atmosphere-lights.tsx" />

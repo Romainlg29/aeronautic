@@ -20,5 +20,5 @@ description: "Every prop of the component."
 | `up`            | `[x, y, z]`                   | Which way is up for it. +Y by default.                                                                       |
 | `quality`       | `LightsQualityName`           | How finely the beams' light in the air is summed: `low`, `medium`, `high` or `ultra`, 8 to 48 samples a ray. |
 | `source`        | `Flight \| null`              | A shared flight for the altitude, the air's density and the gear. The provider's by default.                 |
-| `pass`          | `VolumePass \| null`          | Draw the beams in core's volume pass. The context's by default.                                              |
+| `pass`          | `VolumePass \| null`          | Draw the beams and glare in core's volume pass. The context's by default.                                    |
 | `ref`           | `Ref<LightsHandle>`           | The `Lights` itself, to drive every frame.                                                                   |

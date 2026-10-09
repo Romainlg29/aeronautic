@@ -90,7 +90,11 @@ import {
 // the air. What lights the scene is three's own lights, driven from the
 // same numbers
 
-/** The faintest luminance worth drawing, in the scene's units: 10 bits' step */
+/**
+ * The faintest luminance worth drawing, on the display: 10 bits' step. In
+ * the scene's units it is that over the camera's exposure, the renderer's
+ * `toneMappingExposure`, which an atmosphere opens up as the sky darkens
+ */
 const FLOOR = 1 / 1024;
 
 /**
@@ -157,7 +161,9 @@ export type LightsOptions = {
 
   /**
    * The opaque scene drawn in a pass of its own, as core's `volume_pass`
-   * sets up: put `volumes` in `pass.scene` and give `pass.backdrop` here
+   * sets up: put `volumes` in `pass.scene` and give `pass.backdrop` here.
+   * The glare is then drawn in `volumes` too, over an atmosphere's sky, its
+   * depth hiding the lights behind the airframe
    */
   backdrop?: SceneBackdrop;
 
@@ -302,6 +308,9 @@ export class Lights {
   private _beam_lights: PlacedBeam[] = [];
 
   private _extinction: Extinction = extinction(23_000);
+
+  /** The camera's exposure the beams' reach was last worked out for */
+  private _display = 1;
   private _density = 1;
   private _scattered = 0;
 
@@ -354,7 +363,7 @@ export class Lights {
 
     const glare = new Mesh(
       create_glare_geometry(0),
-      create_glare_material(this._glare_uniforms),
+      create_glare_material(this._glare_uniforms, options.backdrop),
     );
 
     glare.name = "LightsGlare";
@@ -370,7 +379,10 @@ export class Lights {
       );
 
     this.glare = glare;
-    this.group.add(glare);
+
+    // Laid on the screen, it is drawn wherever it is: in the pass, when
+    // there is one, so the sky drawn behind its contents leaves it be
+    (options.backdrop ? this.volumes : this.group).add(glare);
 
     this.setFrame(options.frame ?? {});
     this.writeLook();
@@ -779,7 +791,7 @@ export class Lights {
 
     this._extinction = extinction(this._air.visibilityM, density);
 
-    const floor = FLOOR / Math.max(this._look.exposure, 1e-12);
+    const floor = FLOOR / Math.max(this._look.exposure * this._display, 1e-12);
 
     for (const beam of this._beam_lights) {
       const u = beam.uniforms;
@@ -1112,6 +1124,15 @@ export class Lights {
   ) {
     this.tick(renderer);
 
+    // What is faint on screen moves with the camera's exposure: the beams
+    // reach as far as they still show
+    const display = Math.max(renderer.toneMappingExposure ?? 1, 1e-12);
+
+    if (Math.abs(display / this._display - 1) > 0.1) {
+      this._display = display;
+      this.writeAir();
+    }
+
     const geometry = this.glare.geometry;
     const lights = [
       ...this._navigation_lights,
@@ -1172,7 +1193,8 @@ export class Lights {
         rgb: scratch_rgb,
         core,
         coreLuminance: core_luminance,
-        radius: (glare_radius(brightest, FLOOR, observer) * Math.PI) / 180,
+        radius:
+          (glare_radius(brightest, FLOOR / display, observer) * Math.PI) / 180,
         bias: LENS_M + 2 * pixel * distance,
       });
     }
@@ -1185,4 +1207,7 @@ export class Lights {
 type Renderer = {
   info: { frame: number };
   getDrawingBufferSize: (target: Vector2) => Vector2;
+
+  /** The camera's exposure, applied before the tone curve */
+  toneMappingExposure?: number;
 };

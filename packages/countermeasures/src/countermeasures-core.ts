@@ -128,7 +128,11 @@ import {
 // showcase leaves its flares streaming back as one flown through a game's
 // world does
 
-/** The faintest luminance worth drawing, in the scene's units: 10 bits' step */
+/**
+ * The faintest luminance worth drawing, on the display: 10 bits' step. In
+ * the scene's units it is that over the camera's exposure, the renderer's
+ * `toneMappingExposure`, which an atmosphere opens up as the sky darkens
+ */
 const FLOOR = 1 / 1024;
 
 /**
@@ -267,6 +271,9 @@ type Cloud = {
 type Renderer = {
   info: { frame: number };
   getDrawingBufferSize: (target: Vector2) => Vector2;
+
+  /** The camera's exposure, applied before the tone curve */
+  toneMappingExposure?: number;
 };
 
 const scratch_matrix = new Matrix4();
@@ -2150,6 +2157,9 @@ export class Countermeasures {
   ) {
     this.tick(renderer);
 
+    // The faintest worth drawing, through the camera's exposure
+    const floor = FLOOR / Math.max(renderer.toneMappingExposure ?? 1, 1e-12);
+
     const geometry = this.glare.geometry;
     const burning = this._burning;
 
@@ -2208,7 +2218,7 @@ export class Countermeasures {
         coreLuminance:
           (1 - this._scattered) / (2 * Math.PI * (1 - Math.cos(core))),
         radius: Math.max(
-          (glare_radius(brightest, FLOOR, observer) * Math.PI) / 180,
+          (glare_radius(brightest, floor, observer) * Math.PI) / 180,
           core,
         ),
         bias: flare.light.radiusM + 2 * pixel * distance,
