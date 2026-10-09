@@ -23,6 +23,10 @@ const EXAMPLES = {
   contrails: load(() => import("@/examples/contrails")),
   lights: load(() => import("@/examples/lights")),
   countermeasures: load(() => import("@/examples/countermeasures")),
+  "chaff-in-the-sun": load(() => import("@/examples/chaff-in-the-sun")),
+  "countermeasures-altitude": load(
+    () => import("@/examples/countermeasures-altitude"),
+  ),
   "one-flight": load(() => import("@/examples/one-flight")),
   "the-controls": load(() => import("@/examples/the-controls")),
   "thrust-vectoring": load(() => import("@/examples/thrust-vectoring")),

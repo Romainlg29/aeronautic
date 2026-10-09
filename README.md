@@ -191,6 +191,8 @@ export const Jet = () => (
 
 ## Countermeasures
 
+![A delta fighter at night letting a program of flares go under its tail, each flame streaking back in the airstream and lighting the haze as it falls behind, rendered with @aeronautic/countermeasures](.github/assets/countermeasures.gif)
+
 **Decoy flares**, an MJU-7 class cartridge by default. Its grain of
 magnesium, Teflon and Viton burns from every face at the composition's
 **measured rate**, gone in about three seconds; its flame is the light that

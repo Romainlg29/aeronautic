@@ -4,6 +4,10 @@
 [![CI](https://github.com/Romainlg29/aeronautic/actions/workflows/ci.yml/badge.svg)](https://github.com/Romainlg29/aeronautic/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
+<!-- An absolute URL: npm shows this README without the repo around it -->
+
+![A delta fighter at night letting a program of flares go under its tail, each flame streaking back in the airstream and lighting the haze as it falls behind, rendered with @aeronautic/countermeasures](https://raw.githubusercontent.com/Romainlg29/aeronautic/main/.github/assets/countermeasures.gif)
+
 Physically based **decoy flares and chaff** for [React Three Fiber](https://r3f.docs.pmnd.rs)
 and three.js, written in TSL for three's `WebGPURenderer`.
 

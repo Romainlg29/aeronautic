@@ -37,17 +37,26 @@ const MODEL = `${base_path}/fighter.glb`;
 const MOON_LUX = 0.25;
 const MOON_UP = [0, 1, 0] as const;
 
-// They burn a kilometre up, in the standard atmosphere there
-const ALTITUDE_M = 1000;
-const air = standard_atmosphere(ALTITUDE_M);
-const density = air.pressurePa / (AIR_GAS_CONSTANT * air.temperatureK);
-
-// The MJU-7's flame when it lights, still and thrown at the fighter's
-// speed, and how long it burns there, a little slower than at sea level
+// The MJU-7's flame when it lights, still
 const mju7 = FLARE.mju7;
 const lit = flare_light(mju7, grain_at(mju7, 0));
-const burn_s = burn_time(flare_at_pressure(mju7, air.pressurePa));
-const falling_m_s = terminal_speed(mju7, density);
+
+/**
+ * The standard atmosphere at an altitude, and the flare in it: how long it
+ * burns, slower in thinner air, and how fast it falls once slowed.
+ * @param altitude_m How high
+ * @returns The air's density, the burn and the fall
+ */
+const flare_at = (altitude_m: number) => {
+  const air = standard_atmosphere(altitude_m);
+  const density = air.pressurePa / (AIR_GAS_CONSTANT * air.temperatureK);
+
+  return {
+    density,
+    burn_s: burn_time(flare_at_pressure(mju7, air.pressurePa)),
+    falling_m_s: terminal_speed(mju7, density),
+  };
+};
 
 // Close under the tail, or off to the side, far enough to see a program's
 // flares fall away behind: at 250 m/s each burns out half a kilometre back
@@ -83,10 +92,12 @@ export type Settings = {
   burst: number;
   visibility_m: number;
   ev100: number;
+  altitude_m: number;
 };
 
-// Two flares a burst, four bursts, a clear night
+// Two flares a burst, four bursts, a clear night, a kilometre up
 export const START_SETTINGS: Settings = {
+  altitude_m: 1000,
   view: "close",
   airspeed: 250,
   salvo: 4,
@@ -140,6 +151,11 @@ const FlaringFighter: FC<{
     [exposure],
   );
 
+  const { density, burn_s, falling_m_s } = useMemo(
+    () => flare_at(settings.altitude_m),
+    [settings.altitude_m],
+  );
+
   // As it leaves: the airspeed, and the cartridge's throw square to it
   const thrown_cd = useMemo(
     () =>
@@ -151,7 +167,7 @@ const FlaringFighter: FC<{
         Math.hypot(settings.airspeed, mju7.ejectionMPerS),
         density,
       ).intensityCd,
-    [settings.airspeed],
+    [settings.airspeed, density],
   );
   const program = useMemo(
     () => ({ salvo: settings.salvo, burst: settings.burst }),
@@ -196,7 +212,10 @@ const FlaringFighter: FC<{
           ref={flares}
           program={program}
           flight={{ airspeedMPerS: settings.airspeed }}
-          air={{ altitudeM: ALTITUDE_M, visibilityM: settings.visibility_m }}
+          air={{
+            altitudeM: settings.altitude_m,
+            visibilityM: settings.visibility_m,
+          }}
           look={look}
           fire={fired}
         />
@@ -208,8 +227,9 @@ const FlaringFighter: FC<{
 
 /**
  * The flare and chaff buttons, the view, the program, the airspeed, the haze and the
- * exposure.
- * @param props The settings, how to change them, and how to fire
+ * exposure, and the altitude if asked for.
+ * @param props The settings, how to change them, how to fire, and whether
+ *   the altitude is shown
  * @returns The controls
  */
 const CountermeasuresControls: FC<{
@@ -217,7 +237,8 @@ const CountermeasuresControls: FC<{
   change: (next: Partial<Settings>) => void;
   fire: () => void;
   chaff: () => void;
-}> = ({ settings, change, fire, chaff }) => (
+  altitude: boolean;
+}> = ({ settings, change, fire, chaff, altitude }) => (
   <div className="example-controls">
     <button type="button" onClick={fire}>
       Flares
@@ -253,6 +274,21 @@ const CountermeasuresControls: FC<{
         ))}
       </select>
     </label>
+    {altitude && (
+      <label>
+        altitude {(settings.altitude_m / 1000).toFixed(1)} km
+        <input
+          type="range"
+          min={0}
+          max={15_000}
+          step={500}
+          value={settings.altitude_m}
+          onChange={(event) =>
+            change({ altitude_m: Number(event.target.value) })
+          }
+        />
+      </label>
+    )}
     <label>
       burst {settings.burst}
       <input
@@ -306,10 +342,17 @@ const CountermeasuresControls: FC<{
 
 /**
  * The docs' fighter letting flares go at night.
+ * @param props Where to start from, and whether the altitude can change
  * @returns The example
  */
-export const CountermeasuresExample: FC = () => {
-  const [settings, set_settings] = useState<Settings>(START_SETTINGS);
+export const CountermeasuresExample: FC<{
+  start?: Partial<Settings>;
+  altitude?: boolean;
+}> = ({ start, altitude = false }) => {
+  const [settings, set_settings] = useState<Settings>({
+    ...START_SETTINGS,
+    ...start,
+  });
   const [fired, set_fired] = useState(0);
   const [chaffed, set_chaffed] = useState(0);
   const readout = useRef<HTMLSpanElement>(null);
@@ -331,6 +374,7 @@ export const CountermeasuresExample: FC = () => {
             change={change}
             fire={() => set_fired((count) => count + 1)}
             chaff={() => set_chaffed((count) => count + 1)}
+            altitude={altitude}
           />
           <span ref={readout} className="example-note" />
         </>
