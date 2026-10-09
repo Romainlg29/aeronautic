@@ -7,6 +7,7 @@ import {
   FLARE,
   flare_light,
   grain_at,
+  flare_at_pressure,
   grain_length,
   luminous_per_band,
   mass_rate,
@@ -14,6 +15,7 @@ import {
   MTV_DENSITIES,
   MTV_FRACTIONS,
   terminal_speed,
+  trail_colors,
 } from "./flare";
 import { band_radiance, blackbody_luminance } from "./graybody";
 
@@ -142,5 +144,53 @@ describe("the MJU-7's flame in the airstream", () => {
     expect(flown.intensityCd).toBeLessThan(still.intensityCd);
     expect(flown.trailCd).toBeCloseTo(swept * mju7.trailShare);
     expect(flown.radiusM).toBeLessThan(still.radiusM);
+  });
+});
+
+describe("the MJU-7 in thinner air", () => {
+  it("is carried off less, its products swept by the air's mass", () => {
+    // At 11 km the air is 0.297 times as dense: v½ is 505 m/s
+    expect(airstream_share(mju7, 250, 0.3639)).toBeCloseTo(
+      1 / (1 + (250 * 0.3639) / (mju7.halfLightMPerS * 1.225)),
+    );
+    expect(airstream_share(mju7, 250, 0.3639)).toBeGreaterThan(
+      airstream_share(mju7, 250),
+    );
+  });
+
+  it("burns slower, as MTV's rate goes with the pressure", () => {
+    const high = flare_at_pressure(mju7, 22_632);
+
+    expect(high.burnRateMPerS / mju7.burnRateMPerS).toBeCloseTo(
+      (22_632 / 101_325) ** 0.094,
+      6,
+    );
+    expect(flare_at_pressure(mju7, 101_325).burnRateMPerS).toBeCloseTo(
+      mju7.burnRateMPerS,
+      12,
+    );
+  });
+});
+
+describe("the MJU-7's trail as it cools", () => {
+  const colors = trail_colors(
+    mju7,
+    (temperature_k) => [temperature_k, 0, 0],
+    3,
+    6,
+  );
+
+  it("starts at the flame's temperature", () => {
+    expect(colors[0]).toBeCloseTo(mju7.temperatureK, 0);
+  });
+
+  it("is as hot as a graybody a third of an e-fold dimmer at each step", () => {
+    for (let step = 1; step <= 6; step++) {
+      expect(colors[step * 3]).toBeLessThan(colors[(step - 1) * 3]);
+      expect(
+        blackbody_luminance(colors[step * 3]) /
+          blackbody_luminance(mju7.temperatureK),
+      ).toBeCloseTo(Math.exp(-step / 2), 4);
+    }
   });
 });

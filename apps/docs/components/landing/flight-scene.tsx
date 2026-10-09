@@ -222,6 +222,8 @@ const DAY_PROFILE = { exposure: SKIES.day.exposure };
 const lights_exposure = (plume_exposure: number) =>
   plume_exposure / BLACKBODY_2000K_CD_M2;
 const DAY_LIGHTS_LOOK = { exposure: lights_exposure(SKIES.day.exposure) };
+// The flares' smoke lit by the sun and the sky the trails are
+const DAY_FLARES_LOOK = { ...DAY_LIGHTS_LOOK, ...SKIES.day.look };
 
 // How the fake flies: what the gear, the flaps and the air brake cost off the
 // Mach number its throttle settles at, from `flight-plan`
@@ -324,8 +326,8 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({
     const delta = Math.min(frame_delta, 0.1);
     const input = keys.current;
 
-    // The plumes' exposure, and the vapor's and the trails' light, follow
-    // the sky as it fades
+    // The plumes' exposure, and the vapor's, the trails' and the smoke's
+    // light, follow the sky as it fades
     if (dusk.moved) {
       const night = dusk.night;
       const day = SKIES.day.look;
@@ -342,6 +344,7 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({
       batch.current?.updateProfile({ exposure });
       lights.current?.updateLook({ exposure: lights_exposure(exposure) });
       countermeasures.current?.updateLook({
+        ...look,
         exposure: lights_exposure(exposure),
       });
       vapor.current?.updateLook(look);
@@ -449,7 +452,7 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({
           {/* Its dispensers are the defaults, measured off this model */}
           <Countermeasures
             ref={countermeasures}
-            look={DAY_LIGHTS_LOOK}
+            look={DAY_FLARES_LOOK}
             fire={flares}
           />
         </group>

@@ -18,6 +18,17 @@ The brightest flares also light the scene: three's point lights, at their
 intensity in candela times the exposure, their colour the flame's. How many
 is the quality's.
 
+Each flare's smoke is a ribbon facing the camera through the points it
+left, about ten a second, four σ wide or two pixels. Each point carries the
+light it scatters and its depth through its middle, both worked out on the
+CPU; the GPU spreads the depth across the ribbon as a Gaussian and shows
+1 − e^-τ of the light. Points are kept in the air's frame, less how far the
+air has moved since: laying them costs nothing a frame after.
+
+The lights, the glare, the trails and the smoke are all drawn from the
+first frame, before any flare leaves: a light added or a material first
+drawn has three build its pipeline, and that stalls the frame for a second.
+
 ## Left out
 
 - **The flame's shape at the grain**: it is drawn as a disc of its area.

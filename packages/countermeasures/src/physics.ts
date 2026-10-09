@@ -1,6 +1,7 @@
 // The physics behind the countermeasures, for tools, tests and anyone
 // curious: the flare's grain burning down, its flame as the eye and a
-// seeker see it, its flight through the air, and the dispensers' programs
+// seeker see it, its flight through the air, its smoke, and the
+// dispensers' programs
 
 export {
   airstream_share,
@@ -8,6 +9,7 @@ export {
   burn_time,
   drag_per_speed2,
   FLARE,
+  flare_at_pressure,
   flare_light,
   G0,
   grain_at,
@@ -18,7 +20,10 @@ export {
   mixture_density,
   MTV_DENSITIES,
   MTV_FRACTIONS,
+  SEA_LEVEL_DENSITY,
+  SEA_LEVEL_PA,
   terminal_speed,
+  trail_colors,
   type Flare,
   type FlareLight,
   type FlareName,
@@ -31,6 +36,7 @@ export {
   PHOTOPIC,
   planck,
 } from "./graybody";
+export { henyey_greenstein, smoke_sigma } from "./smoke";
 export {
   default_program,
   program_releases,

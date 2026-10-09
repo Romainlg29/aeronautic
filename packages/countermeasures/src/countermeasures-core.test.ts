@@ -83,7 +83,11 @@ describe("Countermeasures", () => {
 
     render(countermeasures, 0);
     countermeasures.release();
-    fly(countermeasures, countermeasures.burnTimeS - 0.1);
+
+    const out_s =
+      countermeasures.flare.ignitionDelayS + countermeasures.burnTimeS;
+
+    fly(countermeasures, out_s - 0.1);
     expect(countermeasures.burning).toBe(1);
 
     fly(countermeasures, 0.2);
@@ -138,6 +142,19 @@ describe("Countermeasures", () => {
     expect(flare.y).toBeLessThan(-10);
   });
 
+  it("draws its meshes before any flare leaves, built with the scene", () => {
+    const countermeasures = new Countermeasures();
+
+    render(countermeasures, 0);
+
+    // One triangle of no area: drawn, so its pipeline is built now and not
+    // when the first flare leaves
+    const glare = countermeasures.glare.geometry;
+
+    expect(glare.drawRange.count).toBe(3);
+    expect(glare.getAttribute("position").getX(2)).toBe(0);
+  });
+
   it("leaves a trail behind each flare in the airstream", () => {
     const countermeasures = new Countermeasures();
     const camera = new PerspectiveCamera(50, 1, 0.1, 10_000);
@@ -185,6 +202,69 @@ describe("Countermeasures", () => {
 
     countermeasures.release();
     render(countermeasures, 1 / 60);
+
+    // The igniter has still to light it
+    expect(lights[0].intensity).toBe(0);
+
+    fly(countermeasures, 0.15);
     expect(lights[0].intensity).toBeGreaterThan(0);
+  });
+
+  it("burns longer high up, in thinner air", () => {
+    const low = new Countermeasures({ air: { altitudeM: 0 } });
+    const high = new Countermeasures({ air: { altitudeM: 12_000 } });
+
+    // MTV's rate goes with the pressure to the 0.094: a fifth of sea
+    // level's at 12 km burns 14 % slower
+    expect(high.burnTimeS / low.burnTimeS).toBeCloseTo(
+      (101_325 / 19_330) ** 0.094,
+      2,
+    );
+  });
+
+  it("leaves smoke behind that lingers after the flare is out", () => {
+    const countermeasures = new Countermeasures();
+    const camera = new PerspectiveCamera(50, 1, 0.1, 10_000);
+
+    camera.position.set(-200, 0, 300);
+    camera.updateMatrixWorld();
+    render(countermeasures, 0);
+    countermeasures.release(0);
+    fly(countermeasures, 1);
+
+    const draw = () =>
+      countermeasures.smoke.onBeforeRender(
+        {
+          info: { frame },
+          getDrawingBufferSize: (target: {
+            set: (x: number, y: number) => void;
+          }) => target.set(800, 800),
+        } as never,
+        { fog: null } as never,
+        camera,
+        null as never,
+        null as never,
+        null as never,
+      );
+
+    draw();
+    expect(countermeasures.smoking).toBe(1);
+
+    const geometry = countermeasures.smoke.geometry;
+    const depths = geometry.getAttribute("smoke");
+    const colors = geometry.getAttribute("color");
+
+    expect(geometry.drawRange.count).toBeGreaterThan(0);
+
+    // Thick enough to see, lit by its own flare
+    expect(depths.getY(0)).toBeGreaterThan(0.1);
+    expect(colors.getX(0)).toBeGreaterThan(0);
+
+    fly(countermeasures, countermeasures.burnTimeS);
+    expect(countermeasures.burning).toBe(0);
+    expect(countermeasures.smoking).toBe(1);
+
+    countermeasures.clear();
+    expect(countermeasures.smoking).toBe(0);
   });
 });

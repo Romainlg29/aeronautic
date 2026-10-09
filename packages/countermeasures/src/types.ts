@@ -64,6 +64,12 @@ export type CountermeasuresAir = {
 
   /** The meteorological range, metres: how far a black target is seen */
   visibilityM: number;
+
+  /**
+   * The air's turbulence, its dissipation rate ε, m²/s³: how fast it
+   * spreads the smoke
+   */
+  turbulenceM2PerS3: number;
 };
 
 /**
@@ -81,6 +87,20 @@ export type CountermeasuresLook = {
 
   /** The observer's pigmentation: 0 very dark eyes, 0.5 brown, 1 blue */
   pigmentation: number;
+
+  /**
+   * Which way the sunlight comes from, in world space: towards the sun. It
+   * and the sky light the smoke, as they do contrails'
+   */
+  sunDirection: readonly [number, number, number];
+
+  /** The sun's colour, linear, and brightness, in the scene's light units */
+  sunColor: readonly [number, number, number];
+  sunIntensity: number;
+
+  /** The sky's light, the same from every direction, as the sun's */
+  skyColor: readonly [number, number, number];
+  skyIntensity: number;
 };
 
 /**
@@ -108,23 +128,32 @@ export const default_countermeasures_flight = (): CountermeasuresFlight => ({
 
 /**
  * A clear day, a few thousand feet up: the 23 km of the clear sky's
- * standard visibility.
+ * standard visibility, and the turbulence of the top of the mixed layer,
+ * 10⁻³ m²/s³: the free troposphere's is nearer 10⁻⁴, a convective
+ * afternoon's near the ground 10⁻². An estimate of a typical day.
  * @returns A fresh air
  */
 export const default_countermeasures_air = (): CountermeasuresAir => ({
   altitudeM: 1_000,
   visibilityM: 23_000,
+  turbulenceM2PerS3: 1e-3,
 });
 
 /**
  * Dusk, EV 8, where a flare's glare and the sky both show, seen by a young
- * brown-eyed observer.
+ * brown-eyed observer. No sun or sky lights the smoke: only the flares,
+ * as at night. Contrails' daylight is a sun of 3 and a sky of 1.
  * @returns A fresh look
  */
 export const default_countermeasures_look = (): CountermeasuresLook => ({
   exposure: exposure_ev100(8),
   ageYears: 25,
   pigmentation: 0.5,
+  sunDirection: [0.4, 0.8, 0.3],
+  sunColor: [1, 0.96, 0.9],
+  sunIntensity: 0,
+  skyColor: [0.55, 0.68, 0.9],
+  skyIntensity: 0,
 });
 
 /**

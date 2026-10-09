@@ -7,6 +7,7 @@ import {
 import {
   burn_time,
   FLARE,
+  flare_at_pressure,
   flare_light,
   grain_at,
   terminal_speed,
@@ -26,27 +27,45 @@ import {
 } from "react";
 import { type Group, LoopOnce } from "three";
 import { base_path } from "@/lib/shared";
-import { Stage } from "./stage";
+import { Aim, Stage } from "./stage";
 
 const MODEL = `${base_path}/fighter.glb`;
 
 // A full moon lights the ground to about 0.25 lux at most; a hemisphere light
-// gives an upward face its intensity in lux. The flares light the rest
+// gives an upward face its intensity in lux. The flares light the rest. It
+// lights the smoke from overhead too, as the sun would
 const MOON_LUX = 0.25;
-
-// The MJU-7's flame when it lights, still and thrown at the fighter's
-// speed, and how long it burns
-const mju7 = FLARE.mju7;
-const lit = flare_light(mju7, grain_at(mju7, 0));
-const burn_s = burn_time(mju7);
+const MOON_UP = [0, 1, 0] as const;
 
 // They burn a kilometre up, in the standard atmosphere there
 const ALTITUDE_M = 1000;
 const air = standard_atmosphere(ALTITUDE_M);
-const falling_m_s = terminal_speed(
-  mju7,
-  air.pressurePa / (AIR_GAS_CONSTANT * air.temperatureK),
-);
+const density = air.pressurePa / (AIR_GAS_CONSTANT * air.temperatureK);
+
+// The MJU-7's flame when it lights, still and thrown at the fighter's
+// speed, and how long it burns there, a little slower than at sea level
+const mju7 = FLARE.mju7;
+const lit = flare_light(mju7, grain_at(mju7, 0));
+const burn_s = burn_time(flare_at_pressure(mju7, air.pressurePa));
+const falling_m_s = terminal_speed(mju7, density);
+
+// Close under the tail, or off to the side, far enough to see a program's
+// flares fall away behind: at 250 m/s each burns out half a kilometre back
+// and forty metres down
+const VIEWS = {
+  close: {
+    label: "close, under the tail",
+    camera: [-42, 4, -14],
+    target: [0, -6, 28],
+  },
+  side: {
+    label: "off the side, 650 m",
+    camera: [-650, -20, 260],
+    target: [0, -20, 260],
+  },
+} as const;
+
+type View = keyof typeof VIEWS;
 
 // A fighter low down, slower, and holding still for the flares to fall
 const AIRSPEEDS = {
@@ -58,6 +77,7 @@ const AIRSPEEDS = {
 type Airspeed = keyof typeof AIRSPEEDS;
 
 export type Settings = {
+  view: View;
   airspeed: Airspeed;
   salvo: number;
   burst: number;
@@ -67,6 +87,7 @@ export type Settings = {
 
 // Two flares a burst, four bursts, a clear night
 export const START_SETTINGS: Settings = {
+  view: "close",
   airspeed: 250,
   salvo: 4,
   burst: 2,
@@ -108,7 +129,15 @@ const FlaringFighter: FC<{
   }, [scene, actions]);
 
   const exposure = exposure_ev100(settings.ev100);
-  const look = useMemo(() => ({ exposure }), [exposure]);
+  const look = useMemo(
+    () => ({
+      exposure,
+      sunDirection: MOON_UP,
+      sunColor: [1, 1, 1] as const,
+      sunIntensity: MOON_LUX * exposure,
+    }),
+    [exposure],
+  );
 
   // As it leaves: the airspeed, and the cartridge's throw square to it
   const thrown_cd = useMemo(
@@ -119,6 +148,7 @@ const FlaringFighter: FC<{
         undefined,
         undefined,
         Math.hypot(settings.airspeed, mju7.ejectionMPerS),
+        density,
       ).intensityCd,
     [settings.airspeed],
   );
@@ -136,7 +166,8 @@ const FlaringFighter: FC<{
       `${current.burning} burning, ${current.pending} to come · ` +
       `each ${(lit.intensityCd / 1000).toFixed(0)} kcd still, ` +
       `${(thrown_cd / 1000).toFixed(0)} kcd at the grain as thrown, ` +
-      `for ${burn_s.toFixed(1)} s · falling at ` +
+      `lit after ${mju7.ignitionDelayS} s for ${burn_s.toFixed(1)} s · ` +
+      `${current.smoking} smoke trails · falling at ` +
       `${falling_m_s.toFixed(0)} m/s once slowed`;
   });
 
@@ -163,7 +194,8 @@ const FlaringFighter: FC<{
 };
 
 /**
- * The fire button, the program, the airspeed, the haze and the exposure.
+ * The fire button, the view, the program, the airspeed, the haze and the
+ * exposure.
  * @param props The settings, how to change them, and how to fire
  * @returns The controls
  */
@@ -176,6 +208,19 @@ const CountermeasuresControls: FC<{
     <button type="button" onClick={fire}>
       Fire
     </button>
+    <label>
+      view
+      <select
+        value={settings.view}
+        onChange={(event) => change({ view: event.target.value as View })}
+      >
+        {Object.entries(VIEWS).map(([value, { label }]) => (
+          <option key={value} value={value}>
+            {label}
+          </option>
+        ))}
+      </select>
+    </label>
     <label>
       airspeed
       <select
@@ -272,6 +317,10 @@ export const CountermeasuresExample: FC = () => {
         </>
       }
     >
+      <Aim
+        camera={[...VIEWS[settings.view].camera]}
+        target={[...VIEWS[settings.view].target]}
+      />
       <FlaringFighter settings={settings} fired={fired} readout={readout} />
     </Stage>
   );

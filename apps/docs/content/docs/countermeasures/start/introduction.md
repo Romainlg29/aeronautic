@@ -15,7 +15,10 @@ description: "What @aeronautic/countermeasures draws, what drives it, and what i
   temperature carries that to the eye: a few hundred thousand candela as it
   lights, fading as the grain shrinks. In the airstream it dims at the grain
   and trails what is swept off it, long at release and shrinking as it
-  slows: estimates, there being no measured curve to follow.
+  slows: estimates, there being no measured curve to follow. Higher up
+  it burns slower and is swept off less.
+- **Its smoke**: what the flame burns to, laid along its path, spreading in
+  the air's turbulence, lit by the flames, the sun and the sky.
 - **Its flight**: thrown down from the dispenser, then slowed by its own drag
   from the aircraft's speed within a second, falling behind and below.
 - **The programs**: a burst of so many flares, a salvo of so many bursts, the
@@ -27,7 +30,8 @@ description: "What @aeronautic/countermeasures draws, what drives it, and what i
 ## What drives it
 
 None of it is drawn to a size, a colour or a timer by eye; the airstream's
-toll, which no open measurement gives, is an estimate and a dial. A flame's
+toll, the ignition delay and the smoke's optics, which no open
+measurement gives, are estimates and dials. A flame's
 brightness on screen is its intensity, in candela, through the air, over the
 distance squared, times the exposure. How long it burns is its grain's
 thinnest side over its burn rate. Where it goes is its drag and its weight.
@@ -39,10 +43,10 @@ units:
 - **`flare`**: the cartridge, its grain and its composition.
 - **`program`**: what one press of the button lets go.
 - **`flight`**: how the aircraft moves through the air.
-- **`air`**: the altitude and the day's visibility.
-- **`look`**: the exposure, and the eye.
+- **`air`**: the altitude, the day's visibility and its turbulence.
+- **`look`**: the exposure, the eye, and the sun and sky on the smoke.
 
-Chaff and smoke are to come.
+Chaff is to come.
 
 ## Requirements
 

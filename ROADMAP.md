@@ -13,14 +13,15 @@ open an issue to discuss one before starting, as
 
 The flares and their programs are out, in 0.1. Still to come:
 
-- **The smoke**: the burn's products, laid along each flare's path, mixing
-  out and drifting with the wind, lit like the contrails' plume.
+- **The smoke, lit fully**: its own shadow and light scattered more than
+  once, as the contrails' plume has, and measured optics for an MTV
+  flare's smoke in place of the estimates.
 - **Chaff**: a cloud of dipoles blooming from the cartridge, slowing in the
   air and settling at their terminal velocity, glinting where the sun catches
   them.
-- **The flame in the airstream, measured**: the dimming and the trail are
-  estimates for now; measured data on an MTV flare's intensity against
-  airspeed and altitude would replace them.
+- **The flame in the airstream, measured**: the dimming, the trail and
+  the ignition delay are estimates for now; measured data on an MTV flare's
+  intensity against airspeed and altitude would replace them.
 
 ## `@aeronautic/rotor`
 

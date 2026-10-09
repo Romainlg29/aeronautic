@@ -46,10 +46,42 @@ of an MTV flare's intensity against airspeed is published openly, so v½ is
 cold air, and the trail gives half of what is swept off. All three are
 dials on `flare`: `halfLightMPerS`, `glowTimeS`, `trailShare`.
 
+What carries the products off is the air's mass flux, ρ v, not its speed:
+v½ is sea level's, and grows as the air thins. At 250 m/s the grain keeps
+37 % of its light at sea level, 53 % at 6 km and 70 % at 12 km.
+
+## Higher up
+
+MTV's burn rate goes with the pressure to a small power: r = 9.39 p^0.094
+mm/s, p in MPa, from strand-burner tests between 0.15 and 1.15 MPa
+(Nihon University). The flare's rate is sea level's, and thinner air slows
+it, so it burns longer:
+
+| altitude | pressure | burns  |
+| -------- | -------- | ------ |
+| 0        | 101 kPa  | 2.93 s |
+| 1 km     | 90 kPa   | 2.96 s |
+| 6 km     | 47 kPa   | 3.15 s |
+| 12 km    | 19 kPa   | 3.42 s |
+
+Its light a second is what it burns a second, so it is that much dimmer
+for that much longer. The dial is `pressureExponent`.
+
+## Lighting
+
+The cartridge's impulse cartridge fires the flare out, and its igniter
+lights the grain a moment later: it leaves dark and lights a few metres
+behind. No figure for the MJU-7 is published openly; 0.1 s is an
+**estimate**, `ignitionDelayS`.
+
+## The trail cooling
+
+The swept products cool as they go, and redden. Where the trail's light has
+fallen by e^-f, they are as hot as a graybody whose luminance has, so the
+trail is drawn in that one's colour: 2100 K at the grain, about 1700 K three
+e-folds back.
+
 ## Left out
 
-- **Altitude's toll**: thinner air cools the flame less and feeds it less.
-  The airstream's share is the same at every altitude.
-- **The trail's colour**: it cools as it goes, and reddens. It is drawn in
-  the flame's colour.
-- **The smoke**: the magnesium oxide and carbon the flame leaves, to come.
+- **Altitude and the flame's temperature**: thinner air feeds the flame's
+  afterburning in the air less. It is drawn at 2100 K at every altitude.

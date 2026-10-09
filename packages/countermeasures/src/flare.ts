@@ -81,7 +81,37 @@ export type Flare = {
 
   /** The share of the light swept off the grain that the trail still gives */
   trailShare: number;
+
+  /**
+   * How the burn rate follows the pressure, r ∝ pⁿ: the rate given is at
+   * sea level's
+   */
+  pressureExponent: number;
+
+  /** How long after it leaves the grain lights, seconds. An estimate */
+  ignitionDelayS: number;
+
+  /** The smoke it leaves, per kilogram burnt: its oxides and carbon, kg/kg */
+  smokeYield: number;
+
+  /** The smoke's extinction per kilogram, m²/kg. An estimate */
+  smokeExtinctionM2PerKg: number;
+
+  /** The share of what the smoke stops that it scatters. An estimate */
+  smokeAlbedo: number;
+
+  /**
+   * The smoke's scattering asymmetry, Henyey and Greenstein's g: how much
+   * it sends on forward. An estimate
+   */
+  smokeAsymmetry: number;
 };
+
+/** Sea level's pressure, Pa */
+export const SEA_LEVEL_PA = 101_325;
+
+/** Sea level's density, kg/m³ */
+export const SEA_LEVEL_DENSITY = 1.225;
 
 /**
  * MTV1, the baseline magnesium/Teflon/Viton composition, by mass.
@@ -129,6 +159,19 @@ export const FLARE = {
    * 3.86 mm/s, 179 W s/(sr g) between 1.8 and 2.6 µm. An MTV flame is 2000 to
    * 2200 K, emissivity about 0.95: the middle of that. US patent 5,400,712
    * measured its ejection at 99.5 ft/s
+   *
+   * In thinner air it burns slower, as MTV's rate goes with the pressure to
+   * the 0.094 (strand burner, 0.15 to 1.15 MPa, Nihon University's
+   * Mg/Teflon/Viton). The igniter takes a moment: 0.1 s, an estimate
+   *
+   * Its smoke is what it burns to: the Teflon's fluorine takes the
+   * magnesium it can to MgF₂, its carbon is left as soot, and the rest of
+   * the magnesium burns in the air to MgO. A kilogram's 500 g of Mg and
+   * 450 g of C₂F₄ give 561 g of MgF₂, 108 g of C and 466 g of MgO: 1.13 kg,
+   * its 50 g of Viton left aside. A white oxide smoke stops about 2 m² a gram, scatters about
+   * 0.8 of it, the soot taking the rest, and sends it on forward with a g of
+   * 0.6, its particles a fraction of a micron: all three estimates, there
+   * being no measurement of an MTV flare's smoke
    */
   mju7: {
     crossSectionM: [0.0226, 0.0498],
@@ -144,6 +187,12 @@ export const FLARE = {
     halfLightMPerS: 150,
     glowTimeS: 0.05,
     trailShare: 0.5,
+    pressureExponent: 0.094,
+    ignitionDelayS: 0.1,
+    smokeYield: 1.13,
+    smokeExtinctionM2PerKg: 2_000,
+    smokeAlbedo: 0.8,
+    smokeAsymmetry: 0.6,
   },
 } as const satisfies Record<string, Flare>;
 
@@ -246,13 +295,23 @@ export const luminous_per_band = (flare: Flare): number =>
  * through the air. Radiation from the flame competes with the airstream
  * carrying its products off, at a rate that grows with the speed, so the
  * share is 1 / (1 + v / v½): what static tests measure when still, half at
- * v½. The form is the competition's; v½ is an estimate (see the make)
+ * v½. The form is the competition's; v½ is an estimate (see the make).
+ * What carries them off is the air's mass flux, ρ v, so v½ is sea level's
+ * and grows as the air thins
  * @param flare The flare
  * @param speed_m_s Its speed through the air
+ * @param density_kg_m3 The air's density: sea level's by default
  * @returns From 1 down
  */
-export const airstream_share = (flare: Flare, speed_m_s: number): number =>
-  1 / (1 + Math.max(speed_m_s, 0) / flare.halfLightMPerS);
+export const airstream_share = (
+  flare: Flare,
+  speed_m_s: number,
+  density_kg_m3 = SEA_LEVEL_DENSITY,
+): number =>
+  1 /
+  (1 +
+    (Math.max(speed_m_s, 0) * density_kg_m3) /
+      (flare.halfLightMPerS * SEA_LEVEL_DENSITY));
 
 /**
  * The flame, as the eye sees it.
@@ -278,6 +337,7 @@ export type FlareLight = {
  * @param per_band `luminous_per_band(flare)`, if worked out already
  * @param target Where to write it
  * @param speed_m_s Its speed through the air: still, as tested, by default
+ * @param density_kg_m3 The air's density: sea level's by default
  * @returns target
  */
 export const flare_light = (
@@ -286,9 +346,10 @@ export const flare_light = (
   per_band = luminous_per_band(flare),
   target: FlareLight = { intensityCd: 0, trailCd: 0, radiusM: 0 },
   speed_m_s = 0,
+  density_kg_m3 = SEA_LEVEL_DENSITY,
 ): FlareLight => {
   const still = band_intensity(flare, grain);
-  const share = airstream_share(flare, speed_m_s);
+  const share = airstream_share(flare, speed_m_s, density_kg_m3);
   const band = still * share;
   const radiance =
     flare.emissivity *
@@ -336,3 +397,62 @@ export const drag_per_speed2 = (
  */
 export const terminal_speed = (flare: Flare, density_kg_m3: number): number =>
   Math.sqrt(G0 / drag_per_speed2(flare, grain_at(flare, 0), density_kg_m3));
+
+/**
+ * The flare at a pressure: the burn rate the pressure gives it, as MTV's
+ * goes with the pressure to its exponent. The rest is the same.
+ * @param flare The flare, its rate sea level's
+ * @param pressure_pa The air's pressure
+ * @returns The flare as it burns there
+ */
+export const flare_at_pressure = (
+  flare: Flare,
+  pressure_pa: number,
+): Flare => ({
+  ...flare,
+  burnRateMPerS:
+    flare.burnRateMPerS *
+    (Math.max(pressure_pa, 1) / SEA_LEVEL_PA) ** flare.pressureExponent,
+});
+
+/**
+ * The trail's colours as it cools, a table over the e-folds of its light:
+ * where the light has fallen by e^-f, the products are as hot as a
+ * graybody whose luminance has, and their colour is that one's. The
+ * colours are at a luminance of one.
+ * @param flare The flare
+ * @param chromaticity_rgb_of A colour for a temperature, at a luminance of one
+ * @param e_folds How far the table goes
+ * @param steps Its entries, past the first
+ * @returns The colours, red, green and blue in turn
+ */
+export const trail_colors = (
+  flare: Flare,
+  chromaticity_rgb_of: (
+    temperature_k: number,
+  ) => readonly [number, number, number],
+  e_folds: number,
+  steps: number,
+): Float32Array => {
+  const table = new Float32Array((steps + 1) * 3);
+  const hot = blackbody_luminance(flare.temperatureK);
+
+  for (let step = 0; step <= steps; step++) {
+    const wanted = hot * Math.exp((-e_folds * step) / steps);
+
+    // The luminance only falls as it cools: halve the interval on it
+    let low = 300;
+    let high = flare.temperatureK;
+
+    for (let iteration = 0; iteration < 40; iteration++) {
+      const middle = (low + high) / 2;
+
+      if (blackbody_luminance(middle) > wanted) high = middle;
+      else low = middle;
+    }
+
+    table.set(chromaticity_rgb_of((low + high) / 2), step * 3);
+  }
+
+  return table;
+};

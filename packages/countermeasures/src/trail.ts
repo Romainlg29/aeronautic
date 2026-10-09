@@ -18,7 +18,9 @@ import { attribute, vec4 } from "three/tsl";
 // grain flies on: each stays where it left the grain, glowing as it cools,
 // so the trail lies along the flare's path through the air, behind it, as
 // long as its speed times how long they glow. Its light falls off along it
-// as they cool, an e-fold each speed × glow time. Each trail is a ribbon
+// as they cool, an e-fold each speed × glow time, and so does their colour:
+// where the light has fallen by e^-f, the products are as hot as a graybody
+// whose luminance has, and redder. Each trail is a ribbon
 // facing the camera, its luminance the light per metre over its width, laid
 // on the CPU a few cross-sections at a time
 
@@ -27,6 +29,12 @@ export const TRAIL_SEGMENTS = 4;
 
 /** How many e-folds of the light are drawn: all but 5 % of it */
 export const TRAIL_E_FOLDS = 3;
+
+/**
+ * The cooling colours' table: a step a fifth of a segment's e-folds, the
+ * colour moving less than the eye tells apart between two
+ */
+export const TRAIL_COLOR_STEPS = 24;
 
 /** Vertices a trail: two triangles a segment */
 export const TRAIL_VERTICES = TRAIL_SEGMENTS * 6;

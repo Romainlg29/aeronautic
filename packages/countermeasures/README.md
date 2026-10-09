@@ -17,7 +17,11 @@ and three.js, written in TSL for three's `WebGPURenderer`.
 - **The airstream**: the flame dims as it is swept off the grain, halved
   at 150 m/s, and what is swept off glows on as a trail behind it, long at
   release and shrinking as the flare slows. No measured curve is published
-  openly: these numbers are estimates, and dials.
+  openly: these numbers are estimates, and dials. Higher up it burns
+  slower, as MTV's rate goes with the pressure, and is swept off less.
+- **The smoke**: 1.13 kg of MgO, MgF₂ and carbon a kilogram burnt, laid
+  along each flare's path, spreading in the air's turbulence, and lit by
+  the flames, the sun and the sky.
 - **The flight**: thrown down at the cartridge's 30 m/s, then slowed by its
   own drag, a tumbling block's, from the aircraft's speed within a second,
   falling behind and below.
@@ -27,7 +31,7 @@ and three.js, written in TSL for three's `WebGPURenderer`.
   flares light the scene.
 
 None of it is drawn to a size or a timer by eye; the few estimates are
-said to be. Chaff and smoke are to come.
+said to be. Chaff is to come.
 
 **[Docs](https://romainlg29.github.io/aeronautic/docs/countermeasures/start/introduction/)** ·
 **[Live example on the docs' fighter](https://romainlg29.github.io/aeronautic/docs/countermeasures/examples/at-night/)**
@@ -89,8 +93,9 @@ Each is a physical quantity in SI units:
 - **`program`**: `burst`, `burstIntervalS`, `salvo`, `salvoIntervalS`,
   `alternate`.
 - **`flight`**: `airspeedMPerS`, `angleOfAttackRad`, `sideslipRad`.
-- **`air`**: `altitudeM` and `visibilityM`.
-- **`look`**: the exposure, the observer's age and eyes.
+- **`air`**: `altitudeM`, `visibilityM` and `turbulenceM2PerS3`.
+- **`look`**: the exposure, the observer's age and eyes, and the sun
+  and sky that light the smoke.
 
 ## How it works
 
@@ -105,17 +110,18 @@ Each is a physical quantity in SI units:
   (Cauchy), with a cube's drag coefficient, 1.05 (Hoerner). At 250 m/s near
   sea level that is about 770 m/s²; once slowed it falls at 28 m/s. Flares
   are laid in the air, so a turning aircraft leaves them behind.
+- **The smoke.** λ = ṁ Y / v a metre of path, spreading as σ² = σ₀² +
+  ½ ε t³ (Richardson), its depth κ λ / (√(2π) σ). Lit once, by Henyey and
+  Greenstein's phase. Its optics are estimates.
 - **Glare.** CIE 146's glare spread function times the illuminance at the
   eye, through the haze: the same as `@aeronautic/lights`, from
   `@aeronautic/core`.
 
 ### What it leaves out
 
-- The burn rate's dependence on pressure, and altitude's effect on the
-  airstream's toll.
-- Ignition delay: the grain lights as it leaves the dispenser.
-- The flame's shape at the grain: a disc of its area. The trail is a
-  ribbon in the flame's colour.
+- Altitude's effect on the flame's temperature: 2100 K everywhere.
+- The flame's shape at the grain: a disc of its area.
+- The smoke's own shadow, and light it scatters more than once.
 
 ## License
 
