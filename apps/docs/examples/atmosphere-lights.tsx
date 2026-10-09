@@ -3,7 +3,7 @@ import { Lights } from "@aeronautic/lights/react";
 import { type FC, useMemo, useState } from "react";
 import type { Object3D } from "three";
 import { AtmosphereStage, LUMINANCE_SCALE } from "./atmosphere";
-import { useFighter } from "./fighter";
+import { useFighter, useLensesUnlit } from "./fighter";
 
 // The fighter on its approach at dusk, under takram's sky, every light on.
 // The lights are in candelas, drawn at the atmosphere's luminance scale, so
@@ -30,6 +30,8 @@ const SWITCHES: Record<keyof LightsSwitches, string> = {
  */
 const Fighter: FC<{ switches: LightsSwitches }> = ({ switches }) => {
   const { scene, nodes } = useFighter();
+
+  useLensesUnlit(scene);
 
   // The anchors the model gives each light, as on the apron
   const airframe = useMemo(() => {

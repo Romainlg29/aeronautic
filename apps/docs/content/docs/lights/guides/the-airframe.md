@@ -60,3 +60,15 @@ with the wings.
 
 `switch` puts a lamp on the `landing` or the `taxi` switch: by default the one
 its lamp is named for. `onGear` holds it off until the gear is fully down.
+
+## The model's lenses
+
+The glare is each light from its candelas, the light's own disc its lens, so
+a model whose lenses glow counts the light twice. Their glow is the model's
+number, not the light's: the docs' fighter gives its nav lenses 8 in the
+scene's units, some 600 000 cd/m² under takram's atmosphere, where a 40 cd
+light through its 6 cm lens is about 14 000 cd/m². A lens a few pixels
+across, that much brighter than the glare, is drawn or missed by where it
+falls between the pixels, and a bloom turns that into a halo blinking as the
+camera turns. Take the glow off the lenses of the lights `<Lights>` draws:
+set their materials' `emissiveIntensity` to 0.

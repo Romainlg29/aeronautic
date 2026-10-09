@@ -3,7 +3,7 @@ import { Afterburner } from "@aeronautic/afterburner/react";
 import type { Flight } from "@aeronautic/core";
 import { useFlightStore } from "@aeronautic/core/react";
 import { type FC, useLayoutEffect, useState } from "react";
-import type { Mesh, Object3D } from "three";
+import type { Mesh, MeshStandardMaterial, Object3D } from "three";
 import { base_path } from "@/lib/shared";
 
 // What the examples built on the docs' fighter share: the model, the plume
@@ -26,6 +26,43 @@ export const useFighter = () => {
   }, [gltf.scene]);
 
   return gltf;
+};
+
+// The lenses of the lights `<Lights>` draws: its glare is each light from its
+// candelas, its disc the lens itself, so the glow the model gives them is the
+// light counted twice. A nav light's 40 cd ahead, 25.1391's, through the
+// model's lens, 6 cm across, is some 14 000 cd/m²; the model's glow is a
+// fixed 8 in the scene's units, whatever they are, under the atmosphere's
+// 600 000 cd/m². A few pixels across, many times brighter than the glare, it is
+// drawn or not by where it falls between the pixels, and the bloom spreads
+// that into a halo blinking as the camera turns
+const LENS = /^Light_(Nav_Red|Nav_Green|White)$/;
+
+/**
+ * The model's glow taken off the lenses of the lights `<Lights>` draws, while
+ * it draws them.
+ * @param scene The fighter
+ */
+export const useLensesUnlit = (scene: Object3D) => {
+  useLayoutEffect(() => {
+    const kept = new Map<MeshStandardMaterial, number>();
+
+    scene.traverse((node) => {
+      const material = (node as Mesh).material as
+        | MeshStandardMaterial
+        | undefined;
+
+      if (material?.emissive && LENS.test(material.name) && !kept.has(material))
+        kept.set(material, material.emissiveIntensity);
+    });
+
+    for (const material of kept.keys()) material.emissiveIntensity = 0;
+
+    return () => {
+      for (const [material, intensity] of kept)
+        material.emissiveIntensity = intensity;
+    };
+  }, [scene]);
 };
 
 // Not the shape the air flies round: the gear and its doors, and the pylons
