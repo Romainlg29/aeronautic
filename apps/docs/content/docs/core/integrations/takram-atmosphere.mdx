@@ -150,6 +150,17 @@ scene.add(sun);
 scene.environmentNode = skyEnvironment();
 ```
 
+Below the horizon takram's sky is only the air between the camera and the
+ground, near black from a few hundred metres up. A metal skin seen from
+below then reflects black ground hard against the bright horizon, and each
+panel falls on one side of it or the other as the camera turns. The docs'
+examples put the ground into the environment, lit as the aerial perspective
+lights a surface: where a ray of the environment meets the ground, its albedo
+under the sun and the sky there (`getSplitIlluminance`), over π, through the
+air between (`getIndirectLuminanceToPoint`'s transmittance), added to
+`environment.skyNode`. The environment is drawn again only when the sun or
+the camera move far, so it costs nothing per frame.
+
 The atmosphere is found through the renderer's context, by compute passes as
 well as materials:
 

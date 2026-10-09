@@ -8,6 +8,8 @@ import {
   AtmosphereLight,
   AtmosphereLightNode,
   AtmosphereParameters,
+  getIndirectLuminanceToPoint,
+  getSplitIlluminance,
   getSplitScalarIlluminance,
   skyEnvironment,
 } from "@takram/three-atmosphere/webgpu";
@@ -26,7 +28,19 @@ import {
 } from "react";
 import { AgXToneMapping, Vector3, type Vector3Tuple } from "three";
 import { bloom } from "three/addons/tsl/display/BloomNode.js";
-import { context, Fn, instancedArray, uniform, vec4 } from "three/tsl";
+import {
+  cameraProjectionMatrixInverse,
+  cameraWorldMatrix,
+  context,
+  Fn,
+  instancedArray,
+  positionGeometry,
+  select,
+  uniform,
+  vec2,
+  vec3,
+  vec4,
+} from "three/tsl";
 import { type Node, RenderPipeline, WebGPURenderer } from "three/webgpu";
 import { NO_SHADOWS } from "@/lib/no-shadows";
 import { CAMERA_FAR_M } from "@/lib/camera";
@@ -290,17 +304,81 @@ export const Atmosphere: FC<AtmosphereProps> = ({
     return light;
   }, []);
 
-  // What metal and paint reflect: the sky round the scene, without the sun
+  // What metal and paint reflect: the sky round the scene, without the sun,
+  // and the ground under it. Takram's sky stops at the air in front of the
+  // ground, near black from a few hundred metres up, so a belly seen from
+  // below reflected black ground hard against the bright horizon, panel by
+  // panel as the camera turned. The ground is lit as the aerial perspective
+  // lights a surface: its albedo under the sun and the sky there, over π,
+  // through the air between
   useLayoutEffect(() => {
     const environment = skyEnvironment();
+    const sky = environment.skyNode;
+    const { parametersNode: parameters } = atmosphere;
 
+    const ground = Fn(() => {
+      // The ray of the cube's face, from its clip space
+      const direction = cameraWorldMatrix.mul(
+        vec4(
+          cameraProjectionMatrixInverse.mul(vec4(positionGeometry.xy, 0, 1))
+            .xyz,
+          0,
+        ),
+      ).xyz;
+      const ray = atmosphere.matrixWorldToECEF
+        .mul(vec4(direction, 0))
+        .xyz.toVertexStage()
+        .normalize()
+        .toConst();
+
+      // Where it meets the ground's sphere, in the atmosphere's units
+      const eye = atmosphere.cameraPositionUnit
+        .add(atmosphere.altitudeCorrectionUnit)
+        .toConst();
+      const bottom = parameters.bottomRadius as Node<"float">;
+      const along = eye.dot(ray).toConst();
+      const discriminant = along
+        .mul(along)
+        .sub(eye.dot(eye))
+        .add(bottom.mul(bottom))
+        .toConst();
+      const distance = along.negate().sub(discriminant.max(0).sqrt());
+      const point = eye.add(ray.mul(distance)).toConst();
+
+      const light = getSplitIlluminance(
+        point,
+        point.normalize(),
+        atmosphere.sunDirectionECEF,
+      ).toConst();
+      const through = getIndirectLuminanceToPoint(
+        eye,
+        point,
+        vec2(0),
+        atmosphere.sunDirectionECEF,
+      ).get("transmittance");
+      const lit = (parameters.groundAlbedo as Node<"vec3">)
+        .mul(light.get("direct").add(light.get("indirect")))
+        .div(Math.PI)
+        .mul(through);
+
+      return select(
+        discriminant.greaterThanEqual(0).and(distance.greaterThan(0)),
+        lit,
+        vec3(0),
+      );
+    })();
+
+    environment.skyNode = (sky as unknown as Node<"vec3">).add(
+      ground,
+    ) as unknown as typeof sky;
     scene.environmentNode = environment as unknown as Node<"vec3">;
 
     return () => {
       scene.environmentNode = null;
       environment.dispose();
+      sky.dispose();
     };
-  }, [scene]);
+  }, [scene, atmosphere]);
 
   // The opaque scene under the atmosphere first, then the plumes and the
   // vapour over it: the sky is drawn where nothing was, so it goes behind
