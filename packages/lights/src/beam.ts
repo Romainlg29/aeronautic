@@ -1,4 +1,8 @@
-import { AEROSOL_ALBEDO, AEROSOL_ASYMMETRY, type Extinction } from "./haze";
+import {
+  AEROSOL_ALBEDO,
+  AEROSOL_ASYMMETRY,
+  type Extinction,
+} from "@aeronautic/core";
 
 // The landing and taxi lights' beams
 //

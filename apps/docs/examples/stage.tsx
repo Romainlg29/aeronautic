@@ -159,7 +159,7 @@ const exposure_under = (night: number, shade: number) =>
 
 // The aircraft's lights are in cd/m² already: by day the camera is set by the
 // same clear sky, drawn at the background's luminance
-const LIGHTS_DAY_EXPOSURE =
+export const LIGHTS_DAY_EXPOSURE =
   (0.2126 * day_sky.r + 0.7152 * day_sky.g + 0.0722 * day_sky.b) /
   CLEAR_SKY_CD_M2;
 

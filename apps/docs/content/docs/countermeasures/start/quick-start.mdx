@@ -1,0 +1,80 @@
+---
+title: Quick start
+description: "Flares from an aircraft in a few lines."
+---
+
+`<Countermeasures>` is a group where the aircraft's reference point sits,
+usually its model's origin. Put it inside the model, say where the dispensers
+are, and fire it:
+
+```tsx
+import { Canvas } from "@react-three/fiber";
+import { useState } from "react";
+import { Countermeasures } from "@aeronautic/countermeasures/react";
+import { webgpu_gl } from "@aeronautic/core/react";
+
+// The model flies along its local -Z, with +Y up (the defaults). Positions
+// are in the model's frame, in metres; each throws down unless told
+const AIRFRAME = {
+  dispensers: [{ at: [-1, -0.57, 5] }, { at: [1, -0.57, 5] }],
+} as const;
+
+const Jet = ({ fired }: { fired: number }) => (
+  <group>
+    <JetModel />
+    <Countermeasures
+      airframe={AIRFRAME}
+      flight={{ airspeedMPerS: 250 }}
+      fire={fired}
+    />
+  </group>
+);
+
+export const App = () => {
+  const [fired, set_fired] = useState(0);
+
+  return (
+    <>
+      <button onClick={() => set_fired(fired + 1)}>Flares</button>
+      <Canvas gl={webgpu_gl()}>
+        <Jet fired={fired} />
+      </Canvas>
+    </>
+  );
+};
+```
+
+`fire` lets the program go each time it changes; its first value fires
+nothing. Keep the airframe in a constant or a memo: it is compared array by
+array.
+
+## From the ref
+
+The ref holds the countermeasures themselves:
+
+```tsx
+const flares = useRef<CountermeasuresHandle>(null);
+
+<Countermeasures ref={flares} />;
+
+flares.current?.fire(); // the program
+flares.current?.fire({ burst: 1, salvo: 1 }); // one, this once
+flares.current?.release(0); // one flare, from the first dispenser
+flares.current?.stop(); // what is still to come of the program
+```
+
+## In flight
+
+The flares are thrown into the air the aircraft flies through, at its
+airspeed: give `flight.airspeedMPerS`, or let a
+[`<FlightProvider>`](../../../core/guides/one-flight/) give it, with the
+angle of attack and the air's density. At rest they only fall.
+
+## The exposure
+
+The flames are in candela, and the scene's light in cd/m²: `look.exposure` is
+the number one cd/m² is drawn as. By default it is EV100 8, about right for a
+flare's light on the airframe at night. See
+[the exposure](../../guides/exposure/).
+
+Next, [programs](../../guides/programs/).

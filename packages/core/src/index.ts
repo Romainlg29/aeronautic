@@ -67,3 +67,38 @@ export {
   type VolumePass,
   type VolumePassOptions,
 } from "./volume-pass";
+export { chromaticity_rgb, planckian, type Chromaticity } from "./blackbody";
+export { exposure_ev100 } from "./exposure";
+export {
+  GLARE_MAX_DEG,
+  GLARE_MIN_DEG,
+  glare_core,
+  glare_psf,
+  glare_radius,
+  glare_scattered,
+  type Observer,
+} from "./glare";
+export {
+  create_glare_geometry,
+  create_glare_material,
+  create_glare_uniforms,
+  GLARE_ATTRIBUTES,
+  glare_laid,
+  glare_pixel,
+  hide_glare,
+  lay_glare,
+  type GlareLight,
+  type GlareUniforms,
+} from "./glare-material";
+export {
+  AEROSOL_ALBEDO,
+  AEROSOL_ASYMMETRY,
+  ANGSTROM_EXPONENT,
+  density_ratio,
+  extinction,
+  KOSCHMIEDER,
+  RAYLEIGH_SEA_LEVEL,
+  transmission,
+  WAVELENGTHS_NM,
+  type Extinction,
+} from "./haze";

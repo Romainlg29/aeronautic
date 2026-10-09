@@ -20,6 +20,7 @@ import {
   type Object3D,
 } from "three";
 import { base_path } from "@/lib/shared";
+import { useLensesUnlit } from "./fighter";
 import { Stage } from "./stage";
 
 const MODEL = `${base_path}/fighter.glb`;
@@ -85,6 +86,8 @@ const LitFighter: FC<{
   const body = useRef<Group>(null);
   const lights = useRef<LightsHandle>(null);
   const { actions } = useAnimations(animations, body);
+
+  useLensesUnlit(scene);
 
   useEffect(() => {
     scene.traverse((node) => {

@@ -45,3 +45,7 @@ const lights = new Lights({ ...options, backdrop: pass.backdrop });
 
 pass.scene.add(lights.volumes);
 ```
+
+The glare is then drawn in `volumes` too, so an atmosphere's sky, drawn
+behind the pass, leaves it be. See
+[Takram's atmosphere](/docs/lights/integrations/takram-atmosphere).

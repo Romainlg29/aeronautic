@@ -11,8 +11,10 @@ precomputed scattering tables. Three things tie it to the aeronautic
 effects: where the volumes go in its frame, where the scene is on the earth,
 and what one unit of light on screen means. This page sets up all three; the
 [afterburner](/docs/afterburner/integrations/takram-atmosphere),
-[wing vapor](/docs/wing-vapor/integrations/takram-atmosphere) and
-[contrails](/docs/contrails/integrations/takram-atmosphere) pages light
+[wing vapor](/docs/wing-vapor/integrations/takram-atmosphere),
+[contrails](/docs/contrails/integrations/takram-atmosphere),
+[countermeasures](/docs/countermeasures/integrations/takram-atmosphere) and
+[lights](/docs/lights/integrations/takram-atmosphere) pages light
 their effect in it.
 
 ```bash
@@ -59,6 +61,25 @@ The volumes themselves get no aerial perspective. At sea level the air's
 extinction is about 1.8 × 10⁻⁵ per metre in green (Rayleigh 1.35 × 10⁻⁵,
 aerosols 4.4 × 10⁻⁶, takram's defaults), so a plume 500 m away keeps 99 % of
 its light, and 98 % in blue. Seen from kilometres away it would need it.
+
+Nor does the aircraft need it close up, and there it does harm. Takram works
+the aerial perspective out in ECEF, some 6.4 × 10⁶ m from the earth's
+centre, where a float resolves half a metre, as the difference of two
+sky-sized lookups. Over the ten metres to the skin, what it adds is that
+rounding, a different value on every triangle as their depths fall, and it
+shimmers as the camera turns. The air first takes one display step, 1/256,
+off what is behind it at about 104 m, in blue: the examples fade the aerial
+perspective in from there over as far again, and keep it full on the sky.
+
+```ts
+backdropNode: ({ color, depth }) => {
+  const distance = perspectiveDepthToViewZ(depth.r, cameraNear, cameraFar).negate();
+  // The far plane's depth gives no distance in a float: it is sky
+  const air = select(depth.r.greaterThanEqual(1), 1, smoothstep(104, 208, distance));
+
+  return mix(color, aerialPerspective(color, depth), air);
+},
+```
 
 ## Where the scene is on the earth
 
@@ -147,6 +168,17 @@ scene.add(sun);
 
 scene.environmentNode = skyEnvironment();
 ```
+
+Below the horizon takram's sky is only the air between the camera and the
+ground, near black from a few hundred metres up. A metal skin seen from
+below then reflects black ground hard against the bright horizon, and each
+panel falls on one side of it or the other as the camera turns. The docs'
+examples put the ground into the environment, lit as the aerial perspective
+lights a surface: where a ray of the environment meets the ground, its albedo
+under the sun and the sky there (`getSplitIlluminance`), over π, through the
+air between (`getIndirectLuminanceToPoint`'s transmittance), added to
+`environment.skyNode`. The environment is drawn again only when the sun or
+the camera move far, so it costs nothing per frame.
 
 The atmosphere is found through the renderer's context, by compute passes as
 well as materials:

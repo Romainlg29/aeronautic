@@ -15,7 +15,7 @@ import {
 // The keyboard, as War Thunder's keyboard-only controls lay it out: W and S
 // push and pull the stick, A and D roll, the arrows doing the same, Q and E the pedals, Shift and Ctrl
 // the throttle, past military power into reheat. G, F and H work the gear,
-// the flaps and the air brake. Nothing flies: the aircraft holds still, and
+// the flaps and the air brake, C lets flares go and V chaff. Nothing flies: the aircraft holds still, and
 // what the keys change is the flight its effects read
 
 // Where the keys put the controls, each -1 to 1 but the throttle's direction
@@ -182,10 +182,14 @@ const BROWSER_CHORDS = ["S", "D", "E", "Q", "A"].map((key) => ({
 
 /**
  * The keyboard: the stick, pedals and throttle held, and the levers toggled.
- * @returns The axes, read each frame, and the levers
+ * @returns The axes, read each frame, the levers, and the flares and chaff
+ *   fired
  */
 export const usePilot = () => {
   const keys = useKeys();
+  // Each press of C, counted: the countermeasures fire on each new count
+  const [flares, set_flares] = useState(0);
+  const [chaff, set_chaff] = useState(0);
   const [levers, set_levers] = useState<Levers>({
     gear: 0,
     flaps: 0,
@@ -207,12 +211,14 @@ export const usePilot = () => {
       ...both("H", () =>
         set_levers((l) => ({ ...l, airbrake: 1 - l.airbrake })),
       ),
+      ...both("C", () => set_flares((count) => count + 1)),
+      ...both("V", () => set_chaff((count) => count + 1)),
       ...BROWSER_CHORDS,
     ],
     { preventDefault: true, conflictBehavior: "allow" },
   );
 
-  return { keys, levers };
+  return { keys, levers, flares, chaff };
 };
 
 // The legend's rows: the keys, and what they do
@@ -224,6 +230,8 @@ const LEGEND: [keys: string[], does: string][] = [
   [["G"], "Gear"],
   [["F"], "Flaps"],
   [["H"], "Air brake"],
+  [["C"], "Flares"],
+  [["V"], "Chaff"],
 ];
 
 /**

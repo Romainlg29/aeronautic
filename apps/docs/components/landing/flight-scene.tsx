@@ -9,6 +9,10 @@ import { FlightProvider, useFlightStore } from "@aeronautic/core/react";
 import { Contrails, type ContrailsHandle } from "@aeronautic/contrails/react";
 import { humidity_over_water } from "@aeronautic/contrails/physics";
 import { ControlSurfaces } from "@aeronautic/controls/react";
+import {
+  Countermeasures,
+  type CountermeasuresHandle,
+} from "@aeronautic/countermeasures/react";
 import { Lights, type LightsHandle } from "@aeronautic/lights/react";
 import { WingVapor, type WingVaporHandle } from "@aeronautic/wing-vapor/react";
 import { angle_of_attack_for_load } from "@aeronautic/wing-vapor/physics";
@@ -46,7 +50,7 @@ import type { Keys, Levers } from "./pilot";
 // freely about its own axes but goes nowhere: the keys write a flight it only
 // seems to fly, its speed following the throttle and its g and rates the
 // stick, and everything on it reads that flight, the control surfaces, the
-// plumes, the vapor, the contrails and the lights
+// plumes, the vapor, the contrails, the lights and the flares
 
 // Where the sun is, for the skin and the vapor both
 const SUN: [number, number, number] = [5, 10, 5];
@@ -218,6 +222,8 @@ const DAY_PROFILE = { exposure: SKIES.day.exposure };
 const lights_exposure = (plume_exposure: number) =>
   plume_exposure / BLACKBODY_2000K_CD_M2;
 const DAY_LIGHTS_LOOK = { exposure: lights_exposure(SKIES.day.exposure) };
+// The flares' smoke lit by the sun and the sky the trails are
+const DAY_FLARES_LOOK = { ...DAY_LIGHTS_LOOK, ...SKIES.day.look };
 
 // How the fake flies: what the gear, the flaps and the air brake cost off the
 // Mach number its throttle settles at, from `flight-plan`
@@ -249,7 +255,12 @@ const ease = (delta: number, time_s: number) => 1 - Math.exp(-delta / time_s);
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
-type Pilot = { keys: RefObject<Keys>; levers: Levers };
+type Pilot = {
+  keys: RefObject<Keys>;
+  levers: Levers;
+  flares: number;
+  chaff: number;
+};
 
 /**
  * The fighter, turning in place at the keyboard's rates and pitched up by its
@@ -257,7 +268,13 @@ type Pilot = { keys: RefObject<Keys>; levers: Levers };
  * @param props The sky, and the pilot's keys and levers
  * @returns The model, its moving parts, its plumes and its vapor
  */
-const Fighter: FC<{ dusk: Dusk } & Pilot> = ({ dusk, keys, levers }) => {
+const Fighter: FC<{ dusk: Dusk } & Pilot> = ({
+  dusk,
+  keys,
+  levers,
+  flares,
+  chaff,
+}) => {
   const { scene, nodes, animations } = useFighter();
   const flight = useFlightStore();
   const attitude = useRef<Group>(null);
@@ -266,6 +283,17 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({ dusk, keys, levers }) => {
   const batch = useRef<AfterburnerBatchHandle>(null);
   const trails = useRef<ContrailsHandle>(null);
   const lights = useRef<LightsHandle>(null);
+  const countermeasures = useRef<CountermeasuresHandle>(null);
+
+  // Each press of V lets the program go as chaff; its first count, nothing
+  const chaffed = useRef(chaff);
+
+  useEffect(() => {
+    if (chaff === chaffed.current) return;
+
+    chaffed.current = chaff;
+    countermeasures.current?.fire({ payload: "chaff" });
+  }, [chaff]);
 
   // The model's nozzle exits: the trails start where they are
   const airframe = useMemo(
@@ -314,8 +342,8 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({ dusk, keys, levers }) => {
     const delta = Math.min(frame_delta, 0.1);
     const input = keys.current;
 
-    // The plumes' exposure, and the vapor's and the trails' light, follow
-    // the sky as it fades
+    // The plumes' exposure, and the vapor's, the trails' and the smoke's
+    // light, follow the sky as it fades
     if (dusk.moved) {
       const night = dusk.night;
       const day = SKIES.day.look;
@@ -331,6 +359,10 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({ dusk, keys, levers }) => {
 
       batch.current?.updateProfile({ exposure });
       lights.current?.updateLook({ exposure: lights_exposure(exposure) });
+      countermeasures.current?.updateLook({
+        ...look,
+        exposure: lights_exposure(exposure),
+      });
       vapor.current?.updateLook(look);
       trails.current?.updateLook(look);
     }
@@ -433,6 +465,12 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({ dusk, keys, levers }) => {
           <Contrails ref={trails} airframe={airframe} look={SKIES.day.look} />
           {/* Its gear and its altitude are the shared flight's too */}
           <Lights ref={lights} airframe={lamps} look={DAY_LIGHTS_LOOK} />
+          {/* Its dispensers are the defaults, measured off this model */}
+          <Countermeasures
+            ref={countermeasures}
+            look={DAY_FLARES_LOOK}
+            fire={flares}
+          />
         </group>
       </group>
     </AfterburnerBatch>
@@ -475,6 +513,8 @@ const FlightScene: FC<{ sky: Sky; level: Level; flight: Flight } & Pilot> = ({
   flight,
   keys,
   levers,
+  flares,
+  chaff,
 }) => {
   const dusk = useMemo<Dusk>(
     () => ({ target: 0, night: 0, moved: true, linear: 0 }),
@@ -523,7 +563,13 @@ const FlightScene: FC<{ sky: Sky; level: Level; flight: Flight } & Pilot> = ({
       {/* Context doesn't cross into the canvas: the same flight again */}
       <FlightProvider flight={flight}>
         <Suspense fallback={null}>
-          <Fighter dusk={dusk} keys={keys} levers={levers} />
+          <Fighter
+            dusk={dusk}
+            keys={keys}
+            levers={levers}
+            flares={flares}
+            chaff={chaff}
+          />
         </Suspense>
       </FlightProvider>
       <OrbitControls

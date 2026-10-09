@@ -12,9 +12,11 @@ The shared ground of the `@aeronautic` effects, for
   pressure, density, the speed of sound, ram pressure and the dew point.
 - **Six-view depth capture** of a model, for an effect that needs to know the
   airframe's shape.
+- **A point of light as the eye sees it**: the haze's extinction, CIE 146's
+  glare, the exposure and a blackbody's colour, shared by the lights and the
+  flares.
 
-`@aeronautic/afterburner`, `@aeronautic/wing-vapor` and
-`@aeronautic/controls` depend on it, so it is installed with them.
+Every other `@aeronautic` package depends on it, so it is installed with them.
 
 ## Install
 

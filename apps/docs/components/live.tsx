@@ -22,12 +22,21 @@ const EXAMPLES = {
   "any-shape": load(() => import("@/examples/any-shape")),
   contrails: load(() => import("@/examples/contrails")),
   lights: load(() => import("@/examples/lights")),
+  countermeasures: load(() => import("@/examples/countermeasures")),
+  "chaff-in-the-sun": load(() => import("@/examples/chaff-in-the-sun")),
+  "countermeasures-altitude": load(
+    () => import("@/examples/countermeasures-altitude"),
+  ),
   "one-flight": load(() => import("@/examples/one-flight")),
   "the-controls": load(() => import("@/examples/the-controls")),
   "thrust-vectoring": load(() => import("@/examples/thrust-vectoring")),
   "atmosphere-plume": load(() => import("@/examples/atmosphere-plume")),
   "atmosphere-vapor": load(() => import("@/examples/atmosphere-vapor")),
   "atmosphere-contrails": load(() => import("@/examples/atmosphere-contrails")),
+  "atmosphere-lights": load(() => import("@/examples/atmosphere-lights")),
+  "atmosphere-countermeasures": load(
+    () => import("@/examples/atmosphere-countermeasures"),
+  ),
 } satisfies Record<string, ComponentType>;
 
 export type ExampleName = keyof typeof EXAMPLES;

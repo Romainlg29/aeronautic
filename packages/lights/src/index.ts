@@ -31,4 +31,4 @@ export {
   type NavigationLight,
 } from "./types";
 export { LAMP, type Lamp, type LampName } from "./beam";
-export { exposure_ev100 } from "./exposure";
+export { exposure_ev100 } from "@aeronautic/core";

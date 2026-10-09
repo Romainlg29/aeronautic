@@ -1,0 +1,20 @@
+{
+  "title": "Countermeasures",
+  "description": "Decoy flares and their dispensers' programs, burning and falling as they do",
+  "icon": "Flame",
+  "root": true,
+  "pages": [
+    "---[Rocket]Start here---",
+    "...start",
+    "---[BookOpen]Guides---",
+    "...guides",
+    "---[Play]Examples---",
+    "...examples",
+    "---[Plug]Integrations---",
+    "...integrations",
+    "---[Braces]Reference---",
+    "...reference",
+    "---[Atom]How it works---",
+    "...how-it-works"
+  ]
+}

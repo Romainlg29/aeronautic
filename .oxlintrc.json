@@ -47,6 +47,7 @@
         "packages/wing-vapor/src/**",
         "packages/contrails/src/**",
         "packages/lights/src/**",
+        "packages/countermeasures/src/**",
         "packages/controls/src/**"
       ],
       "rules": {

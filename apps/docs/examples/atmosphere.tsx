@@ -8,6 +8,8 @@ import {
   AtmosphereLight,
   AtmosphereLightNode,
   AtmosphereParameters,
+  getIndirectLuminanceToPoint,
+  getSplitIlluminance,
   getSplitScalarIlluminance,
   skyEnvironment,
 } from "@takram/three-atmosphere/webgpu";
@@ -26,7 +28,24 @@ import {
 } from "react";
 import { AgXToneMapping, Vector3, type Vector3Tuple } from "three";
 import { bloom } from "three/addons/tsl/display/BloomNode.js";
-import { context, Fn, instancedArray, uniform, vec4 } from "three/tsl";
+import {
+  cameraFar,
+  cameraNear,
+  cameraProjectionMatrixInverse,
+  cameraWorldMatrix,
+  context,
+  Fn,
+  instancedArray,
+  mix,
+  perspectiveDepthToViewZ,
+  positionGeometry,
+  select,
+  smoothstep,
+  uniform,
+  vec2,
+  vec3,
+  vec4,
+} from "three/tsl";
 import { type Node, RenderPipeline, WebGPURenderer } from "three/webgpu";
 import { NO_SHADOWS } from "@/lib/no-shadows";
 import { CAMERA_FAR_M } from "@/lib/camera";
@@ -50,6 +69,9 @@ const PARAMETERS = new AtmosphereParameters();
 const BLACKBODY_2000K_CD_M2 = 4.8e5;
 export const PLUME_EXPOSURE = BLACKBODY_2000K_CD_M2 * PARAMETERS.luminanceScale;
 
+// The atmosphere's unit, per cd/m²: what an effect's exposure is under it
+export const LUMINANCE_SCALE = PARAMETERS.luminanceScale;
+
 // An incident light meter's calibration constant for a hemispherical
 // receptor, in lux at ISO 100 (ISO 2720 gives 320 to 540), and how far over
 // a metered exposure the brightest unclipped luminance sits (Lagarde and de
@@ -60,6 +82,21 @@ const SATURATION = 1.2;
 
 // The ground's albedo as takram's model has it, lighting the vapour from below
 const GROUND_ALBEDO = PARAMETERS.groundAlbedo.x;
+
+// How far the air at sea level takes one display step, 1/256, off what is
+// behind it, in its bluest channel (takram's extinction is per kilometre):
+// about 104 m. Nearer, the aerial perspective changes nothing visible, but
+// takram works it out in ECEF, some 6.4e6 m from the earth's centre, where a
+// float resolves half a metre, as a difference of two sky-sized lookups:
+// what it adds there is that rounding, faceted by the triangles' depths
+const BLUEST_EXTINCTION_PER_KM = Math.max(
+  ...PARAMETERS.rayleighScattering
+    .clone()
+    .add(PARAMETERS.mieExtinction)
+    .toArray(),
+);
+const AIR_VISIBLE_M =
+  (-Math.log(1 - 1 / 256) / BLUEST_EXTINCTION_PER_KM) * 1000;
 
 // The camera's exposure, in EV at ISO 100, before the meter has read the sky:
 // sunny sixteen
@@ -287,26 +324,111 @@ export const Atmosphere: FC<AtmosphereProps> = ({
     return light;
   }, []);
 
-  // What metal and paint reflect: the sky round the scene, without the sun
+  // What metal and paint reflect: the sky round the scene, without the sun,
+  // and the ground under it. Takram's sky stops at the air in front of the
+  // ground, near black from a few hundred metres up, so a belly seen from
+  // below reflected black ground hard against the bright horizon, panel by
+  // panel as the camera turned. The ground is lit as the aerial perspective
+  // lights a surface: its albedo under the sun and the sky there, over π,
+  // through the air between
   useLayoutEffect(() => {
     const environment = skyEnvironment();
+    const sky = environment.skyNode;
+    const { parametersNode: parameters } = atmosphere;
 
+    const ground = Fn(() => {
+      // The ray of the cube's face, from its clip space
+      const direction = cameraWorldMatrix.mul(
+        vec4(
+          cameraProjectionMatrixInverse.mul(vec4(positionGeometry.xy, 0, 1))
+            .xyz,
+          0,
+        ),
+      ).xyz;
+      const ray = atmosphere.matrixWorldToECEF
+        .mul(vec4(direction, 0))
+        .xyz.toVertexStage()
+        .normalize()
+        .toConst();
+
+      // Where it meets the ground's sphere, in the atmosphere's units
+      const eye = atmosphere.cameraPositionUnit
+        .add(atmosphere.altitudeCorrectionUnit)
+        .toConst();
+      const bottom = parameters.bottomRadius as Node<"float">;
+      const along = eye.dot(ray).toConst();
+      const discriminant = along
+        .mul(along)
+        .sub(eye.dot(eye))
+        .add(bottom.mul(bottom))
+        .toConst();
+      const distance = along.negate().sub(discriminant.max(0).sqrt());
+      const point = eye.add(ray.mul(distance)).toConst();
+
+      const light = getSplitIlluminance(
+        point,
+        point.normalize(),
+        atmosphere.sunDirectionECEF,
+      ).toConst();
+      const through = getIndirectLuminanceToPoint(
+        eye,
+        point,
+        vec2(0),
+        atmosphere.sunDirectionECEF,
+      ).get("transmittance");
+      const lit = (parameters.groundAlbedo as Node<"vec3">)
+        .mul(light.get("direct").add(light.get("indirect")))
+        .div(Math.PI)
+        .mul(through);
+
+      return select(
+        discriminant.greaterThanEqual(0).and(distance.greaterThan(0)),
+        lit,
+        vec3(0),
+      );
+    })();
+
+    environment.skyNode = (sky as unknown as Node<"vec3">).add(
+      ground,
+    ) as unknown as typeof sky;
     scene.environmentNode = environment as unknown as Node<"vec3">;
 
     return () => {
       scene.environmentNode = null;
       environment.dispose();
+      sky.dispose();
     };
-  }, [scene]);
+  }, [scene, atmosphere]);
 
   // The opaque scene under the atmosphere first, then the plumes and the
   // vapour over it: the sky is drawn where nothing was, so it goes behind
-  // them, and they see through the air as it is in front of what is behind
+  // them, and they see through the air as it is in front of what is behind.
+  // Taken in from where the air first shows, over as far again
   const split = useMemo(
     () =>
       volume_pass(scene, camera, {
-        backdropNode: ({ color, depth }) =>
-          aerialPerspective(color, depth) as unknown as Node<"vec4">,
+        backdropNode: ({ color, depth }) => {
+          const distance = perspectiveDepthToViewZ(
+            depth.r,
+            cameraNear,
+            cameraFar,
+          ).negate();
+          const graded = aerialPerspective(
+            color,
+            depth,
+          ) as unknown as Node<"vec4">;
+
+          // The far plane's depth gives no distance in a float: it is sky
+          return mix(
+            color,
+            graded,
+            select(
+              depth.r.greaterThanEqual(1),
+              1,
+              smoothstep(AIR_VISIBLE_M, 2 * AIR_VISIBLE_M, distance),
+            ),
+          );
+        },
       }),
     [scene, camera],
   );

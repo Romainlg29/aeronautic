@@ -52,6 +52,12 @@ const config: NextConfig = {
       "@aeronautic/lights/react": "../../packages/lights/src/react/index.tsx",
       "@aeronautic/lights/physics": "../../packages/lights/src/physics.ts",
       "@aeronautic/lights": "../../packages/lights/src/index.ts",
+      "@aeronautic/countermeasures/react":
+        "../../packages/countermeasures/src/react/index.tsx",
+      "@aeronautic/countermeasures/physics":
+        "../../packages/countermeasures/src/physics.ts",
+      "@aeronautic/countermeasures":
+        "../../packages/countermeasures/src/index.ts",
     },
   },
 };

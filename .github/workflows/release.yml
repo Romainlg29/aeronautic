@@ -3,7 +3,7 @@ name: Release
 # Publishes one @aeronautic package to npm when its tag is pushed:
 # afterburner-vX.Y.Z publishes packages/afterburner, wing-vapor-vX.Y.Z
 # publishes packages/wing-vapor, and core-vX.Y.Z, contrails-vX.Y.Z,
-# lights-vX.Y.Z and controls-vX.Y.Z the same.
+# lights-vX.Y.Z, countermeasures-vX.Y.Z and controls-vX.Y.Z the same.
 # The others depend on core, so a core they need is released before them
 #
 # Only the maintainer releases. The guards, from GitHub's side to npm's:
@@ -27,6 +27,7 @@ on:
         "wing-vapor-v*",
         "contrails-v*",
         "lights-v*",
+        "countermeasures-v*",
         "controls-v*",
       ]
 
@@ -72,7 +73,7 @@ jobs:
           package="${TAG%-v*}"
           tag_version="${TAG##*-v}"
           case "$package" in
-            core | afterburner | wing-vapor | contrails | lights | controls) ;;
+            core | afterburner | wing-vapor | contrails | lights | countermeasures | controls) ;;
             *)
               echo "Tag $TAG doesn't name a package that's released from here" >&2
               exit 1
