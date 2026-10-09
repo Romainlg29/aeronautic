@@ -25,7 +25,7 @@ description: "What @aeronautic/countermeasures draws, what drives it, and what i
   dipoles. The airstream tears them into a cloud in a fifth of a second,
   which stays where it formed, sinking at a fifth of a metre a second,
   spreading, and lit by its fibres' shadow and their aluminium, glittering
-  where it is thin.
+  where it is thin and flashing where the sun's reflection would be.
 - **The programs**: a burst of so many flares or chaff, a salvo of so many bursts, the
   dispensers taking turns.
 - **Glare**: each flame is drawn as the eye sees a bright light, spread by the

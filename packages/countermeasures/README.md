@@ -30,7 +30,8 @@ and three.js, written in TSL for three's `WebGPURenderer`.
   it stays where it formed, falling at a fifth of a metre a second as
   one-mil chaff is measured to, and spreading as the smoke does. Its
   fibres' shadow and aluminium light it, and each fibre, a mirror
-  cylinder, glints: where the cloud thins it glitters.
+  cylinder, glints: where the cloud thins it glitters. Falling, its
+  fibres level out, and seen where the sun's reflection would be it flashes.
 - **Programs**: bursts and salvos, the dispensers taking turns, of flares
   or chaff.
 - **Glare** from the flame's real luminance and the exposure: the eye's own
@@ -127,7 +128,10 @@ Each is a physical quantity in SI units:
   4,653,403 gives, 1.75 × 11 m at 244 m/s, then falls with
   Lamb's drag on a cylinder in Oseen's flow. The fibres whose axis is
   square to the half way between the sun and the eye glint, a Poisson
-  count of them a pixel. Its throw and its fibres' tumbling are estimates.
+  count of them a pixel. Falling, they level out within a few degrees, as
+  the flow's torque and the eddies balance, and the share of mirror facing
+  the half way sets the light: a flash at the sun's reflection. Its throw,
+  its fibres' tumbling and their tilt are estimates.
 - **Glare.** CIE 146's glare spread function times the illuminance at the
   eye, through the haze: the same as `@aeronautic/lights`, from
   `@aeronautic/core`.
@@ -137,8 +141,7 @@ Each is a physical quantity in SI units:
 - Altitude's effect on the flame's temperature: 2100 K everywhere.
 - The flame's shape at the grain: a disc of its area.
 - The smoke's own shadow, and light it scatters more than once.
-- Chaff's fibres turning broadside as they fall, and what it returns to a
-  radar.
+- Chaff's fibres' bending and flutter, and what it returns to a radar.
 
 ## License
 

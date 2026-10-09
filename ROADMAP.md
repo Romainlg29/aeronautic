@@ -16,8 +16,6 @@ The flares, their smoke, chaff and the programs are out, in 0.1. Still to come:
 - **The smoke, lit fully**: its own shadow and light scattered more than
   once, as the contrails' plume has, and measured optics for an MTV
   flare's smoke in place of the estimates.
-- **Chaff turning broadside**: falling, its fibres level out, and a cloud
-  of level mirrors flashes where the sun's reflection would be.
 - **The flame in the airstream, measured**: the dimming, the trail and
   the ignition delay are estimates for now; measured data on an MTV flare's
   intensity against airspeed and altitude would replace them.

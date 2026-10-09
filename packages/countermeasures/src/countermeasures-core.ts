@@ -61,8 +61,11 @@ import {
   create_chaff_geometry,
   create_chaff_material,
   dipole_count,
+  dipole_tilt,
   dipole_tumble_rate,
   glint_share,
+  level_shadow,
+  mirror_density,
   type Chaff,
   type ChaffName,
 } from "./chaff";
@@ -440,6 +443,7 @@ export class Countermeasures {
   private _chaff_fall_m_s = 0;
   private _chaff_count = 0;
   private _chaff_tumble_rad_s = 0;
+  private _chaff_tilt_rad = 0;
   private _glint_step = 0;
   private _chaff_section_m2 = 0;
 
@@ -632,6 +636,11 @@ export class Countermeasures {
   /** How fast the chaff sinks once bloomed, m/s, in this air */
   get chaffFallMPerS(): number {
     return this._chaff_fall_m_s;
+  }
+
+  /** How far from level its fibres lie once bloomed, radians */
+  get chaffTiltRad(): number {
+    return this._chaff_tilt_rad;
   }
 
   /** How long one flare burns, seconds, in this air */
@@ -915,6 +924,13 @@ export class Countermeasures {
     this._chaff_count = dipole_count(this._chaff);
     this._chaff_tumble_rad_s = dipole_tumble_rate(
       this._chaff,
+      this._air.turbulenceM2PerS3,
+    );
+    this._chaff_tilt_rad = dipole_tilt(
+      this._chaff,
+      this._chaff_fall_m_s,
+      this._temperature_k,
+      this._density_kg_m3,
       this._air.turbulenceM2PerS3,
     );
   }
@@ -1916,8 +1932,14 @@ export class Countermeasures {
         .applyMatrix4(camera.matrixWorldInverse);
 
       const kept = 1 - fog_factor(fog ?? null, Math.max(-scratch_view.z, 0));
+
+      // Its fibres level out once the airstream lets them go: a level fibre
+      // shows more of itself from above than edge on
+      const level = chaff_bloom(this._chaff, age_s);
+      const section =
+        this._chaff_section_m2 * level_shadow(level, scratch_toward.y);
       const tau =
-        ((this._chaff_section_m2 / (2 * Math.PI * across * along)) *
+        ((section / (2 * Math.PI * across * along)) *
           kept *
           (scratch_transmission[0] +
             scratch_transmission[1] +
@@ -1950,23 +1972,28 @@ export class Countermeasures {
       // A pixel's dipoles, for each unit of depth: the cartridge's over its
       // cross-section, times the pixel's footprint there
       const footprint = (2 * pixel * distance) ** 2;
-      const per_depth =
-        (this._chaff_count / this._chaff_section_m2) * footprint;
+      const per_depth = (this._chaff_count / section) * footprint;
 
       // The sky lights it from everywhere: no glints. The sun and each flare
       // are small: their light comes by glints, the share of fibres that
-      // catch each, and their counts are matched by their variance
-      const sun_light = phase * look.sunIntensity;
+      // catch each, and their counts are matched by their variance. How much
+      // of the cloud's mirror faces h, half way between the source and the
+      // eye, sets both: level fibres face up, and seen at the sun's
+      // reflection they flash
+      const tilt = this._chaff_tilt_rad;
 
       scratch_sun.fromArray(look.sunDirection).normalize();
+      scratch_next.copy(scratch_sun).add(scratch_toward);
 
+      const sun_half = scratch_next.length();
+      const sun_mirror = mirror_density(
+        level,
+        tilt,
+        scratch_next.y / Math.max(sun_half, 1e-6),
+      );
+      const sun_light = phase * 2 * sun_mirror * look.sunIntensity;
       const sun_k =
-        per_depth *
-        glint_share(
-          SUN_RADIUS_RAD,
-          scratch_next.copy(scratch_sun).add(scratch_toward).length(),
-          sweep,
-        );
+        per_depth * glint_share(SUN_RADIUS_RAD, sun_half, sweep, sun_mirror);
       let light = sun_light;
       let spread = sun_light > 0 ? (sun_light * sun_light) / sun_k : 0;
       let flares = 0;
@@ -1975,8 +2002,21 @@ export class Countermeasures {
         scratch_next.subVectors(flare.position, at);
 
         const reach = scratch_next.length();
+
+        scratch_next
+          .multiplyScalar(1 / Math.max(reach, 1e-3))
+          .add(scratch_toward);
+
+        const half = scratch_next.length();
+        const mirror = mirror_density(
+          level,
+          tilt,
+          scratch_next.y / Math.max(half, 1e-6),
+        );
         const lit =
           (phase *
+            2 *
+            mirror *
             (flare.light.intensityCd + flare.light.trailCd) *
             look.exposure) /
           (reach * reach + across * across);
@@ -1987,11 +2027,9 @@ export class Countermeasures {
           per_depth *
           glint_share(
             Math.max(flare.light.radiusM, across) / Math.max(reach, 1e-3),
-            scratch_next
-              .multiplyScalar(1 / Math.max(reach, 1e-3))
-              .add(scratch_toward)
-              .length(),
+            half,
             sweep,
+            mirror,
           );
 
         flares += lit;
@@ -2017,7 +2055,7 @@ export class Countermeasures {
       // true one dimmed by the haze and the fog
       const glints =
         light > 0 && tau > 0
-          ? (((light * light) / spread) * this._chaff_section_m2) /
+          ? (((light * light) / spread) * section) /
             (2 * Math.PI * across * along * tau)
           : 0;
 

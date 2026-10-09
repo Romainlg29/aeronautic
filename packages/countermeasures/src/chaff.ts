@@ -122,6 +122,12 @@ export const CHAFF_SIGMAS = 3;
 /** The sun's angular radius, radians: 0.267° */
 export const SUN_RADIUS_RAD = 4.65e-3;
 
+/**
+ * The most tilt `mirror_density`'s small-angle form is taken for: within
+ * 2 % of the light the fibres send out
+ */
+const MAX_TILT_RAD = 0.2;
+
 /** Past this many glints a pixel, their count is drawn as a normal's */
 const POISSON_NORMAL = 12;
 
@@ -207,22 +213,158 @@ export const dipole_tumble_rate = (
 ): number => Math.cbrt(turbulence_m2_s3 / chaff.cutLengthM ** 2);
 
 /**
+ * How far from level the fibres lie once the cloud has bloomed. Falling,
+ * a rod's own wake turns it broadside, at about (U / L) Re_L / ln(L/d)
+ * times the tilt (Khayat and Cox, 1989), while the air's eddies shake it at
+ * their tumbling rate. Shaken at random, held back that fast, it keeps a
+ * tilt whose variance is the one over twice the other. The theory is for a
+ * Reynolds number along the rod below 1, and a falling dipole's is a few
+ * hundred: its order-one constant taken as 1, an estimate.
+ * @param chaff The payload
+ * @param fall_m_s How fast it falls
+ * @param temperature_k The air's temperature
+ * @param density_kg_m3 The air's density
+ * @param turbulence_m2_s3 The air's dissipation rate
+ * @returns The tilt's standard deviation, radians
+ */
+export const dipole_tilt = (
+  chaff: Chaff,
+  fall_m_s: number,
+  temperature_k: number,
+  density_kg_m3: number,
+  turbulence_m2_s3: number,
+): number => {
+  const righting =
+    (density_kg_m3 * fall_m_s * fall_m_s) /
+    (air_viscosity(temperature_k) *
+      Math.log(chaff.cutLengthM / chaff.dipoleDiameterM));
+
+  return Math.min(
+    Math.sqrt(
+      dipole_tumble_rate(chaff, turbulence_m2_s3) /
+        Math.max(2 * righting, 1e-9),
+    ),
+    MAX_TILT_RAD,
+  );
+};
+
+/**
+ * e^-z I₀(z), the modified Bessel function scaled (Abramowitz and Stegun
+ * 9.8.1 and 9.8.2).
+ */
+const scaled_bessel_i0 = (z: number): number => {
+  const t = z / 3.75;
+
+  if (t <= 1) {
+    const t2 = t * t;
+
+    return (
+      Math.exp(-z) *
+      (1 +
+        t2 *
+          (3.5156229 +
+            t2 *
+              (3.0899424 +
+                t2 *
+                  (1.2067492 +
+                    t2 * (0.2659732 + t2 * (0.0360768 + t2 * 0.0045813))))))
+    );
+  }
+
+  const u = 1 / t;
+
+  return (
+    (0.39894228 +
+      u *
+        (0.01328592 +
+          u *
+            (0.00225319 +
+              u *
+                (-0.00157565 +
+                  u *
+                    (0.00916281 +
+                      u *
+                        (-0.02057706 +
+                          u *
+                            (0.02635537 +
+                              u * (-0.01647633 + u * 0.00392377)))))))) /
+    Math.sqrt(z)
+  );
+};
+
+/**
+ * The density of the fibres' axes square to a direction h: ∫ P(a) δ(a · h)
+ * over every axis a. A mirror cylinder's surface faces every way square to
+ * its axis, so this is how much of the cloud's mirror faces h, and the
+ * light it sends the eye, and the share that glints, go with it. Axes turned
+ * every way give ½. Level ones, turned every way about the vertical and
+ * tilted by a Gaussian of σ, give e^-z I₀(z) / (σ √(2π) |h_y|), with
+ * z = cot² η / 4σ² for h's elevation η: 1 / (π cos η) far from the vertical,
+ * many times more near it, where the cloud is a sheet of level mirrors.
+ * The tilt is taken small, up to `MAX_TILT_RAD`.
+ * @param level The share of the fibres level, 0 to 1
+ * @param tilt_rad Their tilt's standard deviation
+ * @param h_y The vertical part of h, -1 to 1
+ * @returns Per unit of a · h
+ */
+export const mirror_density = (
+  level: number,
+  tilt_rad: number,
+  h_y: number,
+): number => {
+  const sine = Math.max(Math.abs(h_y), 1e-6);
+  const cot2 = Math.max(1 - sine * sine, 0) / (sine * sine);
+  const sigma = Math.max(tilt_rad, 1e-4);
+  const levelled =
+    scaled_bessel_i0(cot2 / (4 * sigma * sigma)) /
+    (sigma * Math.sqrt(2 * Math.PI) * sine);
+
+  return (1 - level) * 0.5 + level * levelled;
+};
+
+/**
+ * How much more light the fibres stop seen along v than turned every way:
+ * a level fibre shows d L |sin| of its angle to v, so seen from above it
+ * shows all of itself, 4/π of its every-way mean, and seen edge on 8/π² of
+ * it: (8/π²) E(1 − v_y²), E the complete elliptic integral (Abramowitz and
+ * Stegun 17.3.36).
+ * @param level The share of the fibres level, 0 to 1
+ * @param v_y The vertical part of the view, -1 to 1
+ * @returns The factor on the every-way shadow
+ */
+export const level_shadow = (level: number, v_y: number): number => {
+  const m1 = Math.min(v_y * v_y, 1);
+  const elliptic =
+    1 +
+    m1 * (0.4630151 + m1 * 0.1077812) +
+    (m1 > 0 ? m1 * (0.2452727 + m1 * 0.0412496) * Math.log(1 / m1) : 0);
+
+  return 1 - level + (level * 8 * elliptic) / (Math.PI * Math.PI);
+};
+
+/**
  * The share of a cloud's dipoles that glint to the eye over a frame. A
  * mirror cylinder sends a source's light on a cone round its axis, so the
  * eye sees it when the axis is square to h, half way between the source and
- * the eye, within the source's radius over |s + v|. For axes turned every
- * way that bound is the share. Turning, each fibre sweeps through more of
- * them over the frame.
+ * the eye, within the source's radius over |s + v|: 2 x times the axes'
+ * density square to h, `mirror_density`, for that bound x. Turning, each
+ * fibre sweeps through more of them over the frame.
  * @param radius_rad The source's angular radius from the cloud
  * @param half_length |s + v|, the source's and the eye's directions summed
  * @param sweep_rad How far the fibres turn against h over the frame
+ * @param density The axes' density square to h: ½ for every way
  * @returns 0 to 1
  */
 export const glint_share = (
   radius_rad: number,
   half_length: number,
   sweep_rad: number,
-): number => Math.min(radius_rad / Math.max(half_length, 1e-6) + sweep_rad, 1);
+  density = 0.5,
+): number =>
+  Math.min(
+    2 * density * (radius_rad / Math.max(half_length, 1e-6) + sweep_rad),
+    1,
+  );
 
 /**
  * How far the cloud has bloomed, 0 to 1: the airstream tears off less as

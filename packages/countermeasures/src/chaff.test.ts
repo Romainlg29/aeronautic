@@ -7,8 +7,11 @@ import {
   chaff_fall_speed,
   chaff_mass,
   dipole_count,
+  dipole_tilt,
   dipole_tumble_rate,
   glint_share,
+  level_shadow,
+  mirror_density,
 } from "./chaff";
 
 const rr178 = CHAFF.rr178;
@@ -54,6 +57,52 @@ describe("the RR-178's chaff", () => {
 
     // Turning, more catch it over a frame
     expect(glint_share(SUN_RADIUS_RAD, 2, 0.02)).toBeGreaterThan(0.02);
+  });
+
+  it("lies within a few degrees of level once it falls", () => {
+    const fall = chaff_fall_speed(rr178, 288.15, 1.225);
+    const tilt = dipole_tilt(rr178, fall, 288.15, 1.225, 1e-3);
+
+    expect(tilt).toBeGreaterThan(0.01);
+    expect(tilt).toBeLessThan(0.1);
+
+    // Shaken harder, it tilts more
+    expect(dipole_tilt(rr178, fall, 288.15, 1.225, 1e-1)).toBeGreaterThan(tilt);
+  });
+
+  it("faces every way alike turned every way, and up once level", () => {
+    expect(mirror_density(0, 0.04, 0.3)).toBe(0.5);
+
+    // Far from the vertical, level fibres give 1 / (π cos η)
+    const elevation = 0.3;
+
+    expect(mirror_density(1, 0.04, Math.sin(elevation))).toBeCloseTo(
+      1 / (Math.PI * Math.cos(elevation)),
+      2,
+    );
+
+    // At the sun's reflection, a sheet of mirrors
+    expect(mirror_density(1, 0.04, 1)).toBeGreaterThan(5);
+  });
+
+  it("sends out all the light it would turned every way, only elsewhere", () => {
+    // The mean over every h of its density is ½ for any axes
+    for (const tilt of [0.02, 0.04, 0.1]) {
+      let sum = 0;
+      const steps = 200_000;
+
+      for (let step = 0; step < steps; step++) {
+        sum += mirror_density(1, tilt, (step + 0.5) / steps);
+      }
+
+      expect(sum / steps).toBeCloseTo(0.5, 2);
+    }
+  });
+
+  it("shows all of a level fibre from above, less edge on", () => {
+    expect(level_shadow(0, 0.2)).toBe(1);
+    expect(level_shadow(1, 1)).toBeCloseTo(4 / Math.PI, 4);
+    expect(level_shadow(1, 0)).toBeCloseTo(8 / Math.PI ** 2, 4);
   });
 
   it("blooms in a fifth of a second", () => {

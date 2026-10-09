@@ -24,5 +24,6 @@ description: "Every prop of the component."
 
 On the ref, `release(dispenser, payload)` lets one go, `"flare"` by
 default. `chaffClouds` is how many clouds are drawn, `chaffFallMPerS` how
-fast they sink in the air's temperature, and `updateChaff(chaff)` changes the
+fast they sink in the air's temperature, `chaffTiltRad` how far from level
+their fibres lie, and `updateChaff(chaff)` changes the
 cartridge for those to come.

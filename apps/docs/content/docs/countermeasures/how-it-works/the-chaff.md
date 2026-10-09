@@ -97,11 +97,34 @@ times that share, and draws a Poisson count of them: where the cloud is
 dense, hundreds and a smooth grey; where it thins, a few or none, and it
 glitters. The sky lights it from everywhere and does not glint.
 
+## The flash
+
+Once the airstream lets them go, the fibres fall level: a rod falling
+broadside is turned back to it by the flow's own torque, as ρ U² / (μ ln(L/d))
+(Khayat and Cox, 1989), while the eddies tumble it at (ε / L²)^⅓. Their
+balance leaves it a tilt σ = √(tumble / (2 righting)), about 2.5° at sea
+level: the scaling is Khayat and Cox's, its constant taken as 1 and used
+past where they derived it, an **estimate**, kept under 0.2 rad.
+
+A cloud of mirror facets sends ρ E D(h) / 4 towards the eye, D the share of
+its mirror facing h. For fibres turned every way that gives back the
+isotropic light above; level, their axes lie within σ of the horizontal and
+D goes as e^(−z) I₀(z) / (σ √(2π) |h_y|), z = cot²η / (4σ²), η the elevation
+of h. Far from the vertical that is 1 / (π cos η), the fibres facing up
+lighting it less and sideways more; at the vertical, where the sun's
+reflection would be, it is 1 / (σ √(2π)): seen from above, the sun overhead,
+the cloud flashes about eighteen times brighter than turned every way, within
+a few degrees. Over every h it sends out the same light, to within a tenth of
+a percent. More of its fibres catch the sun there, so the flash is smoother
+than its glitter.
+
+Level, a fibre also shows more of itself from above than edge on: its shadow
+is 4/π of the mean seen from straight above, 8/π² from the side.
+
 ## Left out
 
-- **Alignment**: falling, the fibres turn broadside. They are taken as
-  turned every way, so the flash of a whole cloud of level mirrors, seen
-  where the sun's reflection would be, is not drawn.
+- **Bent fibres**: cut fibres are a little bent, and flutter as they fall;
+  they are taken as straight.
 - **The wind**: the cloud drifts with the air, as the smoke does.
 - **The radar**: what the cloud returns to a radar is not drawn, only what
   the eye sees.

@@ -324,6 +324,62 @@ describe("Countermeasures", () => {
     fly(countermeasures, 60);
     expect(countermeasures.chaffClouds).toBe(0);
   });
+
+  it("flashes at the sun's reflection once its fibres level out", () => {
+    const countermeasures = new Countermeasures({
+      look: { sunIntensity: 3, sunDirection: [0, 1, 0] },
+    });
+
+    render(countermeasures, 0);
+    countermeasures.fire({ payload: "chaff", burst: 1, salvo: 1 });
+    fly(countermeasures, 1);
+
+    expect(countermeasures.chaffTiltRad).toBeGreaterThan(0.01);
+    expect(countermeasures.chaffTiltRad).toBeLessThan(0.1);
+
+    const geometry = countermeasures.clouds.geometry;
+    const positions = geometry.getAttribute("position");
+    const middle = new Vector3();
+
+    // The same distance off, from straight above, the sun overhead, and from
+    // the side
+    const glint_from = (offset: [number, number, number]) => {
+      const camera = new PerspectiveCamera(50, 1, 0.1, 10_000);
+
+      camera.position.copy(middle).add(new Vector3(...offset));
+      camera.lookAt(middle);
+      camera.updateMatrixWorld();
+      countermeasures.clouds.onBeforeRender(
+        {
+          info: { frame },
+          getDrawingBufferSize: (target: {
+            set: (x: number, y: number) => void;
+          }) => target.set(800, 800),
+        } as never,
+        { fog: null } as never,
+        camera,
+        null as never,
+        null as never,
+        null as never,
+      );
+
+      return geometry.getAttribute("glint").getX(0);
+    };
+
+    // Laid once to find it
+    glint_from([0, 0, 50]);
+
+    for (let corner = 0; corner < 6; corner++) {
+      middle.x += positions.getX(corner) / 6;
+      middle.y += positions.getY(corner) / 6;
+      middle.z += positions.getZ(corner) / 6;
+    }
+
+    const above = glint_from([0, 100, 0]);
+    const side = glint_from([100, 0, 0]);
+
+    expect(above).toBeGreaterThan(5 * side);
+  });
 });
 
 /** Thick enough to see: the thinnest smoke kept */
