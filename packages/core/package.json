@@ -1,6 +1,6 @@
 {
   "name": "@aeronautic/core",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "The shared ground of the @aeronautic effects: the International Standard Atmosphere and moist air, an aircraft's flight as one mutable store read for free every frame, and six-view depth capture of a model, for three.js and React Three Fiber",
   "keywords": [
     "aircraft",
