@@ -33,6 +33,7 @@ import {
   type Flight,
   type GlareUniforms,
   type Observer,
+  type SceneBackdrop,
 } from "@aeronautic/core";
 import {
   burn_time,
@@ -178,6 +179,14 @@ export type CountermeasuresOptions = {
    * `air`
    */
   source?: Flight | null;
+
+  /**
+   * The opaque scene, when drawn in core's `volume_pass`: put `glare`,
+   * `trail`, `smoke` and `clouds` in `pass.scene` and give
+   * `pass.backdrop` here. Its depth hides them behind the airframe, as the
+   * depth test does in the scene itself
+   */
+  backdrop?: SceneBackdrop;
 };
 
 /** One flare in the air */
@@ -498,7 +507,7 @@ export class Countermeasures {
 
     const glare = new Mesh(
       create_glare_geometry(this._quality.flares),
-      create_glare_material(this._glare_uniforms),
+      create_glare_material(this._glare_uniforms, options.backdrop),
     );
 
     glare.name = "CountermeasuresGlare";
@@ -506,19 +515,21 @@ export class Countermeasures {
     glare.frustumCulled = false;
     glare.renderOrder = 2;
     glare.material.side = DoubleSide;
-    glare.onBeforeRender = (renderer, scene, camera) =>
+    glare.onBeforeRender = (renderer, scene, camera) => {
+      this.follow(glare);
       this.drawGlare(
         renderer as unknown as Renderer,
         scene,
         camera as PerspectiveCamera,
       );
+    };
 
     this.glare = glare;
     this.group.add(glare);
 
     const trail = new Mesh(
       create_trail_geometry(this._quality.flares),
-      create_trail_material(),
+      create_trail_material(options.backdrop),
     );
 
     trail.name = "CountermeasuresTrail";
@@ -526,50 +537,56 @@ export class Countermeasures {
     trail.frustumCulled = false;
     trail.renderOrder = 1;
     trail.material.side = DoubleSide;
-    trail.onBeforeRender = (renderer, scene, camera) =>
+    trail.onBeforeRender = (renderer, scene, camera) => {
+      this.follow(trail);
       this.drawTrail(
         renderer as unknown as Renderer,
         scene,
         camera as PerspectiveCamera,
       );
+    };
 
     this.trail = trail;
     this.group.add(trail);
 
     const smoke = new Mesh(
       create_smoke_geometry(this._quality.flares),
-      create_smoke_material(),
+      create_smoke_material(options.backdrop),
     );
 
     smoke.name = "CountermeasuresSmoke";
     smoke.userData.countermeasures = this;
     smoke.frustumCulled = false;
     smoke.material.side = DoubleSide;
-    smoke.onBeforeRender = (renderer, scene, camera) =>
+    smoke.onBeforeRender = (renderer, scene, camera) => {
+      this.follow(smoke);
       this.drawSmoke(
         renderer as unknown as Renderer,
         scene,
         camera as PerspectiveCamera,
       );
+    };
 
     this.smoke = smoke;
     this.group.add(smoke);
 
     const clouds = new Mesh(
       create_chaff_geometry(this._quality.chaff),
-      create_chaff_material(),
+      create_chaff_material(options.backdrop),
     );
 
     clouds.name = "CountermeasuresChaff";
     clouds.userData.countermeasures = this;
     clouds.frustumCulled = false;
     clouds.material.side = DoubleSide;
-    clouds.onBeforeRender = (renderer, scene, camera) =>
+    clouds.onBeforeRender = (renderer, scene, camera) => {
+      this.follow(clouds);
       this.drawChaff(
         renderer as unknown as Renderer,
         scene,
         camera as PerspectiveCamera,
       );
+    };
 
     this.clouds = clouds;
     this.group.add(clouds);
@@ -867,6 +884,12 @@ export class Countermeasures {
   dispose() {
     this.clear();
     this.group.removeFromParent();
+
+    // Out of a volume pass's scene too, if they were put there
+    for (const mesh of [this.glare, this.trail, this.smoke, this.clouds]) {
+      mesh.removeFromParent();
+    }
+
     this.glare.geometry.dispose();
     this.glare.material.dispose();
     this.trail.geometry.dispose();
@@ -1433,6 +1456,16 @@ export class Countermeasures {
     }
 
     clouds.length = kept;
+  }
+
+  /**
+   * Keep a mesh drawn from another scene, a volume pass's, in the group's
+   * frame: its corners are laid in it
+   * @param mesh The mesh
+   */
+  private follow(mesh: Object3D) {
+    if (mesh.parent !== this.group)
+      mesh.matrixWorld.copy(this.group.matrixWorld);
   }
 
   /** Hang three's lights on the brightest flares */

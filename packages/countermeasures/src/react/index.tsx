@@ -1,5 +1,9 @@
-import { check_renderer, type Flight } from "@aeronautic/core";
-import { useFlightStore, useShallowStable } from "@aeronautic/core/react";
+import { check_renderer, type Flight, type VolumePass } from "@aeronautic/core";
+import {
+  useFlightStore,
+  useShallowStable,
+  useVolumePass,
+} from "@aeronautic/core/react";
 import { createPortal, useThree, type ThreeElements } from "@react-three/fiber";
 import {
   useImperativeHandle,
@@ -99,6 +103,14 @@ export type CountermeasuresProps = Omit<ThreeElements["group"], "ref"> & {
    */
   source?: Flight | null;
 
+  /**
+   * Draw the flames, the smoke, the chaff and the glare in passes of their
+   * own, from core's `volume_pass`, behind which an atmosphere's sky is
+   * drawn. By default the nearest `<VolumePassContext>`'s; null draws in
+   * the scene
+   */
+  pass?: VolumePass | null;
+
   /** The countermeasures themselves, to fire and drive every frame */
   ref?: Ref<CountermeasuresHandle | null>;
 };
@@ -123,6 +135,7 @@ export const Countermeasures: FC<CountermeasuresProps> = ({
   up,
   quality,
   source,
+  pass: pass_prop,
   ref,
   children,
   ...group_props
@@ -130,6 +143,8 @@ export const Countermeasures: FC<CountermeasuresProps> = ({
   const gl = useThree((state) => state.gl);
   const provided = useFlightStore();
   const flight_source = source === undefined ? provided : source;
+  const provided_pass = useVolumePass();
+  const pass = pass_prop === undefined ? provided_pass : pass_prop;
 
   useLayoutEffect(() => check_renderer(gl, "<Countermeasures>"), [gl]);
 
@@ -169,16 +184,31 @@ export const Countermeasures: FC<CountermeasuresProps> = ({
   };
 
   useLayoutEffect(() => {
-    const created = new Core(initial.current);
+    const created = new Core({
+      ...initial.current,
+      backdrop: pass?.backdrop,
+    });
 
     group.current?.add(created.group);
+
+    // The lights stay in the aircraft, lighting the scene; what is drawn
+    // goes in the pass, over the backdrop
+    if (pass) {
+      pass.scene.add(
+        created.glare,
+        created.trail,
+        created.smoke,
+        created.clouds,
+      );
+    }
+
     set_core(created);
 
     return () => {
       set_core(null);
       created.dispose();
     };
-  }, []);
+  }, [pass]);
 
   // A portal moves the group: hang the countermeasures on it again
   useLayoutEffect(() => {

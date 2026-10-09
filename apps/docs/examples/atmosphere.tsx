@@ -50,6 +50,9 @@ const PARAMETERS = new AtmosphereParameters();
 const BLACKBODY_2000K_CD_M2 = 4.8e5;
 export const PLUME_EXPOSURE = BLACKBODY_2000K_CD_M2 * PARAMETERS.luminanceScale;
 
+// The atmosphere's unit, per cd/m²: what an effect's exposure is under it
+export const LUMINANCE_SCALE = PARAMETERS.luminanceScale;
+
 // An incident light meter's calibration constant for a hemispherical
 // receptor, in lux at ISO 100 (ISO 2720 gives 320 to 540), and how far over
 // a metered exposure the brightest unclipped luminance sits (Lagarde and de

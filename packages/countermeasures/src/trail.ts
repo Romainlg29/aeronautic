@@ -10,7 +10,9 @@ import {
   OneMinusSrcAlphaFactor,
   type Node,
 } from "three/webgpu";
+import type { SceneBackdrop } from "@aeronautic/core";
 import { attribute, vec4 } from "three/tsl";
+import { unless_hidden } from "./hidden";
 
 // The flame's trail
 //
@@ -66,19 +68,25 @@ export const create_trail_geometry = (count: number): BufferGeometry => {
 /**
  * The trails' material: each vertex's luminance in the scene's units, added
  * over what is behind, hidden by what is in front.
+ * @param backdrop The opaque scene, when drawn in core's volume pass
  * @returns The material
  */
-export const create_trail_material = (): MeshBasicNodeMaterial => {
+export const create_trail_material = (
+  backdrop?: SceneBackdrop,
+): MeshBasicNodeMaterial => {
   const material = new MeshBasicNodeMaterial({
     transparent: true,
     depthWrite: false,
     fog: false,
   });
 
-  material.fragmentNode = vec4(
-    attribute("color", "vec3") as unknown as Node<"vec3">,
-    0,
-  ) as unknown as Node<"vec4">;
+  material.fragmentNode = unless_hidden(
+    vec4(
+      attribute("color", "vec3") as unknown as Node<"vec3">,
+      0,
+    ) as unknown as Node<"vec4">,
+    backdrop,
+  );
   material.blending = CustomBlending;
   material.blendSrc = OneFactor;
   material.blendDst = OneMinusSrcAlphaFactor;

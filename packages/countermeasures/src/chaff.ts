@@ -26,7 +26,9 @@ import {
   sqrt,
   vec4,
 } from "three/tsl";
+import type { SceneBackdrop } from "@aeronautic/core";
 import { G0 } from "./flare";
+import { unless_hidden } from "./hidden";
 
 // Chaff: a cartridge of dipoles
 //
@@ -446,9 +448,12 @@ const glint_count = Fn(
  * The chaff's material: its depth a Gaussian across both its axes, the
  * light it scatters shown as much as it hides what is behind, its glints
  * counted pixel by pixel.
+ * @param backdrop The opaque scene, when drawn in core's volume pass
  * @returns The material
  */
-export const create_chaff_material = (): MeshBasicNodeMaterial => {
+export const create_chaff_material = (
+  backdrop?: SceneBackdrop,
+): MeshBasicNodeMaterial => {
   const material = new MeshBasicNodeMaterial({
     transparent: true,
     depthWrite: false,
@@ -470,12 +475,15 @@ export const create_chaff_material = (): MeshBasicNodeMaterial => {
   const mean = tau.mul(chaff.w);
   const count = glint_count(mean, hash(seed), hash(seed.bitXor(0x5bd1e995)));
 
-  material.fragmentNode = vec4(
-    (attribute("color", "vec3") as unknown as Node<"vec3">)
-      .add(glint.xyz.mul(count.div(max(mean, 1e-12))))
-      .mul(alpha),
-    alpha,
-  ) as unknown as Node<"vec4">;
+  material.fragmentNode = unless_hidden(
+    vec4(
+      (attribute("color", "vec3") as unknown as Node<"vec3">)
+        .add(glint.xyz.mul(count.div(max(mean, 1e-12))))
+        .mul(alpha),
+      alpha,
+    ) as unknown as Node<"vec4">,
+    backdrop,
+  );
   material.blending = CustomBlending;
   material.blendSrc = OneFactor;
   material.blendDst = OneMinusSrcAlphaFactor;

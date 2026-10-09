@@ -20,6 +20,7 @@ description: "Every prop of the component."
 | `up`       | `[x, y, z]`                           | Which way is up for it. +Y by default.                                                  |
 | `quality`  | `CountermeasuresQualityName \| {...}` | How many flares and chaff clouds are drawn, how many light: `low` to `ultra`.           |
 | `source`   | `Flight \| null`                      | A shared flight for the airspeed, the angles, the altitude and the air's density.       |
+| `pass`     | `VolumePass                           | null`                                                                                   | Draw in core's `volume_pass`, over an atmosphere's sky. The nearest one by default; `null` draws in the scene. |
 | `ref`      | `Ref<CountermeasuresHandle>`          | The `Countermeasures` itself: `fire`, `release`, `stop`, `clear`, `burning`, `pending`. |
 
 On the ref, `release(dispenser, payload)` lets one go, `"flare"` by

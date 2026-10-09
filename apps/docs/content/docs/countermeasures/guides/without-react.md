@@ -34,5 +34,24 @@ Every `update*` method changes some fields and keeps the rest, and does
 nothing if they are what they were. `updateAirframe` and `setQuality`
 rebuild the dispensers and the lights; the others only write numbers.
 
+Under an atmosphere drawn as core's `volume_pass` backdrop, give the pass's
+`backdrop` and put the four meshes in its scene, the group still in the
+aircraft:
+
+```ts
+const countermeasures = new Countermeasures({ backdrop: pass.backdrop });
+
+aircraft.add(countermeasures.group);
+pass.scene.add(
+  countermeasures.glare,
+  countermeasures.trail,
+  countermeasures.smoke,
+  countermeasures.clouds,
+);
+```
+
+They follow the group every frame, and the backdrop's depth hides them
+behind the airframe. See [Takram's atmosphere](/docs/countermeasures/integrations/takram-atmosphere).
+
 `burning` and `pending` count the flares out and still to come, and
 `burnTimeS` is how long one burns.

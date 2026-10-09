@@ -10,7 +10,9 @@ import {
   OneMinusSrcAlphaFactor,
   type Node,
 } from "three/webgpu";
+import type { SceneBackdrop } from "@aeronautic/core";
 import { attribute, exp, float, vec4 } from "three/tsl";
+import { unless_hidden } from "./hidden";
 
 // The flare's smoke
 //
@@ -73,9 +75,12 @@ export const create_smoke_geometry = (count: number): BufferGeometry => {
 /**
  * The smoke's material: its depth across the ribbon a Gaussian's, the
  * light it scatters shown as much as it hides what is behind.
+ * @param backdrop The opaque scene, when drawn in core's volume pass
  * @returns The material
  */
-export const create_smoke_material = (): MeshBasicNodeMaterial => {
+export const create_smoke_material = (
+  backdrop?: SceneBackdrop,
+): MeshBasicNodeMaterial => {
   const material = new MeshBasicNodeMaterial({
     transparent: true,
     depthWrite: false,
@@ -87,10 +92,13 @@ export const create_smoke_material = (): MeshBasicNodeMaterial => {
   const tau = smoke.y.mul(exp(across.mul(across).mul(-0.5)));
   const alpha = float(1).sub(exp(tau.negate()));
 
-  material.fragmentNode = vec4(
-    (attribute("color", "vec3") as unknown as Node<"vec3">).mul(alpha),
-    alpha,
-  ) as unknown as Node<"vec4">;
+  material.fragmentNode = unless_hidden(
+    vec4(
+      (attribute("color", "vec3") as unknown as Node<"vec3">).mul(alpha),
+      alpha,
+    ) as unknown as Node<"vec4">,
+    backdrop,
+  );
   material.blending = CustomBlending;
   material.blendSrc = OneFactor;
   material.blendDst = OneMinusSrcAlphaFactor;

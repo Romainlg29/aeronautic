@@ -1,11 +1,13 @@
 import { useAnimations, useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
+import type { CountermeasuresLook } from "@aeronautic/countermeasures";
 import {
   Countermeasures,
   type CountermeasuresHandle,
 } from "@aeronautic/countermeasures/react";
 import {
   type FC,
+  type ReactNode,
   type RefObject,
   useEffect,
   useMemo,
@@ -42,7 +44,7 @@ const ALTITUDE_M = 3000;
 
 // Ahead, off to the side and above, looking back down the trail; behind,
 // chasing; and high behind it, looking down the trail at the fighter
-const VIEWS = {
+export const VIEWS = {
   alongside: {
     label: "alongside, looking back",
     camera: [34, 26, -32],
@@ -101,17 +103,40 @@ const HELD = {
 };
 const HELD_EVERY_MS = 200;
 
+// Two flares a burst, two bursts, as the night example's program
+const FLARES = {
+  burst: 2,
+  burstIntervalS: 0.1,
+  salvo: 2,
+  salvoIntervalS: 0.5,
+  payload: "flare" as const,
+};
+
+/**
+ * The light the fighter flies in, from elsewhere: an atmosphere's. Its own
+ * sun and sky are then left out.
+ */
+export type Daylight = {
+  /** The look, in the scene's light units */
+  look: Partial<CountermeasuresLook>;
+
+  /** The sun's illuminance there, lux */
+  lux: number;
+};
+
 /**
  * The fighter flying in the sun, letting chaff go.
- * @param props The settings, whether chaff is held down, and where to say
- *   what it is doing
+ * @param props The settings, whether chaff is held down, where to say what
+ *   it is doing, the flares fired so far, and the light if it is given
  * @returns The model, its chaff and the daylight
  */
-const ChaffingFighter: FC<{
+export const ChaffingFighter: FC<{
   settings: Settings;
   held: boolean;
   readout: RefObject<HTMLSpanElement | null>;
-}> = ({ settings, held, readout }) => {
+  flares?: number;
+  daylight?: Daylight;
+}> = ({ settings, held, readout, flares, daylight }) => {
   const { scene, animations } = useGLTF(MODEL);
   const body = useRef<Group>(null);
   const chaff = useRef<CountermeasuresHandle>(null);
@@ -153,7 +178,7 @@ const ChaffingFighter: FC<{
     ],
     [elevation, bearing],
   );
-  const lux = sun_lux(elevation);
+  const lux = daylight?.lux ?? sun_lux(elevation);
 
   // The sky's light from above and the ground's from below, each half of
   // every way: the ground lit by the sun and the sky
@@ -161,7 +186,7 @@ const ChaffingFighter: FC<{
     (GROUND_ALBEDO * (lux * Math.sin(elevation) + Math.PI * SKY_CD_M2)) /
     Math.PI;
   const exposure = LIGHTS_DAY_EXPOSURE;
-  const look = useMemo(
+  const own_look = useMemo(
     () => ({
       exposure,
       sunDirection: sun,
@@ -172,6 +197,7 @@ const ChaffingFighter: FC<{
     }),
     [exposure, sun, lux, ground_cd_m2],
   );
+  const look = daylight?.look ?? own_look;
 
   useFrame(() => {
     const current = chaff.current;
@@ -194,31 +220,41 @@ const ChaffingFighter: FC<{
           flight={{ airspeedMPerS: settings.airspeed }}
           air={{ altitudeM: ALTITUDE_M }}
           look={look}
+          program={FLARES}
+          fire={flares}
           quality="ultra"
         />
       </group>
-      <hemisphereLight
-        args={["#8cacdc", "#5a5a50", Math.PI * SKY_CD_M2 * exposure]}
-      />
-      <directionalLight
-        position={[sun[0] * 100, sun[1] * 100, sun[2] * 100]}
-        intensity={lux * exposure}
-      />
+      {!daylight && (
+        <>
+          <hemisphereLight
+            args={["#8cacdc", "#5a5a50", Math.PI * SKY_CD_M2 * exposure]}
+          />
+          <directionalLight
+            position={[sun[0] * 100, sun[1] * 100, sun[2] * 100]}
+            intensity={lux * exposure}
+          />
+        </>
+      )}
     </>
   );
 };
 
 /**
  * The chaff button, held down, the view, the airspeed and the sun.
- * @param props The settings, how to change them, and how to hold the chaff
+ * @param props The settings, how to change them, how to hold the chaff, how
+ *   low the sun goes, and more controls first
  * @returns The controls
  */
-const ChaffControls: FC<{
+export const ChaffControls: FC<{
   settings: Settings;
   change: (next: Partial<Settings>) => void;
   hold: (held: boolean) => void;
-}> = ({ settings, change, hold }) => (
+  lowest_deg?: number;
+  children?: ReactNode;
+}> = ({ settings, change, hold, lowest_deg = 5, children }) => (
   <div className="example-controls">
+    {children}
     <button
       type="button"
       onPointerDown={() => hold(true)}
@@ -259,7 +295,7 @@ const ChaffControls: FC<{
       sun {settings.elevation_deg}° up
       <input
         type="range"
-        min={5}
+        min={lowest_deg}
         max={85}
         step={1}
         value={settings.elevation_deg}

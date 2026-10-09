@@ -15,6 +15,7 @@ import {
   type UniformNode,
 } from "three/webgpu";
 import { scene_depth, scene_view_z } from "./scene";
+import type { SceneBackdrop } from "./volume-pass";
 import {
   Fn,
   asin,
@@ -114,10 +115,13 @@ export const create_glare_uniforms = (): GlareUniforms => ({
 /**
  * The glare's material.
  * @param uniforms Its uniforms
+ * @param backdrop The opaque scene, when the glare is drawn in a volume
+ *   pass: its depth hides the lights. Left out, the frame's own
  * @returns The material
  */
 export const create_glare_material = (
   uniforms: GlareUniforms,
+  backdrop?: SceneBackdrop,
 ): MeshBasicNodeMaterial => {
   const age = uniforms.age as unknown as F;
   const p = uniforms.pigmentation as unknown as F;
@@ -160,7 +164,9 @@ export const create_glare_material = (
 
     // Hidden, if the scene at the light is nearer than it
     const on_screen = centre.x.greaterThanEqual(0);
-    const scene_z = scene_view_z(scene_depth().sample(centre.xy) as never);
+    const scene_z = scene_view_z(
+      (backdrop?.depth ?? scene_depth()).sample(centre.xy) as never,
+    );
     const seen = select(
       on_screen.and(scene_z.greaterThan(light.w.add(centre.w))),
       float(0),

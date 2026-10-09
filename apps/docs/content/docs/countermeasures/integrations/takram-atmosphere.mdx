@@ -1,0 +1,81 @@
+---
+title: Takram's atmosphere
+description: "Flares and chaff under @takram/three-atmosphere's sky: the flames in its light units, the smoke and the chaff lit by its sun and sky."
+---
+
+<Example name="atmosphere-countermeasures" />
+
+The in-the-sun example under
+[`@takram/three-atmosphere`](https://www.npmjs.com/package/@takram/three-atmosphere)'s
+sky. Hold the chaff and it streams out behind the fighter, lit by the
+sunlight and skylight the atmosphere works out three kilometres up. Bring the
+sun down below the horizon and fire the flares: the camera opens up for the
+dimmer sky, and the same flames come up brighter against it.
+
+The setup, the volume pass with the aerial perspective as its backdrop and
+the scene's place on the earth, is on [core's page](/docs/core/integrations/takram-atmosphere).
+
+## In the volume pass
+
+The atmosphere's aerial perspective draws the sky wherever the opaque scene
+left nothing, so whatever is drawn over the sky in the scene itself is drawn
+over again. `<Countermeasures>` finds the volume pass through its
+`<VolumePassContext>`, as the plumes, the vapor and the contrails do, and
+draws its flames, smoke, chaff and glare in it, over the atmosphere's
+backdrop. The point lights stay in the aircraft, lighting the scene.
+
+The pass has no depth of its own: each of them reads the opaque scene's from
+`pass.backdrop` instead, so the airframe still hides what is behind it.
+Without React, give `backdrop` to the `Countermeasures` and put its `glare`,
+`trail`, `smoke` and `clouds` in `pass.scene`.
+
+## The light units
+
+The look's `exposure` is the scene's value for 1 cd/m². The atmosphere draws
+one unit on screen as about 75 700 cd/m², so under it the exposure is its
+`luminanceScale`, whatever the camera meters:
+
+```ts
+import { AtmosphereParameters } from "@takram/three-atmosphere/webgpu";
+
+const exposure = new AtmosphereParameters().luminanceScale; // ≈ 1.3 × 10⁻⁵
+
+<Countermeasures
+  look={{
+    exposure,
+    sunDirection, // towards the sun, world space
+    sunColor: lighting.sun,
+    sunIntensity: 1,
+    skyColor: lighting.sky,
+    skyIntensity: 1,
+  }}
+/>
+```
+
+The sun and the sky are taken as the contrails take them, from takram's
+`getSplitScalarIlluminance` at the aircraft:
+
+- **The sun** is its `direct`: the solar irradiance through the air above.
+  It lights the smoke through its phase function, and the chaff by its
+  glints and its flash at the sun's reflection.
+- **The sky** is the mean of the dome above, E<sub>h</sub> / π from its
+  horizontal illuminance, and the sunlit ground below: the light that
+  falls on the smoke and the chaff from every side.
+
+Both are already in the atmosphere's units, so their intensities stay at 1.
+The flames are in candelas, the exposure turning them into the same units.
+
+## The air in front of it
+
+The pass's contents get no aerial perspective from the atmosphere. The
+countermeasures put their own haze in front of them, from the `air`'s
+visibility: at its default 23 km, Koschmieder's 3.912 / V is 0.17 per
+kilometre, and the example's few hundred metres keep over 95 % of the
+light. Takram's clear air three kilometres up, about 0.01 per kilometre in
+green, is nearly twenty times thinner;
+give `visibilityM` to match it if the scene is seen from far off.
+
+The glitter is counted pixel by pixel, in the pass's pixels: at its half
+resolution it is coarser, with the same mean.
+
+<Source file="atmosphere-countermeasures.tsx" />
