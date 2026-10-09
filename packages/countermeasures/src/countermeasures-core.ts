@@ -217,6 +217,7 @@ export class Countermeasures {
   private _frame_options: CountermeasuresFrame = {};
   private readonly _glare_uniforms: GlareUniforms;
   private _lights: PointLight[] = [];
+  private readonly _picked: Burning[] = [];
 
   // The flare's make, worked out once
   private _burn_s = 0;
@@ -561,7 +562,11 @@ export class Countermeasures {
     this._glare_uniforms.pigmentation.value = observer.pigmentation;
   }
 
-  /** Three's lights for the brightest flares: a fixed pool, never recompiled */
+  /**
+   * Three's lights for the brightest flares: a fixed pool, always visible.
+   * A light shown or hidden changes the scene's lights, and every material
+   * recompiles for it; one at no intensity costs nothing
+   */
   private buildLights() {
     for (const light of this._lights) {
       light.removeFromParent();
@@ -575,7 +580,6 @@ export class Countermeasures {
 
       light.name = "CountermeasuresLight";
       light.color.setRGB(...this._color);
-      light.visible = false;
       this._lights.push(light);
       this.group.add(light);
     }
@@ -766,20 +770,19 @@ export class Countermeasures {
 
     if (lights.length === 0) return;
 
-    const brightest = [...this._burning]
-      .sort((a, b) => b.light.intensityCd - a.light.intensityCd)
-      .slice(0, lights.length);
+    this.pickBrightest();
 
     scratch_origin.setFromMatrixPosition(this.group.matrixWorld);
     scratch_matrix.copy(this.group.matrixWorld).invert();
 
     for (let index = 0; index < lights.length; index++) {
       const light = lights[index];
-      const flare = brightest[index];
+      const flare = this._picked[index];
 
-      light.visible = flare !== undefined;
-
-      if (!flare) continue;
+      if (!flare) {
+        light.intensity = 0;
+        continue;
+      }
 
       // The scene's lights are set before this frame's draw reads them:
       // put each a frame on, where its flare will be then
@@ -790,6 +793,30 @@ export class Countermeasures {
         .add(scratch_origin)
         .applyMatrix4(scratch_matrix);
       light.intensity = flare.light.intensityCd * this._look.exposure;
+    }
+  }
+
+  /**
+   * Pick the brightest flares for the lights, without sorting or allocating:
+   * the lights are a handful, and this runs every frame
+   */
+  private pickBrightest() {
+    const picked = this._picked;
+
+    picked.length = 0;
+
+    for (let index = 0; index < this._lights.length; index++) {
+      let found: Burning | undefined;
+
+      for (const flare of this._burning) {
+        if (picked.includes(flare)) continue;
+        if (!found || flare.light.intensityCd > found.light.intensityCd) {
+          found = flare;
+        }
+      }
+
+      if (!found) return;
+      picked.push(found);
     }
   }
 

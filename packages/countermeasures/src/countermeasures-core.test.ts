@@ -147,11 +147,10 @@ describe("Countermeasures", () => {
     expect(lights).toHaveLength(1);
 
     render(countermeasures, 0);
-    expect(lights[0].visible).toBe(false);
+    expect(lights[0].intensity).toBe(0);
 
     countermeasures.release();
     render(countermeasures, 1 / 60);
-    expect(lights[0].visible).toBe(true);
     expect(lights[0].intensity).toBeGreaterThan(0);
   });
 });
