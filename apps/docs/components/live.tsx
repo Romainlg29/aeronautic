@@ -22,6 +22,7 @@ const EXAMPLES = {
   "any-shape": load(() => import("@/examples/any-shape")),
   contrails: load(() => import("@/examples/contrails")),
   lights: load(() => import("@/examples/lights")),
+  countermeasures: load(() => import("@/examples/countermeasures")),
   "one-flight": load(() => import("@/examples/one-flight")),
   "the-controls": load(() => import("@/examples/the-controls")),
   "thrust-vectoring": load(() => import("@/examples/thrust-vectoring")),

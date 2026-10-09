@@ -1,6 +1,6 @@
 # Roadmap
 
-What's planned after `@aeronautic/lights`, in the same spirit as the rest:
+What's planned after `@aeronautic/countermeasures`' flares, in the same spirit as the rest:
 each effect worked out from the physics and from measured data, its dials
 physical quantities in SI units, never a look tuned by eye. A package lands
 when it can say where every number comes from.
@@ -11,19 +11,15 @@ open an issue to discuss one before starting, as
 
 ## `@aeronautic/countermeasures`
 
-Flares and chaff, ejected, falling and burning out as the physics says.
+The flares and their programs are out, in 0.1. Still to come:
 
-- **Flares**: ejected at their cartridge's speed, then a ballistic body with
-  its own drag, decelerating in the aircraft's slipstream and falling away.
-  Their magnesium–PTFE burn gives the brightness, colour temperature and
-  burn time, and the smoke trail's mass.
 - **The smoke**: the burn's products, laid along each flare's path, mixing
   out and drifting with the wind, lit like the contrails' plume.
 - **Chaff**: a cloud of dipoles blooming from the cartridge, slowing in the
   air and settling at their terminal velocity, glinting where the sun catches
   them.
-- **Salvos and programs**: the dispenser's sequences, timed against the flight
-  from a shared `Flight`.
+- **The flame in the airstream**: how much a flare's intensity drops with
+  its speed through the air and with altitude, from measured data.
 
 ## `@aeronautic/rotor`
 

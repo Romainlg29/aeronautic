@@ -1,7 +1,7 @@
 import type { Object3D } from "three";
 import type { Lamp, LampName } from "./beam";
 import { ILLUMINANT_A_K, LED_GREEN, LED_RED, type Chromaticity } from "./color";
-import { exposure_ev100 } from "./exposure";
+import { exposure_ev100 } from "@aeronautic/core";
 import { ANTICOLLISION_CD, type Pulse } from "./flash";
 import type { NavigationSide } from "./navigation";
 

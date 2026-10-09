@@ -9,14 +9,15 @@ the day: the look comes out of them.
 
 **[Docs and live examples](https://romainlg29.github.io/aeronautic/)**
 
-| Package                                                  | npm                                                                                                                   | What it draws                                                        |
-| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| [`@aeronautic/afterburner`](packages/afterburner#readme) | [![npm](https://img.shields.io/npm/v/@aeronautic/afterburner)](https://www.npmjs.com/package/@aeronautic/afterburner) | Jet afterburners and rocket exhaust plumes                           |
-| [`@aeronautic/wing-vapor`](packages/wing-vapor#readme)   | [![npm](https://img.shields.io/npm/v/@aeronautic/wing-vapor)](https://www.npmjs.com/package/@aeronautic/wing-vapor)   | Vortex trails, shock vapor and the vapor cone a wing pulls in air    |
-| [`@aeronautic/contrails`](packages/contrails#readme)     | [![npm](https://img.shields.io/npm/v/@aeronautic/contrails)](https://www.npmjs.com/package/@aeronautic/contrails)     | Engine contrails that form, sink, spread and persist as the day says |
-| [`@aeronautic/lights`](packages/lights#readme)           | [![npm](https://img.shields.io/npm/v/@aeronautic/lights)](https://www.npmjs.com/package/@aeronautic/lights)           | Navigation, anti-collision, landing and taxi lights, to the rule     |
-| [`@aeronautic/controls`](packages/controls#readme)       | [![npm](https://img.shields.io/npm/v/@aeronautic/controls)](https://www.npmjs.com/package/@aeronautic/controls)       | Control surfaces, gear, nozzles and thrust vectoring on a model      |
-| [`@aeronautic/core`](packages/core#readme)               | [![npm](https://img.shields.io/npm/v/@aeronautic/core)](https://www.npmjs.com/package/@aeronautic/core)               | The shared flight, the atmosphere and the depth capture              |
+| Package                                                          | npm                                                                                                                           | What it draws                                                        |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| [`@aeronautic/afterburner`](packages/afterburner#readme)         | [![npm](https://img.shields.io/npm/v/@aeronautic/afterburner)](https://www.npmjs.com/package/@aeronautic/afterburner)         | Jet afterburners and rocket exhaust plumes                           |
+| [`@aeronautic/wing-vapor`](packages/wing-vapor#readme)           | [![npm](https://img.shields.io/npm/v/@aeronautic/wing-vapor)](https://www.npmjs.com/package/@aeronautic/wing-vapor)           | Vortex trails, shock vapor and the vapor cone a wing pulls in air    |
+| [`@aeronautic/contrails`](packages/contrails#readme)             | [![npm](https://img.shields.io/npm/v/@aeronautic/contrails)](https://www.npmjs.com/package/@aeronautic/contrails)             | Engine contrails that form, sink, spread and persist as the day says |
+| [`@aeronautic/lights`](packages/lights#readme)                   | [![npm](https://img.shields.io/npm/v/@aeronautic/lights)](https://www.npmjs.com/package/@aeronautic/lights)                   | Navigation, anti-collision, landing and taxi lights, to the rule     |
+| [`@aeronautic/countermeasures`](packages/countermeasures#readme) | [![npm](https://img.shields.io/npm/v/@aeronautic/countermeasures)](https://www.npmjs.com/package/@aeronautic/countermeasures) | Decoy flares that burn and fall as their grain and drag say          |
+| [`@aeronautic/controls`](packages/controls#readme)               | [![npm](https://img.shields.io/npm/v/@aeronautic/controls)](https://www.npmjs.com/package/@aeronautic/controls)               | Control surfaces, gear, nozzles and thrust vectoring on a model      |
+| [`@aeronautic/core`](packages/core#readme)                       | [![npm](https://img.shields.io/npm/v/@aeronautic/core)](https://www.npmjs.com/package/@aeronautic/core)                       | The shared flight, the atmosphere and the depth capture              |
 
 Each installs on its own, with the same peers: `@aeronautic/core`, `three`
 0.186, plus `react` 19 and `@react-three/fiber` 9 (or 10) for the components
@@ -188,12 +189,48 @@ export const Jet = () => (
 · [README](packages/lights/README.md)
 · [How it works](https://romainlg29.github.io/aeronautic/docs/lights/how-it-works/the-rule/)
 
+## Countermeasures
+
+**Decoy flares**, an MJU-7 class cartridge by default. Its grain of
+magnesium, Teflon and Viton burns from every face at the composition's
+**measured rate**, gone in about three seconds; its flame is the light that
+burn gives, a few hundred thousand candela at **2100 K**; its drag slows it
+from the aircraft's speed within a second, and it falls behind and below.
+The dispensers fire to a **program**, bursts and salvos, taking turns. Chaff
+and smoke are to come.
+
+```bash
+pnpm add @aeronautic/countermeasures @aeronautic/core three@~0.186 @react-three/fiber
+```
+
+Put `<Countermeasures>` at the aircraft's reference point, and fire it:
+
+```tsx
+import { Countermeasures } from "@aeronautic/countermeasures/react";
+
+export const Jet = ({ fired }: { fired: number }) => (
+  <group>
+    <JetModel />
+    <Countermeasures
+      airframe={{ dispensers: [{ at: [-1, -0.57, 5] }, { at: [1, -0.57, 5] }] }}
+      flight={{ airspeedMPerS: 250 }}
+      fire={fired}
+    />
+  </group>
+);
+```
+
+[Countermeasures docs](https://romainlg29.github.io/aeronautic/docs/countermeasures/start/introduction/)
+· [README](packages/countermeasures/README.md)
+· [How it works](https://romainlg29.github.io/aeronautic/docs/countermeasures/how-it-works/the-grain/)
+
 ## The repository
 
 - [`packages/afterburner`](packages/afterburner): `@aeronautic/afterburner`.
 - [`packages/wing-vapor`](packages/wing-vapor): `@aeronautic/wing-vapor`.
 - [`packages/contrails`](packages/contrails): `@aeronautic/contrails`.
 - [`packages/lights`](packages/lights): `@aeronautic/lights`.
+- [`packages/countermeasures`](packages/countermeasures): `@aeronautic/countermeasures`.
 - [`packages/controls`](packages/controls): `@aeronautic/controls`.
 - [`packages/core`](packages/core): `@aeronautic/core`, which the others
   depend on.
@@ -265,7 +302,7 @@ as [SECURITY.md](SECURITY.md) describes.
 
 The docs deploy on every push to `main`. Releases to npm are
 the maintainer's, each package from a tag naming it, `core-v*`, `afterburner-v*`,
-`wing-vapor-v*`, `contrails-v*`, `lights-v*` or `controls-v*` (see [RELEASING.md](RELEASING.md)).
+`wing-vapor-v*`, `contrails-v*`, `lights-v*`, `countermeasures-v*` or `controls-v*` (see [RELEASING.md](RELEASING.md)).
 
 What's planned next is in [ROADMAP.md](ROADMAP.md).
 

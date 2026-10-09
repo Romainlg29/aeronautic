@@ -113,6 +113,16 @@ html:has(.landing) {
   accent-color: #f59e42;
 }
 
+.example-controls button {
+  background: #f59e42;
+  color: #10131a;
+  border: 0;
+  border-radius: 0.25rem;
+  padding: 0.2rem 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .example-controls select {
   background: #151a24;
   color: inherit;

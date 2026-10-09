@@ -14,6 +14,7 @@
     "@aeronautic/contrails": "workspace:*",
     "@aeronautic/controls": "workspace:*",
     "@aeronautic/core": "workspace:*",
+    "@aeronautic/countermeasures": "workspace:*",
     "@aeronautic/lights": "workspace:*",
     "@aeronautic/wing-vapor": "workspace:*",
     "@react-three/drei": "^10.7.9",

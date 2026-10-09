@@ -18,11 +18,30 @@ import {
 } from "three/webgpu";
 import { atan, exp, float, Fn, uniform, vec3 } from "three/tsl";
 import {
+  AEROSOL_ALBEDO,
+  AEROSOL_ASYMMETRY,
   canonical_frame,
+  chromaticity_rgb,
+  create_glare_geometry,
+  create_glare_material,
+  create_glare_uniforms,
+  density_ratio,
+  extinction,
   fog_factor,
-  type Flight,
-  type SceneBackdrop,
+  glare_laid,
+  glare_pixel,
+  glare_radius,
+  glare_scattered,
+  hide_glare,
+  lay_glare,
+  planckian,
+  transmission,
   write_scene_fog,
+  type Extinction,
+  type Flight,
+  type GlareUniforms,
+  type Observer,
+  type SceneBackdrop,
 } from "@aeronautic/core";
 import {
   beam_half_angles,
@@ -37,23 +56,7 @@ import {
   create_beam_uniforms,
   type BeamUniforms,
 } from "./beam-material";
-import { chromaticity_rgb, planckian } from "./color";
 import { ANTICOLLISION_VERTICAL, flash_at } from "./flash";
-import { glare_radius, glare_scattered, type Observer } from "./glare";
-import {
-  create_glare_geometry,
-  create_glare_material,
-  create_glare_uniforms,
-  type GlareUniforms,
-} from "./glare-material";
-import {
-  AEROSOL_ALBEDO,
-  AEROSOL_ASYMMETRY,
-  density_ratio,
-  extinction,
-  transmission,
-  type Extinction,
-} from "./haze";
 import { navigation_intensity, piecewise } from "./navigation";
 import {
   default_anticollision,
@@ -209,11 +212,10 @@ const scratch_position = new Vector3();
 const scratch_camera = new Vector3();
 const scratch_vector = new Vector3();
 const scratch_view = new Vector3();
-const scratch_ndc = new Vector3();
 const scratch_u = new Vector3();
 const scratch_v = new Vector3();
-const scratch_size = new Vector2();
 const scratch_transmission: [number, number, number] = [0, 0, 0];
+const scratch_rgb: [number, number, number] = [0, 0, 0];
 
 /**
  * Whether a mount is a position rather than a node.
@@ -1125,26 +1127,17 @@ export class Lights {
 
     this.placeAxes();
 
-    const position = geometry.getAttribute("position").array as Float32Array;
-    const ray = geometry.getAttribute("ray").array as Float32Array;
-    const light_attribute = geometry.getAttribute("light")
-      .array as Float32Array;
-    const glow = geometry.getAttribute("glow").array as Float32Array;
-    const centre = geometry.getAttribute("centre").array as Float32Array;
-
     const view = camera.matrixWorldInverse;
-    const projection = camera.projectionMatrix;
-    const unproject = camera.projectionMatrixInverse;
     const exposure = this._look.exposure;
     const observer = this.observer();
     const fog = (scene as { fog?: Parameters<typeof fog_factor>[0] }).fog;
+    const pixel = glare_pixel(renderer, camera);
 
-    // A pixel's angular radius at the middle of the view
-    renderer.getDrawingBufferSize(scratch_size);
-
-    const pixel = Math.atan(
-      1 / projection.elements[5] / Math.max(scratch_size.y, 1),
-    );
+    // Its own disc: 0.1°, or a pixel if that is wider, carrying what the eye
+    // does not scatter
+    const core = Math.max((0.1 * Math.PI) / 180, pixel);
+    const core_luminance =
+      (1 - this._scattered) / (2 * Math.PI * (1 - Math.cos(core)));
 
     scratch_camera.setFromMatrixPosition(camera.matrixWorld);
 
@@ -1162,153 +1155,29 @@ export class Lights {
       transmission(this._extinction, distance, scratch_transmission);
 
       const scale = (intensity * kept * exposure) / (distance * distance);
-      const r = light.color[0] * scratch_transmission[0] * scale;
-      const g = light.color[1] * scratch_transmission[1] * scale;
-      const b = light.color[2] * scratch_transmission[2] * scale;
-      const brightest = Math.max(r, g, b);
 
-      const vertex = index * 6;
+      scratch_rgb[0] = light.color[0] * scratch_transmission[0] * scale;
+      scratch_rgb[1] = light.color[1] * scratch_transmission[1] * scale;
+      scratch_rgb[2] = light.color[2] * scratch_transmission[2] * scale;
+
+      const brightest = Math.max(...scratch_rgb);
 
       if (!(brightest > 0)) {
-        position.fill(0, vertex * 3, (vertex + 6) * 3);
+        hide_glare(geometry, index);
         continue;
       }
 
-      // Its own disc: 0.1°, or a pixel if that is wider, carrying what the
-      // eye does not scatter
-      const core = Math.max((0.1 * Math.PI) / 180, pixel);
-      const core_luminance =
-        (1 - this._scattered) / (2 * Math.PI * (1 - Math.cos(core)));
-
-      const radius = (glare_radius(brightest, FLOOR, observer) * Math.PI) / 180;
-      const direction = scratch_u.copy(scratch_view).normalize();
-
-      // Where on the screen, and how far round, its veil reaches
-      let x0 = -1;
-      let x1 = 1;
-      let y0 = -1;
-      let y1 = 1;
-
-      const off_axis = Math.acos(Math.min(Math.max(-direction.z, -1), 1));
-
-      if (off_axis + radius < (85 * Math.PI) / 180) {
-        x0 = Infinity;
-        x1 = -Infinity;
-        y0 = Infinity;
-        y1 = -Infinity;
-
-        // Two directions square to the light's, round which the cone's rim
-        // is laid
-        scratch_v
-          .set(0, 1, 0)
-          .addScaledVector(direction, -direction.y)
-          .normalize();
-
-        if (scratch_v.lengthSq() < 0.5) scratch_v.set(1, 0, 0);
-
-        const side = scratch_ndc.crossVectors(direction, scratch_v);
-        const steps = 24;
-
-        for (let step = 0; step < steps; step++) {
-          const angle = (step / steps) * Math.PI * 2;
-          // A point on the rim, as a view space position, then its NDC
-          const px =
-            direction.x * Math.cos(radius) +
-            (scratch_v.x * Math.cos(angle) + side.x * Math.sin(angle)) *
-              Math.sin(radius);
-          const py =
-            direction.y * Math.cos(radius) +
-            (scratch_v.y * Math.cos(angle) + side.y * Math.sin(angle)) *
-              Math.sin(radius);
-          const pz =
-            direction.z * Math.cos(radius) +
-            (scratch_v.z * Math.cos(angle) + side.z * Math.sin(angle)) *
-              Math.sin(radius);
-
-          const projected = scratch_position
-            .set(px, py, pz)
-            .applyMatrix4(projection);
-
-          x0 = Math.min(x0, projected.x);
-          x1 = Math.max(x1, projected.x);
-          y0 = Math.min(y0, projected.y);
-          y1 = Math.max(y1, projected.y);
-        }
-
-        // The rim's ellipse bulges between the points by up to 1/cos(π/24)
-        const pad_x = (x1 - x0) * 0.01;
-        const pad_y = (y1 - y0) * 0.01;
-
-        x0 = Math.max(x0 - pad_x, -1);
-        x1 = Math.min(x1 + pad_x, 1);
-        y0 = Math.max(y0 - pad_y, -1);
-        y1 = Math.min(y1 + pad_y, 1);
-      }
-
-      if (x1 <= x0 || y1 <= y0) {
-        position.fill(0, vertex * 3, (vertex + 6) * 3);
-        continue;
-      }
-
-      // Where the light itself is on the screen, to read the depth there
-      let u_centre = -1;
-      let v_centre = -1;
-
-      if (scratch_view.z < 0) {
-        const ndc = scratch_position
-          .copy(scratch_view)
-          .applyMatrix4(projection);
-
-        if (Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1) {
-          u_centre = (ndc.x + 1) / 2;
-          v_centre = (1 - ndc.y) / 2;
-        }
-      }
-
-      const bias = LENS_M + 2 * pixel * distance;
-      const corners = [x0, y0, x1, y0, x1, y1, x0, y0, x1, y1, x0, y1];
-
-      for (let corner = 0; corner < 6; corner++) {
-        const at = vertex + corner;
-        const cx = corners[corner * 2];
-        const cy = corners[corner * 2 + 1];
-
-        position[at * 3] = cx;
-        position[at * 3 + 1] = cy;
-        position[at * 3 + 2] = 0;
-
-        // The view ray through the corner: a point on one depth plane, so
-        // it interpolates linearly across the screen
-        const through = scratch_position
-          .set(cx, cy, 0.5)
-          .applyMatrix4(unproject);
-
-        ray[at * 3] = through.x;
-        ray[at * 3 + 1] = through.y;
-        ray[at * 3 + 2] = through.z;
-
-        light_attribute[at * 4] = direction.x;
-        light_attribute[at * 4 + 1] = direction.y;
-        light_attribute[at * 4 + 2] = direction.z;
-        light_attribute[at * 4 + 3] = scratch_view.z;
-
-        glow[at * 4] = r;
-        glow[at * 4 + 1] = g;
-        glow[at * 4 + 2] = b;
-        glow[at * 4 + 3] = core;
-
-        centre[at * 4] = u_centre;
-        centre[at * 4 + 1] = v_centre;
-        centre[at * 4 + 2] = core_luminance;
-        centre[at * 4 + 3] = bias;
-      }
+      lay_glare(geometry, index, camera, {
+        view: scratch_view,
+        rgb: scratch_rgb,
+        core,
+        coreLuminance: core_luminance,
+        radius: (glare_radius(brightest, FLOOR, observer) * Math.PI) / 180,
+        bias: LENS_M + 2 * pixel * distance,
+      });
     }
 
-    for (const name of ["position", "ray", "light", "glow", "centre"]) {
-      geometry.getAttribute(name).needsUpdate = true;
-    }
-
-    geometry.setDrawRange(0, lights.length * 6);
+    glare_laid(geometry, lights.length);
   }
 }
 

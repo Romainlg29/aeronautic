@@ -1,0 +1,96 @@
+{
+  "name": "@aeronautic/countermeasures",
+  "version": "0.1.0",
+  "description": "Physically based aircraft countermeasures for three.js and React Three Fiber: MTV decoy flares thrown at the cartridge's speed, slowed by their own drag and falling, burning down with the light of a graybody flame worked out from the composition's measured radiance, fired in dispenser programs and seen through the eye's glare, for WebGPU",
+  "keywords": [
+    "aircraft",
+    "countermeasures",
+    "decoy",
+    "dispenser",
+    "effects",
+    "flare",
+    "glare",
+    "military",
+    "r3f",
+    "react-three-fiber",
+    "three",
+    "three.js",
+    "threejs",
+    "tsl",
+    "vfx",
+    "webgpu"
+  ],
+  "homepage": "https://romainlg29.github.io/aeronautic/docs/countermeasures/start/introduction/",
+  "bugs": {
+    "url": "https://github.com/Romainlg29/aeronautic/issues"
+  },
+  "license": "MIT",
+  "author": "Romain Le Gall (https://github.com/Romainlg29)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Romainlg29/aeronautic.git",
+    "directory": "packages/countermeasures"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    },
+    "./physics": {
+      "types": "./dist/physics.d.ts",
+      "default": "./dist/physics.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "pnpm build"
+  },
+  "devDependencies": {
+    "@aeronautic/core": "workspace:^",
+    "@react-three/fiber": "^9.8.1",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.3.0",
+    "@types/three": "~0.186.0",
+    "react": "^19.3.0",
+    "three": "~0.186.1",
+    "tsdown": "^0.23.0",
+    "typescript": "~6.0.2",
+    "vitest": "^4.1.4"
+  },
+  "peerDependencies": {
+    "@aeronautic/core": "workspace:^",
+    "@react-three/fiber": "^9.0.0 || ^10.0.0-alpha.0",
+    "react": "^19.0.0",
+    "three": ">=0.186.0 <0.187.0"
+  },
+  "peerDependenciesMeta": {
+    "@react-three/fiber": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
+  }
+}

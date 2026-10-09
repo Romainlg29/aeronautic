@@ -1,4 +1,4 @@
-import { standard_atmosphere } from "@aeronautic/core";
+import { standard_atmosphere } from "./atmosphere";
 
 // The air between a light and the eye
 //
