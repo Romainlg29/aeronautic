@@ -1,7 +1,7 @@
 // The physics behind the countermeasures, for tools, tests and anyone
 // curious: the flare's grain burning down, its flame as the eye and a
-// seeker see it, its flight through the air, its smoke, and the
-// dispensers' programs
+// seeker see it, its flight through the air, its smoke, the chaff, and
+// the dispensers' programs
 
 export {
   airstream_share,
@@ -30,6 +30,17 @@ export {
   type Grain,
 } from "./flare";
 export {
+  air_viscosity,
+  CHAFF,
+  chaff_bloom,
+  chaff_cross_section,
+  chaff_fall_speed,
+  chaff_mass,
+  dipole_count,
+  type Chaff,
+  type ChaffName,
+} from "./chaff";
+export {
   band_radiance,
   blackbody_luminance,
   KM,
@@ -40,6 +51,7 @@ export { henyey_greenstein, smoke_sigma } from "./smoke";
 export {
   default_program,
   program_releases,
+  type Payload,
   type Program,
   type Release,
 } from "./program";

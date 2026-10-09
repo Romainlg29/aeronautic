@@ -25,7 +25,13 @@ CPU; the GPU spreads the depth across the ribbon as a Gaussian and shows
 1 − e^-τ of the light. Points are kept in the air's frame, less how far the
 air has moved since: laying them costs nothing a frame after.
 
-The lights, the glare, the trails and the smoke are all drawn from the
+Each chaff cloud is one quad facing the camera, three σ each way of its
+two axes as they show from where the camera is: its length along its
+path, foreshortened, and its width. The CPU gives its corners the light it
+scatters and its depth through its middle; the GPU spreads that as a
+Gaussian across both axes and shows 1 − e^-τ of it.
+
+The lights, the glare, the trails, the smoke and the chaff are all drawn from the
 first frame, before any flare leaves: a light added or a material first
 drawn has three build its pipeline, and that stalls the frame for a second.
 

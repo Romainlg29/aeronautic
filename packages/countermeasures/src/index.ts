@@ -23,5 +23,6 @@ export {
   type Dispenser,
   type DispenserMount,
 } from "./types";
+export { CHAFF, type Chaff, type ChaffName } from "./chaff";
 export { FLARE, type Flare, type FlareName } from "./flare";
-export { default_program, type Program } from "./program";
+export { default_program, type Payload, type Program } from "./program";

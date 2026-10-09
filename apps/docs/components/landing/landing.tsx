@@ -98,7 +98,7 @@ const Page: FC = () => {
   const [sky, set_sky] = useState<Sky>("day");
   const [level, set_level] = useState<Level>("low");
   const [flight] = useState(() => new Flight(START));
-  const { keys, levers, flares } = usePilot();
+  const { keys, levers, flares, chaff } = usePilot();
 
   return (
     <FlightProvider flight={flight}>
@@ -117,6 +117,7 @@ const Page: FC = () => {
             keys={keys}
             levers={levers}
             flares={flares}
+            chaff={chaff}
           />
         </div>
 
@@ -140,7 +141,7 @@ const Page: FC = () => {
             <p className="mt-2 max-w-xl text-sm text-white/80 md:text-base">
               {tagline} An afterburner, the vapor a wing pulls out of humid air,
               the contrails it leaves at altitude, its lights at night and the
-              flares it lets go, all from the physics.
+              flares and chaff it lets go, all from the physics.
             </p>
           </div>
           <nav className="pointer-events-auto flex flex-wrap items-center gap-2">

@@ -11,6 +11,7 @@ import {
 } from "react";
 import type { Group, Object3D } from "three";
 import { Countermeasures as Core } from "../countermeasures-core";
+import type { Chaff, ChaffName } from "../chaff";
 import type { Flare, FlareName } from "../flare";
 import type { Program } from "../program";
 import type {
@@ -48,7 +49,13 @@ export type CountermeasuresProps = Omit<ThreeElements["group"], "ref"> & {
   /** The flare: a make's name, or the fields over the MJU-7's */
   flare?: FlareName | Partial<Flare>;
 
-  /** What firing lets go: the burst, the salvo and their intervals */
+  /** The chaff: a payload's name, or the fields over the RR-178's */
+  chaff?: ChaffName | Partial<Chaff>;
+
+  /**
+   * What firing lets go: the burst, the salvo, their intervals, and flares
+   * or chaff
+   */
   program?: Partial<Program>;
 
   /** How the aircraft moves through the air */
@@ -79,8 +86,9 @@ export type CountermeasuresProps = Omit<ThreeElements["group"], "ref"> & {
   up?: readonly [number, number, number];
 
   /**
-   * How many flares are drawn and light the scene: `"low"`, `"medium"`,
-   * `"high"` (the default) or `"ultra"`, or `{ flares, lights }`
+   * How many flares and chaff clouds are drawn and light the scene:
+   * `"low"`, `"medium"`, `"high"` (the default) or `"ultra"`, or
+   * `{ flares, chaff, lights }`
    */
   quality?: CountermeasuresQualityName | Partial<CountermeasuresQuality>;
 
@@ -96,13 +104,15 @@ export type CountermeasuresProps = Omit<ThreeElements["group"], "ref"> & {
 };
 
 /**
- * One aircraft's flare dispensers, on the group it is.
- * @param props Where they are, the flare, the program, the air and the eye
+ * One aircraft's flare and chaff dispensers, on the group it is.
+ * @param props Where they are, the flare, the chaff, the program, the air
+ *   and the eye
  * @returns The group
  */
 export const Countermeasures: FC<CountermeasuresProps> = ({
   airframe,
   flare,
+  chaff,
   program,
   flight,
   air,
@@ -128,6 +138,7 @@ export const Countermeasures: FC<CountermeasuresProps> = ({
 
   const stable_airframe = useShallowStable(airframe);
   const stable_flare = useShallowStable(flare);
+  const stable_chaff = useShallowStable(chaff);
   const stable_program = useShallowStable(program);
   const stable_flight = useShallowStable(flight);
   const stable_air = useShallowStable(air);
@@ -138,6 +149,7 @@ export const Countermeasures: FC<CountermeasuresProps> = ({
   const initial = useRef({
     airframe,
     flare,
+    chaff,
     program,
     flight,
     air,
@@ -145,7 +157,16 @@ export const Countermeasures: FC<CountermeasuresProps> = ({
     quality,
   });
 
-  initial.current = { airframe, flare, program, flight, air, look, quality };
+  initial.current = {
+    airframe,
+    flare,
+    chaff,
+    program,
+    flight,
+    air,
+    look,
+    quality,
+  };
 
   useLayoutEffect(() => {
     const created = new Core(initial.current);
@@ -173,6 +194,10 @@ export const Countermeasures: FC<CountermeasuresProps> = ({
   useLayoutEffect(() => {
     if (stable_flare) core?.updateFlare(stable_flare);
   }, [core, stable_flare]);
+
+  useLayoutEffect(() => {
+    if (stable_chaff) core?.updateChaff(stable_chaff);
+  }, [core, stable_chaff]);
 
   useLayoutEffect(() => {
     if (stable_program) core?.updateProgram(stable_program);

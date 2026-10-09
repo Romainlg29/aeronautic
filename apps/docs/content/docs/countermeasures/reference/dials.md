@@ -1,6 +1,6 @@
 ---
 title: Dials
-description: "Every field of the airframe, the flare, the flight, the air and the look, with its default."
+description: "Every field of the airframe, the flare, the chaff, the flight, the air and the look, with its default."
 ---
 
 Every dial is a physical quantity. The defaults are the `default_*`
@@ -38,6 +38,25 @@ The default, `FLARE.mju7`, is an MJU-7 class flare.
 | `smokeExtinctionM2PerKg` | `2000`             | What the smoke stops, per kilogram. An estimate.                             |
 | `smokeAlbedo`            | `0.8`              | The share of that it scatters. An estimate.                                  |
 | `smokeAsymmetry`         | `0.6`              | How much it scatters on forward, Henyey and Greenstein's g. An estimate.     |
+
+## `Chaff`
+
+The default, `CHAFF.rr178`, is an RR-178 class cartridge.
+
+| field             | default   | what it is                                                                        |
+| ----------------- | --------- | --------------------------------------------------------------------------------- |
+| `dipoleLengthM`   | `88_775`  | All its dipoles, end to end: the RR-178's (Dalkıran, Bilkent).                    |
+| `dipoleDiameterM` | `25.4e-6` | One dipole's diameter, its coating included: a mil.                               |
+| `cutLengthM`      | `0.024`   | A typical dipole: the geometric mean of the 2 to 20 GHz cuts, 7.5 to 75 mm.       |
+| `densityKgPerM3`  | `2600`    | Aluminised glass: glass's 2540 and aluminium's 2700.                              |
+| `reflectance`     | `0.91`    | The share of the light aluminium reflects.                                        |
+| `ejectionMPerS`   | `30.3`    | How fast the cartridge throws it: the flare's. An estimate.                       |
+| `bloomTimeS`      | `0.2`     | How long the airstream takes to tear it into a cloud (US patent 4,653,403).       |
+| `bloomWidthM`     | `1.75`    | The cloud then, across its path: the patent's 1.5 to 2 m, read as ±2σ.            |
+| `bloomLengthM`    | `11`      | And along it: the patent's 10 to 12 m, read as ±2σ.                               |
+| `bloomAtMPerS`    | `244`     | The airspeed that length is at, 800 ft/s: it goes with the speed it is thrown at. |
+
+Reading the patent's sizes as ±2σ of a Gaussian is an estimate.
 
 ## `CountermeasuresFlight`
 

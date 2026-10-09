@@ -3,7 +3,7 @@ title: Physics
 description: "What @aeronautic/countermeasures/physics exports."
 ---
 
-Everything the flares are worked out from, for a tool, a test or a HUD.
+Everything the flares and chaff are worked out from, for a tool, a test or a HUD.
 
 ## The grain
 
@@ -45,6 +45,18 @@ Everything the flares are worked out from, for a tool, a test or a HUD.
 | ----------------------------- | --------------------------------------------------- |
 | `smoke_sigma(σ₀, ε, t)`       | How wide the smoke has spread, Richardson's law.    |
 | `henyey_greenstein(cos θ, g)` | The phase function it scatters with, per steradian. |
+
+## The chaff
+
+| export                       | what it is                                                         |
+| ---------------------------- | ------------------------------------------------------------------ |
+| `CHAFF`                      | The chaff by name: `rr178`.                                        |
+| `chaff_mass(chaff)`          | The payload's mass, kg.                                            |
+| `dipole_count(chaff)`        | How many dipoles it holds, of the typical cut.                     |
+| `chaff_cross_section(chaff)` | The light they all stop, π d L / 4, m².                            |
+| `air_viscosity(T)`           | The air's dynamic viscosity, Sutherland's law, Pa·s.               |
+| `chaff_fall_speed(chaff, T)` | How fast a dipole falls broadside: Stokes's drag on a slender rod. |
+| `chaff_bloom(chaff, age)`    | How far the cloud has bloomed, 0 to 1.                             |
 
 ## The programs
 

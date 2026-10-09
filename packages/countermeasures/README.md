@@ -4,7 +4,7 @@
 [![CI](https://github.com/Romainlg29/aeronautic/actions/workflows/ci.yml/badge.svg)](https://github.com/Romainlg29/aeronautic/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-Physically based **decoy flares** for [React Three Fiber](https://r3f.docs.pmnd.rs)
+Physically based **decoy flares and chaff** for [React Three Fiber](https://r3f.docs.pmnd.rs)
 and three.js, written in TSL for three's `WebGPURenderer`.
 
 - **The grain**: an MJU-7 class flare by default, 253 g of magnesium, Teflon
@@ -25,13 +25,19 @@ and three.js, written in TSL for three's `WebGPURenderer`.
 - **The flight**: thrown down at the cartridge's 30 m/s, then slowed by its
   own drag, a tumbling block's, from the aircraft's speed within a second,
   falling behind and below.
-- **Programs**: bursts and salvos, the dispensers taking turns.
+- **Chaff**: an RR-178 class cartridge, 88,775 m of aluminised glass
+  fibre, 117 g. The airstream tears it into a cloud in a fifth of a second;
+  it stays where it formed, falling at Stokes's speed for a slender rod,
+  half a metre a second, and spreading as the smoke does. Its fibres' shadow
+  and aluminium light it.
+- **Programs**: bursts and salvos, the dispensers taking turns, of flares
+  or chaff.
 - **Glare** from the flame's real luminance and the exposure: the eye's own
   scatter (CIE 146), dimmed and reddened by the day's haze. The brightest
   flares light the scene.
 
 None of it is drawn to a size or a timer by eye; the few estimates are
-said to be. Chaff is to come.
+said to be.
 
 **[Docs](https://romainlg29.github.io/aeronautic/docs/countermeasures/start/introduction/)** ·
 **[Live example on the docs' fighter](https://romainlg29.github.io/aeronautic/docs/countermeasures/examples/at-night/)**
@@ -74,7 +80,7 @@ export const Jet = ({ fired }: { fired: number }) => (
 ```
 
 `fire` lets the program go each time it changes. The ref holds the
-countermeasures themselves: `fire()`, `release(dispenser)`, `stop()`,
+countermeasures themselves: `fire()`, `release(dispenser, payload)`, `stop()`,
 `clear()`. Inside a `<FlightProvider>` from `@aeronautic/core` the airspeed,
 the angles, the altitude and the air's density are the shared flight's.
 
@@ -90,8 +96,10 @@ Each is a physical quantity in SI units:
 - **`flare`**: the grain's size, mass, density and burn rate, the energy it
   radiates per kilogram, the flame's temperature and emissivity, its drag
   and its ejection speed.
+- **`chaff`**: the dipoles' total length, diameter, cut and density, their
+  reflectance, the throw and the bloom.
 - **`program`**: `burst`, `burstIntervalS`, `salvo`, `salvoIntervalS`,
-  `alternate`.
+  `alternate`, `payload`: `"flare"` or `"chaff"`.
 - **`flight`**: `airspeedMPerS`, `angleOfAttackRad`, `sideslipRad`.
 - **`air`**: `altitudeM`, `visibilityM` and `turbulenceM2PerS3`.
 - **`look`**: the exposure, the observer's age and eyes, and the sun
@@ -113,6 +121,11 @@ Each is a physical quantity in SI units:
 - **The smoke.** λ = ṁ Y / v a metre of path, spreading as σ² = σ₀² +
   ½ ε t³ (Richardson), its depth κ λ / (√(2π) σ). Lit once, by Henyey and
   Greenstein's phase. Its optics are estimates.
+- **Chaff.** Its fibres stop light with their shadow, π d L / 4, 1.77 m²,
+  and reflect 0.91 of it, every way alike. It blooms to the size US patent
+  4,653,403 gives, 1.75 × 11 m at 244 m/s, then falls at
+  ρ g d² (ln(2L/d) + ½) / 16μ, μ by Sutherland's law. Its throw is an
+  estimate.
 - **Glare.** CIE 146's glare spread function times the illuminance at the
   eye, through the haze: the same as `@aeronautic/lights`, from
   `@aeronautic/core`.
@@ -122,6 +135,8 @@ Each is a physical quantity in SI units:
 - Altitude's effect on the flame's temperature: 2100 K everywhere.
 - The flame's shape at the grain: a disc of its area.
 - The smoke's own shadow, and light it scatters more than once.
+- Chaff's glints, its fibres turning broadside as they fall, and what it
+  returns to a radar.
 
 ## License
 

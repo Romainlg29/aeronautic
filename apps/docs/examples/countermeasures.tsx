@@ -104,8 +104,9 @@ export const START_SETTINGS: Settings = {
 const FlaringFighter: FC<{
   settings: Settings;
   fired: number;
+  chaffed: number;
   readout: RefObject<HTMLSpanElement | null>;
-}> = ({ settings, fired, readout }) => {
+}> = ({ settings, fired, chaffed, readout }) => {
   const { scene, animations } = useGLTF(MODEL);
   const body = useRef<Group>(null);
   const flares = useRef<CountermeasuresHandle>(null);
@@ -157,6 +158,16 @@ const FlaringFighter: FC<{
     [settings.salvo, settings.burst],
   );
 
+  // The same program, of chaff: a cloud a cartridge
+  const chaffed_once = useRef(chaffed);
+
+  useEffect(() => {
+    if (chaffed === chaffed_once.current) return;
+
+    chaffed_once.current = chaffed;
+    flares.current?.fire({ ...program, payload: "chaff" });
+  }, [chaffed, program]);
+
   useFrame(() => {
     const current = flares.current;
 
@@ -168,7 +179,9 @@ const FlaringFighter: FC<{
       `${(thrown_cd / 1000).toFixed(0)} kcd at the grain as thrown, ` +
       `lit after ${mju7.ignitionDelayS} s for ${burn_s.toFixed(1)} s · ` +
       `${current.smoking} smoke trails · falling at ` +
-      `${falling_m_s.toFixed(0)} m/s once slowed`;
+      `${falling_m_s.toFixed(0)} m/s once slowed · ` +
+      `${current.chaffClouds} chaff clouds, sinking at ` +
+      `${current.chaffFallMPerS.toFixed(2)} m/s`;
   });
 
   return (
@@ -194,7 +207,7 @@ const FlaringFighter: FC<{
 };
 
 /**
- * The fire button, the view, the program, the airspeed, the haze and the
+ * The flare and chaff buttons, the view, the program, the airspeed, the haze and the
  * exposure.
  * @param props The settings, how to change them, and how to fire
  * @returns The controls
@@ -203,10 +216,14 @@ const CountermeasuresControls: FC<{
   settings: Settings;
   change: (next: Partial<Settings>) => void;
   fire: () => void;
-}> = ({ settings, change, fire }) => (
+  chaff: () => void;
+}> = ({ settings, change, fire, chaff }) => (
   <div className="example-controls">
     <button type="button" onClick={fire}>
-      Fire
+      Flares
+    </button>
+    <button type="button" onClick={chaff}>
+      Chaff
     </button>
     <label>
       view
@@ -294,6 +311,7 @@ const CountermeasuresControls: FC<{
 export const CountermeasuresExample: FC = () => {
   const [settings, set_settings] = useState<Settings>(START_SETTINGS);
   const [fired, set_fired] = useState(0);
+  const [chaffed, set_chaffed] = useState(0);
   const readout = useRef<HTMLSpanElement>(null);
 
   const change = (next: Partial<Settings>) =>
@@ -312,6 +330,7 @@ export const CountermeasuresExample: FC = () => {
             settings={settings}
             change={change}
             fire={() => set_fired((count) => count + 1)}
+            chaff={() => set_chaffed((count) => count + 1)}
           />
           <span ref={readout} className="example-note" />
         </>
@@ -321,7 +340,12 @@ export const CountermeasuresExample: FC = () => {
         camera={[...VIEWS[settings.view].camera]}
         target={[...VIEWS[settings.view].target]}
       />
-      <FlaringFighter settings={settings} fired={fired} readout={readout} />
+      <FlaringFighter
+        settings={settings}
+        fired={fired}
+        chaffed={chaffed}
+        readout={readout}
+      />
     </Stage>
   );
 };

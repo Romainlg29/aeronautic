@@ -3,7 +3,11 @@
 // A countermeasures dispenser set (the ALE-47's, say) fires to a program the
 // crew or the threat picks: a burst of so many flares, so far apart, and a
 // salvo of so many bursts, so far apart. The dispensers take turns, so the
-// flares leave from both sides and the pattern is as wide as the aircraft
+// flares leave from both sides and the pattern is as wide as the aircraft.
+// A program throws flares against infrared seekers, or chaff against radars
+
+/** What a cartridge holds */
+export type Payload = "flare" | "chaff";
 
 /**
  * A dispenser program.
@@ -23,6 +27,9 @@ export type Program = {
 
   /** Whether the dispensers take turns, or each flare leaves from the first */
   alternate: boolean;
+
+  /** What it throws: flares, or chaff */
+  payload: Payload;
 };
 
 /**
@@ -36,6 +43,7 @@ export const default_program = (): Program => ({
   salvo: 4,
   salvoIntervalS: 1,
   alternate: true,
+  payload: "flare",
 });
 
 /**
@@ -47,6 +55,9 @@ export type Release = {
 
   /** Which dispenser, by index */
   dispenser: number;
+
+  /** What leaves */
+  payload: Payload;
 };
 
 /**
@@ -75,6 +86,7 @@ export const program_releases = (
           round * Math.max(program.salvoIntervalS, 0) +
           flare * Math.max(program.burstIntervalS, 0),
         dispenser: program.alternate ? (first + index) % count : first % count,
+        payload: program.payload ?? "flare",
       });
     }
   }

@@ -255,7 +255,12 @@ const ease = (delta: number, time_s: number) => 1 - Math.exp(-delta / time_s);
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
-type Pilot = { keys: RefObject<Keys>; levers: Levers; flares: number };
+type Pilot = {
+  keys: RefObject<Keys>;
+  levers: Levers;
+  flares: number;
+  chaff: number;
+};
 
 /**
  * The fighter, turning in place at the keyboard's rates and pitched up by its
@@ -268,6 +273,7 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({
   keys,
   levers,
   flares,
+  chaff,
 }) => {
   const { scene, nodes, animations } = useFighter();
   const flight = useFlightStore();
@@ -278,6 +284,16 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({
   const trails = useRef<ContrailsHandle>(null);
   const lights = useRef<LightsHandle>(null);
   const countermeasures = useRef<CountermeasuresHandle>(null);
+
+  // Each press of V lets the program go as chaff; its first count, nothing
+  const chaffed = useRef(chaff);
+
+  useEffect(() => {
+    if (chaff === chaffed.current) return;
+
+    chaffed.current = chaff;
+    countermeasures.current?.fire({ payload: "chaff" });
+  }, [chaff]);
 
   // The model's nozzle exits: the trails start where they are
   const airframe = useMemo(
@@ -498,6 +514,7 @@ const FlightScene: FC<{ sky: Sky; level: Level; flight: Flight } & Pilot> = ({
   keys,
   levers,
   flares,
+  chaff,
 }) => {
   const dusk = useMemo<Dusk>(
     () => ({ target: 0, night: 0, moved: true, linear: 0 }),
@@ -546,7 +563,13 @@ const FlightScene: FC<{ sky: Sky; level: Level; flight: Flight } & Pilot> = ({
       {/* Context doesn't cross into the canvas: the same flight again */}
       <FlightProvider flight={flight}>
         <Suspense fallback={null}>
-          <Fighter dusk={dusk} keys={keys} levers={levers} flares={flares} />
+          <Fighter
+            dusk={dusk}
+            keys={keys}
+            levers={levers}
+            flares={flares}
+            chaff={chaff}
+          />
         </Suspense>
       </FlightProvider>
       <OrbitControls

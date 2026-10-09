@@ -267,4 +267,60 @@ describe("Countermeasures", () => {
     countermeasures.clear();
     expect(countermeasures.smoking).toBe(0);
   });
+
+  it("lays chaff where it left, sinking, until it spreads too thin", () => {
+    const countermeasures = new Countermeasures({
+      look: { sunIntensity: 3 },
+    });
+    const camera = new PerspectiveCamera(50, 1, 0.1, 10_000);
+
+    camera.position.set(-200, 0, 300);
+    camera.updateMatrixWorld();
+    render(countermeasures, 0);
+    countermeasures.fire({ payload: "chaff", burst: 1, salvo: 1 });
+    fly(countermeasures, 1);
+
+    expect(countermeasures.burning).toBe(0);
+    expect(countermeasures.chaffClouds).toBe(1);
+
+    const draw = () =>
+      countermeasures.clouds.onBeforeRender(
+        {
+          info: { frame },
+          getDrawingBufferSize: (target: {
+            set: (x: number, y: number) => void;
+          }) => target.set(800, 800),
+        } as never,
+        { fog: null } as never,
+        camera,
+        null as never,
+        null as never,
+        null as never,
+      );
+
+    draw();
+
+    const geometry = countermeasures.clouds.geometry;
+    const depths = geometry.getAttribute("chaff");
+    const positions = geometry.getAttribute("position");
+
+    expect(geometry.drawRange.count).toBe(6);
+    expect(depths.getZ(0)).toBeGreaterThan(SEEN);
+    expect(geometry.getAttribute("color").getX(0)).toBeGreaterThan(0);
+
+    // A second at 250 m/s: the aircraft is 250 m on, the cloud behind it
+    let z = 0;
+
+    for (let corner = 0; corner < 6; corner++) z += positions.getZ(corner) / 6;
+
+    expect(z).toBeGreaterThan(230);
+    expect(z).toBeLessThan(260);
+
+    // Spread by the turbulence past seeing, within a minute
+    fly(countermeasures, 60);
+    expect(countermeasures.chaffClouds).toBe(0);
+  });
 });
+
+/** Thick enough to see: the thinnest smoke kept */
+const SEEN = 0.02;

@@ -196,8 +196,10 @@ magnesium, Teflon and Viton burns from every face at the composition's
 **measured rate**, gone in about three seconds; its flame is the light that
 burn gives, a few hundred thousand candela at **2100 K**; its drag slows it
 from the aircraft's speed within a second, and it falls behind and below.
-The dispensers fire to a **program**, bursts and salvos, taking turns. Chaff
-and smoke are to come.
+Each leaves its **smoke**, spreading in the air's turbulence. The dispensers
+fire to a **program**, bursts and salvos, taking turns, of flares or
+**chaff**: 3.7 million aluminised dipoles torn into a cloud in a fifth of a
+second, sinking at half a metre a second where it was let go.
 
 ```bash
 pnpm add @aeronautic/countermeasures @aeronautic/core three@~0.186 @react-three/fiber

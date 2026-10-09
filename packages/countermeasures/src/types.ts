@@ -1,5 +1,6 @@
 import { exposure_ev100 } from "@aeronautic/core";
 import type { Object3D } from "three";
+import type { Chaff, ChaffName } from "./chaff";
 import type { Flare, FlareName } from "./flare";
 
 // The dials split the way the physics does
@@ -169,11 +170,26 @@ export const resolve_flare = (
   typeof flare === "string" ? flares[flare] : { ...flares.mju7, ...flare };
 
 /**
+ * A chaff payload by name, or as given.
+ * @param chaff The name, or the fields over the RR-178's
+ * @param payloads The payloads by name
+ * @returns The payload
+ */
+export const resolve_chaff = (
+  chaff: ChaffName | Partial<Chaff> | undefined,
+  payloads: Record<ChaffName, Chaff>,
+): Chaff =>
+  typeof chaff === "string" ? payloads[chaff] : { ...payloads.rr178, ...chaff };
+
+/**
  * How many flares are drawn, and how many light the scene.
  */
 export type CountermeasuresQuality = {
   /** The most burning at once; past it the oldest goes first */
   flares: number;
+
+  /** The most chaff clouds in the air at once, as the flares */
+  chaff: number;
 
   /**
    * How many of the brightest light the scene, with three's point lights.
@@ -186,10 +202,10 @@ export type CountermeasuresQuality = {
  * Qualities, by name. `high` is the default.
  */
 export const COUNTERMEASURES_QUALITY = {
-  low: { flares: 16, lights: 0 },
-  medium: { flares: 32, lights: 1 },
-  high: { flares: 64, lights: 2 },
-  ultra: { flares: 128, lights: 4 },
+  low: { flares: 16, chaff: 16, lights: 0 },
+  medium: { flares: 32, chaff: 32, lights: 1 },
+  high: { flares: 64, chaff: 64, lights: 2 },
+  ultra: { flares: 128, chaff: 128, lights: 4 },
 } as const satisfies Record<string, CountermeasuresQuality>;
 
 /** A quality preset's name */

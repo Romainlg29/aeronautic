@@ -51,6 +51,18 @@ import {
   type Grain,
 } from "./flare";
 import {
+  CHAFF,
+  CHAFF_SIGMAS,
+  CHAFF_VERTICES,
+  chaff_bloom,
+  chaff_cross_section,
+  chaff_fall_speed,
+  create_chaff_geometry,
+  create_chaff_material,
+  type Chaff,
+  type ChaffName,
+} from "./chaff";
+import {
   create_smoke_geometry,
   create_smoke_material,
   henyey_greenstein,
@@ -68,12 +80,18 @@ import {
   TRAIL_SEGMENTS,
   TRAIL_VERTICES,
 } from "./trail";
-import { default_program, program_releases, type Program } from "./program";
+import {
+  default_program,
+  program_releases,
+  type Payload,
+  type Program,
+} from "./program";
 import {
   default_countermeasures_air,
   default_countermeasures_airframe,
   default_countermeasures_flight,
   default_countermeasures_look,
+  resolve_chaff,
   resolve_countermeasures_quality,
   resolve_flare,
   type CountermeasuresAir,
@@ -92,7 +110,8 @@ import {
 // it and gravity pulls it down, how bright it is and how much of that the
 // air lets through to the eye. The GPU only spreads that over the screen,
 // as the eye's glare, and three's point lights carry the brightest onto the
-// scene
+// scene. Chaff is a cloud each cartridge, laid where the airstream tore it
+// open, sinking and spreading
 //
 // As contrails' trails are, the flares are laid in the air the aircraft
 // flies through, not the world: each moves through the air at its own
@@ -131,6 +150,9 @@ export type CountermeasuresOptions = {
 
   /** The flare: a make's name, or the fields over the MJU-7's */
   flare?: FlareName | Partial<Flare>;
+
+  /** The chaff: a payload's name, or the fields over the RR-178's */
+  chaff?: ChaffName | Partial<Chaff>;
 
   /** What `fire()` lets go */
   program?: Partial<Program>;
@@ -198,6 +220,24 @@ type Smoke = {
   nextS: number;
 };
 
+/** One cartridge's chaff, in the air */
+type Cloud = {
+  /**
+   * Where it was let go, from the group's origin in world axes less the
+   * air's drift then, metres
+   */
+  position: Vector3;
+
+  /** Which way the airstream laid it, along its throw through the air */
+  direction: Vector3;
+
+  /** How long it is once bloomed, ±2σ, metres */
+  lengthM: number;
+
+  /** When it left, on the clock, seconds */
+  bornS: number;
+};
+
 /** What of the renderer the countermeasures read */
 type Renderer = {
   info: { frame: number };
@@ -218,6 +258,8 @@ const scratch_point = new Vector3();
 const scratch_next = new Vector3();
 const scratch_toward = new Vector3();
 const scratch_sun = new Vector3();
+const scratch_along = new Vector3();
+const scratch_across = new Vector3();
 const section_rgb: [number, number, number] = [0, 0, 0];
 const scratch_transmission: [number, number, number] = [0, 0, 0];
 const scratch_rgb: [number, number, number] = [0, 0, 0];
@@ -345,6 +387,9 @@ export class Countermeasures {
   /** The smoke's mesh: what the flames burn to, left in the air */
   readonly smoke: Mesh<BufferGeometry, MeshBasicNodeMaterial>;
 
+  /** The chaff's mesh: a cloud each cartridge */
+  readonly clouds: Mesh<BufferGeometry, MeshBasicNodeMaterial>;
+
   /** How fast its clock runs, one being real time */
   timeScale = 1;
 
@@ -353,6 +398,7 @@ export class Countermeasures {
 
   private _airframe: CountermeasuresAirframe;
   private _flare: Flare;
+  private _chaff: Chaff;
   private _program: Program;
   private _flight: CountermeasuresFlight;
   private _air: CountermeasuresAir;
@@ -376,15 +422,21 @@ export class Countermeasures {
     (TRAIL_COLOR_STEPS + 1) * 3,
   );
 
+  // The chaff's, in this air
+  private _chaff_fall_m_s = 0;
+  private _chaff_section_m2 = 0;
+
   // The day's air
   private _pressure_pa = 101_325;
+  private _temperature_k = 281.65;
   private _density_kg_m3 = 1.225;
   private _extinction: Extinction = extinction(23_000);
   private _scattered = 0;
 
   private _burning: Burning[] = [];
   private _smoke: Smoke[] = [];
-  private _queue: { timeS: number; dispenser: number }[] = [];
+  private _clouds: Cloud[] = [];
+  private _queue: { timeS: number; dispenser: number; payload: Payload }[] = [];
   private _next_dispenser = 0;
 
   // The aircraft's velocity through the air, world axes, as last flown,
@@ -406,6 +458,7 @@ export class Countermeasures {
       ...options.airframe,
     };
     this._flare = resolve_flare(options.flare, FLARE);
+    this._chaff = resolve_chaff(options.chaff, CHAFF);
     this._program = { ...default_program(), ...options.program };
     this._flight = {
       ...default_countermeasures_flight(),
@@ -481,6 +534,25 @@ export class Countermeasures {
     this.smoke = smoke;
     this.group.add(smoke);
 
+    const clouds = new Mesh(
+      create_chaff_geometry(this._quality.chaff),
+      create_chaff_material(),
+    );
+
+    clouds.name = "CountermeasuresChaff";
+    clouds.userData.countermeasures = this;
+    clouds.frustumCulled = false;
+    clouds.material.side = DoubleSide;
+    clouds.onBeforeRender = (renderer, scene, camera) =>
+      this.drawChaff(
+        renderer as unknown as Renderer,
+        scene,
+        camera as PerspectiveCamera,
+      );
+
+    this.clouds = clouds;
+    this.group.add(clouds);
+
     this.setFrame(options.frame ?? {});
     this.writeFlare();
     this.writeAir();
@@ -494,6 +566,10 @@ export class Countermeasures {
 
   get flare(): Readonly<Flare> {
     return this._flare;
+  }
+
+  get chaff(): Readonly<Chaff> {
+    return this._chaff;
   }
 
   get program(): Readonly<Program> {
@@ -531,6 +607,16 @@ export class Countermeasures {
     return this._smoke.length;
   }
 
+  /** How many chaff clouds are in the air */
+  get chaffClouds(): number {
+    return this._clouds.length;
+  }
+
+  /** How fast the chaff sinks once bloomed, m/s, in this air */
+  get chaffFallMPerS(): number {
+    return this._chaff_fall_m_s;
+  }
+
   /** How long one flare burns, seconds, in this air */
   get burnTimeS(): number {
     return this._burn_s;
@@ -560,6 +646,22 @@ export class Countermeasures {
 
     this._flare = next;
     this.writeFlare();
+  }
+
+  /**
+   * Change the chaff: a payload by name, or some of its fields.
+   * @param chaff What to change
+   */
+  updateChaff(chaff: ChaffName | Partial<Chaff>) {
+    const next =
+      typeof chaff === "string"
+        ? resolve_chaff(chaff, CHAFF)
+        : { ...this._chaff, ...chaff };
+
+    if (unchanged(this._chaff, next)) return;
+
+    this._chaff = next;
+    this.writeChaff();
   }
 
   /**
@@ -619,12 +721,14 @@ export class Countermeasures {
       this.glare.geometry,
       this.trail.geometry,
       this.smoke.geometry,
+      this.clouds.geometry,
     ];
 
     this._quality = next;
     this.glare.geometry = create_glare_geometry(next.flares);
     this.trail.geometry = create_trail_geometry(next.flares);
     this.smoke.geometry = create_smoke_geometry(next.flares);
+    this.clouds.geometry = create_chaff_geometry(next.chaff);
 
     for (const geometry of previous) geometry.dispose();
 
@@ -636,6 +740,7 @@ export class Countermeasures {
     }
 
     this._burning = this._burning.filter((flare) => flare.smoke.flare);
+    this._clouds.splice(0, Math.max(this._clouds.length - next.chaff, 0));
     this.buildLights();
   }
 
@@ -654,10 +759,10 @@ export class Countermeasures {
   }
 
   /**
-   * Run a program: its flares leave over the next seconds, the dispensers
-   * taking turns.
+   * Run a program: its flares or its chaff leave over the next seconds, the
+   * dispensers taking turns.
    * @param program The program, over the one set
-   * @returns How many flares it lets go
+   * @returns How many cartridges it lets go
    */
   fire(program?: Partial<Program>): number {
     const dispensers = this._airframe.dispensers.length;
@@ -675,6 +780,7 @@ export class Countermeasures {
       this._queue.push({
         timeS: now_s + release.timeS,
         dispenser: release.dispenser,
+        payload: release.payload,
       });
     }
 
@@ -686,17 +792,22 @@ export class Countermeasures {
   }
 
   /**
-   * Let one flare go now.
+   * Let one cartridge go now.
    * @param dispenser Which dispenser, by index. By default the next in turn
+   * @param payload A flare, or chaff
    */
-  release(dispenser?: number) {
+  release(dispenser?: number, payload: Payload = "flare") {
     const count = this._airframe.dispensers.length;
 
     if (count === 0) return;
 
     const index = dispenser ?? this._next_dispenser;
 
-    this._queue.unshift({ timeS: this.now(), dispenser: index % count });
+    this._queue.unshift({
+      timeS: this.now(),
+      dispenser: index % count,
+      payload,
+    });
     this._next_dispenser = (index + 1) % count;
   }
 
@@ -717,11 +828,12 @@ export class Countermeasures {
     this._queue = [];
   }
 
-  /** Put every flare out and clear the smoke, cancelling what is to leave */
+  /** Put every flare out, clear the smoke and chaff, and what is to leave */
   clear() {
     this._queue = [];
     this._burning = [];
     this._smoke = [];
+    this._clouds = [];
     this._drift.set(0, 0, 0);
   }
 
@@ -735,6 +847,8 @@ export class Countermeasures {
     this.trail.material.dispose();
     this.smoke.geometry.dispose();
     this.smoke.material.dispose();
+    this.clouds.geometry.dispose();
+    this.clouds.material.dispose();
 
     for (const light of this._lights) {
       light.removeFromParent();
@@ -773,18 +887,26 @@ export class Countermeasures {
     this._smoke_every_s = this._burn_s / (SMOKE_POINTS - 2);
   }
 
+  /** How fast the chaff sinks in this air, and the light it stops */
+  private writeChaff() {
+    this._chaff_fall_m_s = chaff_fall_speed(this._chaff, this._temperature_k);
+    this._chaff_section_m2 = chaff_cross_section(this._chaff);
+  }
+
   /** The air's density and extinction */
   private writeAir() {
     const values = this.source?.values;
 
     if (values) {
       this._pressure_pa = values.pressurePa;
+      this._temperature_k = values.temperatureK;
       this._density_kg_m3 = values.densityKgPerM3;
       this._extinction = extinction(this._air.visibilityM, values.densityRatio);
     } else {
       const air = standard_atmosphere(this._air.altitudeM);
 
       this._pressure_pa = air.pressurePa;
+      this._temperature_k = air.temperatureK;
       this._density_kg_m3 =
         air.pressurePa / (AIR_GAS_CONSTANT * air.temperatureK);
       this._extinction = extinction(
@@ -794,6 +916,7 @@ export class Countermeasures {
     }
 
     this.writeBurn();
+    this.writeChaff();
   }
 
   /** The eye's glare, for the observer */
@@ -885,11 +1008,12 @@ export class Countermeasures {
   }
 
   /**
-   * Let a flare go from a dispenser.
+   * Let a cartridge go from a dispenser.
    * @param index Which dispenser
    * @param age_s How long ago, seconds, within this frame
+   * @param payload A flare, or chaff
    */
-  private spawn(index: number, age_s: number) {
+  private spawn(index: number, age_s: number, payload: Payload) {
     const dispenser = this._airframe.dispensers[index];
 
     if (!dispenser) return;
@@ -911,6 +1035,12 @@ export class Countermeasures {
       scratch_direction
         .set(direction[0], direction[1], direction[2])
         .transformDirection(at.matrixWorld);
+    }
+
+    if (payload === "chaff") {
+      this.spawnChaff(age_s);
+
+      return;
     }
 
     // The oldest smoke goes first, past the most drawn, and its flare
@@ -946,6 +1076,46 @@ export class Countermeasures {
     this._smoke.push(smoke);
     this._burning.push(flare);
     this.fly(flare, age_s);
+  }
+
+  /**
+   * Let a cartridge's chaff go, from the dispenser and throw in
+   * `scratch_position` and `scratch_direction`. Its fibres are stopped by
+   * the air within a metre: it stays where it was let go, the airstream
+   * laying it out ahead of there along its throw, the aircraft long past.
+   * @param age_s How long ago, seconds, within this frame
+   */
+  private spawnChaff(age_s: number) {
+    if (this._quality.chaff <= 0) return;
+
+    // The oldest goes first, past the most drawn
+    if (this._clouds.length >= this._quality.chaff) this._clouds.shift();
+
+    const chaff = this._chaff;
+    const throw_m_s = scratch_relative
+      .copy(this._velocity)
+      .addScaledVector(scratch_direction, chaff.ejectionMPerS);
+    const speed = throw_m_s.length();
+    const width = chaff.bloomWidthM;
+
+    this._clouds.push({
+      // Where the aircraft was then: it has flown on since
+      position: scratch_position
+        .clone()
+        .sub(scratch_origin)
+        .addScaledVector(this._velocity, -age_s)
+        .sub(this._drift),
+      direction:
+        speed > 1e-6
+          ? throw_m_s.clone().multiplyScalar(1 / speed)
+          : new Vector3(0, -1, 0),
+      // Torn off over its path as it slows: as long as its speed has it
+      lengthM: Math.max(
+        (chaff.bloomLengthM * speed) / chaff.bloomAtMPerS,
+        width,
+      ),
+      bornS: this._time_s - age_s,
+    });
   }
 
   /**
@@ -1019,7 +1189,11 @@ export class Countermeasures {
     while (this._queue.length > 0 && this._queue[0].timeS <= this._time_s) {
       const release = this._queue.shift()!;
 
-      this.spawn(release.dispenser, this._time_s - release.timeS);
+      this.spawn(
+        release.dispenser,
+        this._time_s - release.timeS,
+        release.payload,
+      );
     }
 
     // Out, in place: its smoke's last point where it went out
@@ -1067,6 +1241,13 @@ export class Countermeasures {
     }
 
     this.thinSmoke();
+    this.thinChaff();
+
+    // Nothing in the air: start the drift again, keeping it small
+    if (this._smoke.length === 0 && this._clouds.length === 0) {
+      this._drift.set(0, 0, 0);
+    }
+
     this.placeLights();
   }
 
@@ -1138,9 +1319,74 @@ export class Countermeasures {
     }
 
     smoke.length = kept;
+  }
 
-    // Nothing in the air: start the drift again, keeping it small
-    if (kept === 0) this._drift.set(0, 0, 0);
+  /**
+   * A cloud's σ now, across and along its path, metres: bloomed, then
+   * spread by the air's turbulence as the smoke is.
+   * @param cloud The cloud
+   * @param age_s How long since it left
+   * @param target Where to write them, across then along
+   */
+  private chaffSigmas(cloud: Cloud, age_s: number, target: Vector3) {
+    const chaff = this._chaff;
+    const bloom = chaff_bloom(chaff, age_s);
+
+    // The packet a cartridge wide before it opens
+    const across = Math.max((chaff.bloomWidthM / 4) * bloom, 0.0127);
+    const along = Math.max((cloud.lengthM / 4) * bloom, across);
+    const turbulence = this._air.turbulenceM2PerS3;
+
+    return target.set(
+      smoke_sigma(across, turbulence, age_s),
+      smoke_sigma(along, turbulence, age_s),
+      0,
+    );
+  }
+
+  /**
+   * Where a cloud's middle is now, from the group's origin in world axes:
+   * half its length on from where it was let go, as far as it has bloomed,
+   * and sunk since.
+   * @param cloud The cloud
+   * @param age_s How long since it left
+   * @param target Where to write it
+   * @returns target
+   */
+  private chaffMiddle(cloud: Cloud, age_s: number, target: Vector3): Vector3 {
+    return target
+      .copy(cloud.position)
+      .add(this._drift)
+      .addScaledVector(
+        cloud.direction,
+        (cloud.lengthM / 2) * chaff_bloom(this._chaff, age_s),
+      )
+      .setY(target.y - this._chaff_fall_m_s * age_s);
+  }
+
+  /**
+   * Let a cloud go once it has spread too thin to see even end on, or the
+   * air has taken it past the day's visibility from the aircraft
+   */
+  private thinChaff() {
+    const clouds = this._clouds;
+    const reach2 = this._air.visibilityM ** 2;
+    let kept = 0;
+
+    for (const cloud of clouds) {
+      const age_s = this._time_s - cloud.bornS;
+      const across = this.chaffSigmas(cloud, age_s, scratch_across).x;
+      const tau = this._chaff_section_m2 / (2 * Math.PI * across * across);
+      const distance2 = this.chaffMiddle(
+        cloud,
+        age_s,
+        scratch_along,
+      ).lengthSq();
+
+      if (tau >= SMOKE_FAINTEST && distance2 < reach2) clouds[kept++] = cloud;
+    }
+
+    clouds.length = kept;
   }
 
   /** Hang three's lights on the brightest flares */
@@ -1550,6 +1796,160 @@ export class Countermeasures {
     geometry.getAttribute("smoke").needsUpdate = true;
     if (laid > 0) geometry.setDrawRange(0, laid * SMOKE_VERTICES);
     else draw_nothing(geometry);
+  }
+
+  /**
+   * Lay the chaff for this camera, just before it is drawn: a quad facing it
+   * on each cloud, as long as the cloud looks along its path, with the
+   * light it scatters and its depth through its middle.
+   * @param renderer The renderer
+   * @param scene The scene, for its fog
+   * @param camera The camera
+   */
+  private drawChaff(
+    renderer: Renderer,
+    scene: Object3D,
+    camera: PerspectiveCamera,
+  ) {
+    this.tick(renderer);
+
+    const geometry = this.clouds.geometry;
+    const clouds = this._clouds;
+
+    if (!camera.isPerspectiveCamera || clouds.length === 0) {
+      draw_nothing(geometry);
+
+      return;
+    }
+
+    const positions = geometry.getAttribute("position").array as Float32Array;
+    const colors = geometry.getAttribute("color").array as Float32Array;
+    const depths = geometry.getAttribute("chaff").array as Float32Array;
+    const look = this._look;
+    const fog = (scene as { fog?: Parameters<typeof fog_factor>[0] }).fog;
+    const pixel = glare_pixel(renderer, camera);
+
+    // A mirror turned every way sends the light every way alike
+    const phase = 1 / (4 * Math.PI);
+
+    scratch_origin.setFromMatrixPosition(this.group.matrixWorld);
+    scratch_matrix.copy(this.group.matrixWorld).invert();
+    scratch_camera
+      .setFromMatrixPosition(camera.matrixWorld)
+      .sub(scratch_origin);
+
+    let laid = 0;
+
+    for (const cloud of clouds) {
+      const age_s = this._time_s - cloud.bornS;
+      const at = this.chaffMiddle(cloud, age_s, scratch_point);
+      const sigmas = this.chaffSigmas(cloud, age_s, scratch_next);
+
+      scratch_toward.subVectors(scratch_camera, at);
+
+      const distance = Math.max(scratch_toward.length(), 1e-3);
+
+      scratch_toward.multiplyScalar(1 / distance);
+
+      // Its path as the camera sees it: the Gaussian seen along the view is
+      // one across the view, its long σ shortened as the path turns away
+      const cosine = cloud.direction.dot(scratch_toward);
+
+      scratch_along
+        .copy(cloud.direction)
+        .addScaledVector(scratch_toward, -cosine);
+
+      if (scratch_along.lengthSq() < 1e-12) {
+        scratch_along.set(1, 0, 0).applyQuaternion(camera.quaternion);
+      }
+
+      scratch_along.normalize();
+      scratch_across.crossVectors(scratch_toward, scratch_along);
+
+      // Two pixels wide at least, its chaff spread over that
+      const smallest = pixel * distance;
+      const across = Math.max(sigmas.x, smallest);
+      const along = Math.max(
+        Math.sqrt(
+          sigmas.y * sigmas.y * (1 - cosine * cosine) +
+            sigmas.x * sigmas.x * cosine * cosine,
+        ),
+        smallest,
+      );
+
+      // Through the haze and the scene's fog to the eye
+      transmission(this._extinction, distance, scratch_transmission);
+      scratch_view
+        .copy(at)
+        .add(scratch_origin)
+        .applyMatrix4(camera.matrixWorldInverse);
+
+      const kept = 1 - fog_factor(fog ?? null, Math.max(-scratch_view.z, 0));
+      const tau =
+        ((this._chaff_section_m2 / (2 * Math.PI * across * along)) *
+          kept *
+          (scratch_transmission[0] +
+            scratch_transmission[1] +
+            scratch_transmission[2])) /
+        3;
+
+      // The sun's and the sky's light, and every flare's: a cloud is one
+      // quad, so each costs little
+      let flares = 0;
+
+      for (const flare of this._burning) {
+        flares +=
+          ((flare.light.intensityCd + flare.light.trailCd) * look.exposure) /
+          (at.distanceToSquared(flare.position) + across * across);
+      }
+
+      const albedo = this._chaff.reflectance * kept;
+
+      for (let channel = 0; channel < 3; channel++) {
+        section_rgb[channel] =
+          albedo *
+          scratch_transmission[channel] *
+          (phase * look.sunColor[channel] * look.sunIntensity +
+            look.skyColor[channel] * look.skyIntensity +
+            phase * this._color[channel] * flares);
+      }
+
+      scratch_along.multiplyScalar(CHAFF_SIGMAS * along);
+      scratch_across.multiplyScalar(CHAFF_SIGMAS * across);
+
+      const first = laid * CHAFF_VERTICES;
+
+      for (let corner = 0; corner < CHAFF_VERTICES; corner++) {
+        // Two triangles: (-,-) (+,-) (+,+), (-,-) (+,+) (-,+)
+        const u = corner === 1 || corner === 2 || corner === 4 ? 1 : -1;
+        const v = corner === 2 || corner === 4 || corner === 5 ? 1 : -1;
+        const vertex = first + corner;
+
+        scratch_left
+          .copy(at)
+          .addScaledVector(scratch_along, u)
+          .addScaledVector(scratch_across, v)
+          .add(scratch_origin)
+          .applyMatrix4(scratch_matrix);
+
+        positions[vertex * 3] = scratch_left.x;
+        positions[vertex * 3 + 1] = scratch_left.y;
+        positions[vertex * 3 + 2] = scratch_left.z;
+        colors[vertex * 3] = section_rgb[0];
+        colors[vertex * 3 + 1] = section_rgb[1];
+        colors[vertex * 3 + 2] = section_rgb[2];
+        depths[vertex * 3] = u;
+        depths[vertex * 3 + 1] = v;
+        depths[vertex * 3 + 2] = tau;
+      }
+
+      laid++;
+    }
+
+    geometry.getAttribute("position").needsUpdate = true;
+    geometry.getAttribute("color").needsUpdate = true;
+    geometry.getAttribute("chaff").needsUpdate = true;
+    geometry.setDrawRange(0, laid * CHAFF_VERTICES);
   }
 
   /**
