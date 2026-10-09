@@ -62,6 +62,25 @@ extinction is about 1.8 × 10⁻⁵ per metre in green (Rayleigh 1.35 × 10⁻�
 aerosols 4.4 × 10⁻⁶, takram's defaults), so a plume 500 m away keeps 99 % of
 its light, and 98 % in blue. Seen from kilometres away it would need it.
 
+Nor does the aircraft need it close up, and there it does harm. Takram works
+the aerial perspective out in ECEF, some 6.4 × 10⁶ m from the earth's
+centre, where a float resolves half a metre, as the difference of two
+sky-sized lookups. Over the ten metres to the skin, what it adds is that
+rounding, a different value on every triangle as their depths fall, and it
+shimmers as the camera turns. The air first takes one display step, 1/256,
+off what is behind it at about 104 m, in blue: the examples fade the aerial
+perspective in from there over as far again, and keep it full on the sky.
+
+```ts
+backdropNode: ({ color, depth }) => {
+  const distance = perspectiveDepthToViewZ(depth.r, cameraNear, cameraFar).negate();
+  // The far plane's depth gives no distance in a float: it is sky
+  const air = select(depth.r.greaterThanEqual(1), 1, smoothstep(104, 208, distance));
+
+  return mix(color, aerialPerspective(color, depth), air);
+},
+```
+
 ## Where the scene is on the earth
 
 The atmosphere wants the scene's frame in ECEF, the earth-centred one.

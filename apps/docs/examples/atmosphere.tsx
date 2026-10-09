@@ -29,13 +29,18 @@ import {
 import { AgXToneMapping, Vector3, type Vector3Tuple } from "three";
 import { bloom } from "three/addons/tsl/display/BloomNode.js";
 import {
+  cameraFar,
+  cameraNear,
   cameraProjectionMatrixInverse,
   cameraWorldMatrix,
   context,
   Fn,
   instancedArray,
+  mix,
+  perspectiveDepthToViewZ,
   positionGeometry,
   select,
+  smoothstep,
   uniform,
   vec2,
   vec3,
@@ -77,6 +82,21 @@ const SATURATION = 1.2;
 
 // The ground's albedo as takram's model has it, lighting the vapour from below
 const GROUND_ALBEDO = PARAMETERS.groundAlbedo.x;
+
+// How far the air at sea level takes one display step, 1/256, off what is
+// behind it, in its bluest channel (takram's extinction is per kilometre):
+// about 104 m. Nearer, the aerial perspective changes nothing visible, but
+// takram works it out in ECEF, some 6.4e6 m from the earth's centre, where a
+// float resolves half a metre, as a difference of two sky-sized lookups:
+// what it adds there is that rounding, faceted by the triangles' depths
+const BLUEST_EXTINCTION_PER_KM = Math.max(
+  ...PARAMETERS.rayleighScattering
+    .clone()
+    .add(PARAMETERS.mieExtinction)
+    .toArray(),
+);
+const AIR_VISIBLE_M =
+  (-Math.log(1 - 1 / 256) / BLUEST_EXTINCTION_PER_KM) * 1000;
 
 // The camera's exposure, in EV at ISO 100, before the meter has read the sky:
 // sunny sixteen
@@ -382,12 +402,33 @@ export const Atmosphere: FC<AtmosphereProps> = ({
 
   // The opaque scene under the atmosphere first, then the plumes and the
   // vapour over it: the sky is drawn where nothing was, so it goes behind
-  // them, and they see through the air as it is in front of what is behind
+  // them, and they see through the air as it is in front of what is behind.
+  // Taken in from where the air first shows, over as far again
   const split = useMemo(
     () =>
       volume_pass(scene, camera, {
-        backdropNode: ({ color, depth }) =>
-          aerialPerspective(color, depth) as unknown as Node<"vec4">,
+        backdropNode: ({ color, depth }) => {
+          const distance = perspectiveDepthToViewZ(
+            depth.r,
+            cameraNear,
+            cameraFar,
+          ).negate();
+          const graded = aerialPerspective(
+            color,
+            depth,
+          ) as unknown as Node<"vec4">;
+
+          // The far plane's depth gives no distance in a float: it is sky
+          return mix(
+            color,
+            graded,
+            select(
+              depth.r.greaterThanEqual(1),
+              1,
+              smoothstep(AIR_VISIBLE_M, 2 * AIR_VISIBLE_M, distance),
+            ),
+          );
+        },
       }),
     [scene, camera],
   );
