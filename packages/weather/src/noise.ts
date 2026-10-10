@@ -352,26 +352,41 @@ export const detail_channels = (
   ];
 };
 
+// How rough a cloud's edge is from scale to scale: the edges of clouds and
+// rain areas are fractal over 1 to 1000 km, their perimeter's dimension 1.35
+// (Lovejoy 1982), so a billow half the size stands out 2^-(2 - 1.35) = 0.64
+// as far. The shape's three cellular octaves, weighted so and summed to 1:
+// the inverted cellular noise's level sets are spheres about its feature
+// points, so each octave heaps rounded lobes on the last's, as cauliflower
+export const ROUGHNESS_EXPONENT = 2 - 1.35;
+const OCTAVE = 2 ** -ROUGHNESS_EXPONENT;
+const SHAPE_SUM = 1 + OCTAVE + OCTAVE * OCTAVE;
+export const SHAPE_WEIGHTS: readonly [number, number, number] = [
+  1 / SHAPE_SUM,
+  OCTAVE / SHAPE_SUM,
+  (OCTAVE * OCTAVE) / SHAPE_SUM,
+];
+
 // Where the noises' values fall, their 5th and 95th percentiles over 20 000
-// points of the tile: the shape's Schneider remap keeps it within 0.78 to
-// 0.89, the detail's sum within 0.31 to 0.68. Each is stretched over 0 to 1
-// from them, so a billow wears its full reach in and a tower is not just
-// worn evenly
-export const SHAPE_SPREAD: readonly [number, number] = [0.78, 0.89];
+// points of the tile. Each is stretched over 0 to 1 from them, so a billow
+// wears its full reach in and a tower is not just worn evenly
+export const SHAPE_SPREAD: readonly [number, number] = [0.3, 0.66];
 export const DETAIL_SPREAD: readonly [number, number] = [0.31, 0.68];
 
 /**
- * The shape the clouds' billows take from the shape texture: its
- * Perlin–Worley, eroded where its three finer cellular octaves are thin
- * (Schneider 2015), stretched over its spread.
+ * The shape the clouds' billows take from the shape texture: its three
+ * cellular octaves, weighted as cloud edges are rough, stretched over their
+ * spread.
  * @param channels The shape texture's four channels
  * @returns 0 to 1
  */
 export const shape_noise = (
   channels: readonly [number, number, number, number],
 ): number => {
-  const fbm = channels[1] * 0.625 + channels[2] * 0.25 + channels[3] * 0.125;
-  const value = remap(channels[0], fbm - 1, 1, 0, 1);
+  const value =
+    channels[1] * SHAPE_WEIGHTS[0] +
+    channels[2] * SHAPE_WEIGHTS[1] +
+    channels[3] * SHAPE_WEIGHTS[2];
 
   return Math.min(Math.max(remap(value, ...SHAPE_SPREAD, 0, 1), 0), 1);
 };

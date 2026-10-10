@@ -105,7 +105,8 @@ Each is a physical quantity in SI units:
   Marshall and Palmer, 0.365 R<sup>0.63</sup> per km.
 - **The shapes.** Cumulus sizes as a D<sup>−2</sup> power law (Benner and
   Curry 1998), domes after Scorer (1957), billows a quarter of a tower
-  across (Blyth et al. 1988), worn by seeded Perlin–Worley noise.
+  across (Blyth et al. 1988), worn by seeded cellular noise, lobes on
+  lobes as rough as Lovejoy (1982) measured cloud edges.
 - **The light.** Mie's phase through Jendersie and d'Eon's (2023) fit; the
   sun through six doubling steps; many scatterings by Eddington's
   two-stream; each step integrated as Hillaire (2016) has it; the air in

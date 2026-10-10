@@ -21,13 +21,19 @@ import {
   vec4,
 } from "three/tsl";
 import type { Node, UniformNode } from "three/webgpu";
-import { SLOPE_MAX, TABLE_SIZE, type ResolvedLayer } from "../field";
+import {
+  detail_reach,
+  SLOPE_MAX,
+  TABLE_SIZE,
+  type ResolvedLayer,
+} from "../field";
 import { layer_has_map, type MapFrame } from "../map";
 import {
   DETAIL_CELLS,
   DETAIL_SPREAD,
   SHAPE_CELLS,
   SHAPE_SPREAD,
+  SHAPE_WEIGHTS,
 } from "../noise";
 import { pcg3d, unit3 } from "./noise";
 
@@ -85,6 +91,8 @@ export type LayerNodes = {
   inverseCrown: FloatUniform;
   billow: FloatUniform;
   detail: FloatUniform;
+  /** How far the detail wears in, metres: field.ts's `detail_reach` */
+  detailReach: FloatUniform;
   roughness: FloatUniform;
 
   /** How far its billows have boiled up, metres */
@@ -141,6 +149,7 @@ export const create_layer_nodes = (
   inverseCrown: float_uniform(),
   billow: float_uniform(),
   detail: float_uniform(),
+  detailReach: float_uniform(),
   roughness: float_uniform(),
   rise: float_uniform(),
   stretch: uniform(vec3(1, 0, 1)) as unknown as LayerNodes["stretch"],
@@ -190,6 +199,7 @@ export const update_layer_nodes = (
   nodes.inverseCrown.value = 1 / Math.max(layer.crown, 1e-3);
   nodes.billow.value = layer.billowM;
   nodes.detail.value = layer.detailM;
+  nodes.detailReach.value = detail_reach(layer);
   nodes.roughness.value = layer.form === "stratiform" ? 1 : 0.15;
   nodes.rise.value = layer.updraftMPerS * time_s;
 
@@ -397,18 +407,11 @@ export const noise_coordinates = (
  * @param at Where, in tiles
  * @returns 0 to 1
  */
-export const shape_noise = (shape: Data3DTexture, at: V3): F => {
-  const channels = texture3D(shape, at).toVar();
-  const fbm = dot(channels.yzw, vec3(0.625, 0.25, 0.125));
-
-  return channels.x
-    .sub(fbm)
-    .add(1)
-    .div(float(2).sub(fbm))
+export const shape_noise = (shape: Data3DTexture, at: V3): F =>
+  dot(texture3D(shape, at).yzw, vec3(...SHAPE_WEIGHTS))
     .sub(SHAPE_SPREAD[0])
     .div(SHAPE_SPREAD[1] - SHAPE_SPREAD[0])
     .clamp(0, 1) as F;
-};
 
 /**
  * The detail texture's noise at a point: noise.ts's `detail_noise`.
@@ -441,7 +444,7 @@ export const layer_density = (
 ): F => {
   const height = altitude.sub(nodes.base);
   const worn_shape = shape.oneMinus();
-  const worn_detail = detail.oneMinus().mul(nodes.detail);
+  const worn_detail = detail.oneMinus().mul(nodes.detailReach);
 
   const reach = nodes.cumuliform
     ? nodes.billow

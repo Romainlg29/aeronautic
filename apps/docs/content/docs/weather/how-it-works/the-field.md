@@ -42,13 +42,19 @@ at any scale.
 A cumulus rises as a train of thermals each about half its width (Blyth,
 Cooper and Jensen 1988), so a billow is a quarter of the largest tower
 across. The columns' tops and bases are worn in by a billow where the shape
-noise is low, and by a detail more where the detail noise is, as
-cauliflower is; the edge is a detail wide. The billows boil upward at the
+noise is low, and further where the detail noise is, as cauliflower is; the
+edge is a detail wide. The billows boil upward at the
 layer's updraft and drift with its wind.
 
-The shape noise is Perlin–Worley with three octaves of cellular noise, the
-detail three finer octaves of cellular noise. Each is stretched over 0 to 1
-from its 5th and 95th percentiles, so a billow wears its full reach in.
+The noise is cellular, inverted: its level sets are spheres about its
+feature points, so it heaps rounded lobes. The shape is three octaves of it,
+the detail three finer. Cloud edges are fractal from a kilometre to a
+thousand, their perimeter's dimension 1.35 (Lovejoy 1982), so a lobe half
+the size stands out 2<sup>−0.65</sup> = 0.64 as far: the shape's octaves are
+weighted so, and the detail wears in as far as a lobe its size stands out of
+a billow, about a fifth of a billow for a tenth of its size. Each noise is
+stretched over 0 to 1 from its 5th and 95th percentiles, so a billow wears
+its full reach in.
 
 ## The seed
 

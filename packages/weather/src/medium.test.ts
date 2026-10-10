@@ -53,8 +53,12 @@ describe("weather_medium", () => {
 
   it("is darker deeper under the sun", () => {
     const weather = storm();
-    const top = weather.resolve().layers[0].topM;
-    const high = weather_medium(weather, 0, top - 300, 0).color.r;
+    // The highest the cloud is over its centre: its top is worn in
+    let top = weather.resolve().layers[0].topM;
+
+    while (!weather.sample(0, top, 0).inCloud) top -= 50;
+
+    const high = weather_medium(weather, 0, top - 100, 0).color.r;
     const low = weather_medium(weather, 0, 3000, 0).color.r;
 
     expect(low).toBeLessThan(high);

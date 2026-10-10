@@ -24,6 +24,7 @@ import {
   DETAIL_CELLS,
   pcg3d,
   perlin_fbm,
+  ROUGHNESS_EXPONENT,
   seed_salt,
   shape_channels,
   shape_noise,
@@ -683,12 +684,22 @@ export type Erosion = {
 };
 
 /**
+ * How far the detail wears into a cloud: as far as a lobe of its size stands
+ * out of the billows, by the roughness cloud edges have from scale to scale
+ * (see noise.ts). A tenth of a billow's size stands out a fifth as far.
+ * @param layer The layer
+ * @returns Metres
+ */
+export const detail_reach = (layer: CloudLayer): number =>
+  layer.billowM * (layer.detailM / layer.billowM) ** ROUGHNESS_EXPONENT;
+
+/**
  * How much of its water a layer holds at a point: 1 deep in a cloud, 0 out of
  * it, between over its edge.
  *
  * The column's top and base are worn in by the billows: by up to a billow
- * where the shape noise is low, and a detail more where the detail noise is,
- * as cauliflower is. Its edge is a detail wide.
+ * where the shape noise is low, and further where the detail noise is, as
+ * cauliflower is. Its edge is a detail wide.
  * @param resolved The layer
  * @param column Its column at the point
  * @param altitude_m The point's altitude
@@ -705,7 +716,7 @@ export const layer_density = (
   const height = altitude_m - baseM;
 
   const worn_shape = 1 - erosion.shape;
-  const worn_detail = (1 - erosion.detail) * layer.detailM;
+  const worn_detail = (1 - erosion.detail) * detail_reach(layer);
 
   let density = 0;
 
