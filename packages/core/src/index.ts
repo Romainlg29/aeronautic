@@ -51,15 +51,21 @@ export { deg, to_deg } from "./units";
 export {
   create_scene_fog,
   fog_factor,
+  medium_sky,
+  medium_sun,
   SCENE_FOG_DENSITY,
+  SCENE_FOG_MEDIUM,
   SCENE_FOG_NONE,
   SCENE_FOG_RANGE,
   scene_color,
   scene_depth,
   scene_fog_factor,
+  scene_medium,
   scene_view_z,
+  set_scene_medium,
   write_scene_fog,
   type SceneFogUniforms,
+  type SceneMedium,
 } from "./scene";
 export {
   volume_pass,

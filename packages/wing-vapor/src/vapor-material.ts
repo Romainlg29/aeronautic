@@ -20,6 +20,8 @@ import {
 } from "three/webgpu";
 import {
   create_scene_fog,
+  medium_sky,
+  medium_sun,
   scene_fog_factor,
   scene_view_z,
   type SceneBackdrop,
@@ -565,13 +567,16 @@ export const create_vapor_material = (
     // The sun's light, split as clouds' is: the droplets' forward peak, which
     // a cloud in the way blocks, and what has scattered many times, which
     // diffuses round it and is dimmed far less
-    const sun = (u.sun as unknown as V3).mul(MULTIPLE_SCATTERING);
+    // In a cloud, its sun and its sky are the cloud's
+    const sun = medium_sun(u.fog, u.sun as unknown as V3).mul(
+      MULTIPLE_SCATTERING,
+    );
     const sun_single = sun
       .mul(henyey_greenstein(cosine, u.anisotropy as unknown as F))
       .mul(1 - ISOTROPIC_SHARE)
       .toVar();
     const sun_multiple = sun.mul(ISOTROPIC_SHARE / (4 * Math.PI)).toVar();
-    const sky = (u.sky as unknown as V3).toVar();
+    const sky = medium_sky(u.fog, u.sky as unknown as V3).toVar();
     const sun_ray = (u.sunDirection as unknown as V3).toVar();
 
     // The air moves aft past the aircraft at the airspeed, along the free

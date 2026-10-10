@@ -9,10 +9,13 @@ import {
   useContext,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type FC,
   type ReactNode,
+  type RefObject,
 } from "react";
+import { Vector3, type Object3D } from "three";
 import { CloudsNode, type CloudsOptions } from "../clouds-node";
 import { cloud_layer, type CloudGenus } from "../genera";
 import type {
@@ -32,7 +35,10 @@ import { Weather as Core } from "../weather";
 // and `<Storm at={[x, z]}>`, each added while it is mounted. `useClouds()`
 // draws them for the camera: composite its node with `over` where the scene
 // is graded, as `volume_pass`'s `backdropNode`, and every effect drawn in
-// that pass goes over the clouds
+// that pass goes over the clouds, and fades into the cloud round the camera.
+// Inside a `<FlightProvider>`, the flight flies through the same weather: its
+// day is the weather's, and its air saturated in cloud, so its vapour and its
+// contrails form as they would
 
 const WeatherContext = shared_context<Core | null>("weather", null);
 
@@ -73,8 +79,23 @@ export type WeatherProps = {
   /** The weather itself, to share one made elsewhere */
   weather?: Core;
 
+  /**
+   * Whether the `<FlightProvider>`'s flight flies through the weather: its
+   * day made the weather's, and its relative humidity 1 while it is in cloud,
+   * where the air is saturated, its own again out of it. By default true
+   */
+  couple?: boolean;
+
+  /**
+   * Where the aircraft is in the scene, for the flight's air: by default the
+   * scene's origin, where the weather puts the flight's altitude
+   */
+  aircraft?: RefObject<Object3D | null>;
+
   children?: ReactNode;
 };
+
+const scratch_position = new Vector3();
 
 /**
  * The weather the clouds inside it are layers of.
@@ -89,11 +110,16 @@ export const Weather: FC<WeatherProps> = ({
   origin,
   altitudeM: altitude_m = 0,
   weather: given,
+  couple = true,
+  aircraft,
   children,
 }) => {
   const made = useMemo(() => new Core(), []);
   const weather = given ?? made;
   const flight = useFlightStore();
+
+  // The flight's own humidity, kept while the cloud's is written over it
+  const own_humidity = useRef<number | null>(null);
 
   const stable_day = useShallowStable(day);
   const stable_look = useShallowStable(look);
@@ -120,7 +146,36 @@ export const Weather: FC<WeatherProps> = ({
   useFrame((_, delta) => {
     weather.origin[1] = flight?.values.altitudeM ?? altitude_m;
     weather.advance(Math.min(delta, 0.1) * time_scale);
+
+    if (!flight || !couple) return;
+
+    const at = aircraft?.current?.getWorldPosition(scratch_position);
+    const air = weather.sample(at?.x ?? 0, at?.y ?? 0, at?.z ?? 0);
+
+    if (air.inCloud) {
+      own_humidity.current ??= flight.values.relativeHumidity;
+    }
+
+    const humidity = air.inCloud ? 1 : own_humidity.current;
+
+    if (!air.inCloud) own_humidity.current = null;
+
+    flight.set({
+      temperatureOffsetK: weather.day.temperatureOffsetK,
+      relativeHumidity: humidity ?? undefined,
+    });
   });
+
+  // Its own humidity back when it stops flying through the weather
+  useLayoutEffect(
+    () => () => {
+      if (flight && own_humidity.current !== null) {
+        flight.set({ relativeHumidity: own_humidity.current });
+        own_humidity.current = null;
+      }
+    },
+    [flight, couple],
+  );
 
   return (
     <WeatherContext.Provider value={weather}>
@@ -169,7 +224,7 @@ export const CloudLayer: FC<CloudLayerProps> = ({
 /**
  * Props for `<Storm>`: where it stands, and any field of its layer.
  */
-export type StormProps = Partial<Layer> &
+export type StormProps = Omit<Partial<Layer>, keyof CloudCell | "cells"> &
   Omit<CloudCell, "at"> & {
     /** Where it stands in the weather, x and z in metres */
     at: readonly [number, number];
@@ -217,13 +272,20 @@ export type UseCloudsOptions = CloudsOptions & {
 
   /** How finely: by default `"medium"` */
   quality?: WeatherQualityName | Partial<WeatherQuality>;
+
+  /**
+   * The scene the other effects are drawn in, to fade them into the cloud
+   * round the camera: by default the canvas's. Null for none
+   */
+  scene?: Object3D | null;
 };
 
 /**
  * The weather's clouds for the scene's camera: a node to composite with
  * `over(color, depth)`, as `volume_pass`'s `backdropNode` or anywhere a
  * scene's colour and depth are at hand. Made again when the camera or the
- * quality change, and disposed of after.
+ * quality change, and disposed of after. Inside a cloud, every effect of the
+ * scene is drawn in it, as a medium.
  * @param options The weather, and how finely
  * @returns The node, or null outside a weather
  */
@@ -234,6 +296,8 @@ export const useClouds = (
   const weather = options.weather === undefined ? provided : options.weather;
   const camera = useThree((state) => state.camera);
   const gl = useThree((state) => state.gl);
+  const own_scene = useThree((state) => state.scene);
+  const scene = options.scene === undefined ? own_scene : options.scene;
   const quality = useShallowStable(options.quality);
 
   useLayoutEffect(() => check_renderer(gl, "useClouds"), [gl]);
@@ -247,12 +311,12 @@ export const useClouds = (
       return;
     }
 
-    const made = new CloudsNode(weather, camera, { quality });
+    const made = new CloudsNode(weather, camera, { quality, scene });
 
     set_node(made);
 
     return () => made.dispose();
-  }, [weather, camera, quality]);
+  }, [weather, camera, quality, scene]);
 
   return node;
 };

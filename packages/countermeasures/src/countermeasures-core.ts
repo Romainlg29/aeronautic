@@ -27,6 +27,7 @@ import {
   hide_glare,
   lay_glare,
   planckian,
+  scene_medium,
   standard_atmosphere,
   transmission,
   type Extinction,
@@ -34,6 +35,7 @@ import {
   type GlareUniforms,
   type Observer,
   type SceneBackdrop,
+  type SceneMedium,
 } from "@aeronautic/core";
 import {
   burn_time,
@@ -110,6 +112,37 @@ import {
   type CountermeasuresQualityName,
   type DispenserMount,
 } from "./types";
+
+/**
+ * What a scene fogs its effects with: its medium while it has one, a cloud
+ * the camera is in, or else its fog.
+ * @param scene The scene
+ * @returns Its medium or its fog
+ */
+const scene_fog = (scene: object): Parameters<typeof fog_factor>[0] =>
+  scene_medium(scene) ??
+  (scene as { fog?: Parameters<typeof fog_factor>[0] }).fog;
+
+/**
+ * The sky's light on one channel, as an effect is lit by it: the medium's
+ * own light inside one.
+ * @param look The look, for its sky
+ * @param channel The channel
+ * @param medium The scene's medium, if any
+ * @returns The light
+ */
+const sky_light = (
+  look: CountermeasuresLook,
+  channel: number,
+  medium: SceneMedium | null,
+): number =>
+  medium?.light
+    ? channel === 0
+      ? medium.light.r
+      : channel === 1
+        ? medium.light.g
+        : medium.light.b
+    : look.skyColor[channel] * look.skyIntensity;
 
 // One aircraft's countermeasures
 //
@@ -1558,7 +1591,7 @@ export class Countermeasures {
     const positions = geometry.getAttribute("position").array as Float32Array;
     const colors = geometry.getAttribute("color").array as Float32Array;
     const exposure = this._look.exposure;
-    const fog = (scene as { fog?: Parameters<typeof fog_factor>[0] }).fog;
+    const fog = scene_fog(scene);
     const pixel = glare_pixel(renderer, camera);
     const glow_s = this._flare.glowTimeS;
 
@@ -1698,7 +1731,9 @@ export class Countermeasures {
     const look = this._look;
     const lit = this._lit;
     const exposure = look.exposure;
-    const fog = (scene as { fog?: Parameters<typeof fog_factor>[0] }).fog;
+    const fog = scene_fog(scene);
+    const medium = scene_medium(scene);
+    const sun_through = medium?.sunTransmittance ?? 1;
     const pixel = glare_pixel(renderer, camera);
     const turbulence = this._air.turbulenceM2PerS3;
     const g = lit.smokeAsymmetry;
@@ -1823,8 +1858,8 @@ export class Countermeasures {
           section_rgb[channel] =
             albedo *
             scratch_transmission[channel] *
-            (look.sunColor[channel] * sun +
-              look.skyColor[channel] * look.skyIntensity +
+            (look.sunColor[channel] * sun * sun_through +
+              sky_light(look, channel, medium) +
               this._color[channel] * flares);
         }
 
@@ -1913,7 +1948,9 @@ export class Countermeasures {
     const sparks = geometry.getAttribute("glint").array as Float32Array;
     const depths = geometry.getAttribute("chaff").array as Float32Array;
     const look = this._look;
-    const fog = (scene as { fog?: Parameters<typeof fog_factor>[0] }).fog;
+    const fog = scene_fog(scene);
+    const medium = scene_medium(scene);
+    const sun_through = medium?.sunTransmittance ?? 1;
     const pixel = glare_pixel(renderer, camera);
 
     // A mirror turned every way sends the light every way alike
@@ -2083,12 +2120,12 @@ export class Countermeasures {
         section_rgb[channel] =
           albedo *
           scratch_transmission[channel] *
-          look.skyColor[channel] *
-          look.skyIntensity;
+          sky_light(look, channel, medium);
         glint_rgb[channel] =
           albedo *
           scratch_transmission[channel] *
-          (look.sunColor[channel] * sun_light + this._color[channel] * flares);
+          (look.sunColor[channel] * sun_light * sun_through +
+            this._color[channel] * flares);
       }
 
       // The glints each unit of drawn depth holds: the drawn depth is the
@@ -2172,7 +2209,7 @@ export class Countermeasures {
     const view = camera.matrixWorldInverse;
     const exposure = this._look.exposure;
     const observer = this.observer();
-    const fog = (scene as { fog?: Parameters<typeof fog_factor>[0] }).fog;
+    const fog = scene_fog(scene);
     const pixel = glare_pixel(renderer, camera);
     const smallest = Math.max((0.1 * Math.PI) / 180, pixel);
 

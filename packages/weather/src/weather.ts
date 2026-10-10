@@ -54,6 +54,14 @@ export type WeatherSample = {
 
   /** Whether it is inside a cloud: its droplets or ice, rain left out */
   inCloud: boolean;
+
+  /**
+   * About how much cloud is over it and under it: optical depths to its
+   * cloud's top and base, at its own extinction, as the clouds' shader takes
+   * them to light it by the sky and the ground
+   */
+  up: number;
+  down: number;
 };
 
 /**
@@ -213,6 +221,8 @@ export class Weather {
     let water = 0;
     let ice = 0;
     let rain = 0;
+    let up = 0;
+    let down = 0;
 
     for (const [index, resolved] of layers.entries()) {
       if (altitude < this.day.groundM || altitude > resolved.topM) continue;
@@ -250,6 +260,13 @@ export class Weather {
       water += w;
       ice += i;
       rain = Math.max(rain, r);
+
+      const here = w + i + r;
+      const top =
+        column.anvil > 0 ? resolved.topM : resolved.baseM + column.height;
+
+      up += here * Math.max(top - altitude, 0);
+      down += here * Math.max(altitude - resolved.baseM, 0);
     }
 
     const extinction = water + ice + rain;
@@ -261,6 +278,8 @@ export class Weather {
       rain,
       visibilityM: visibility(extinction),
       inCloud: water + ice > 0,
+      up,
+      down,
     };
   }
 }

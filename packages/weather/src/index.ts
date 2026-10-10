@@ -3,6 +3,7 @@
 // and the field behind them in `@aeronautic/weather/physics`
 
 export { clouds, CloudsNode, type CloudsOptions } from "./clouds-node";
+export { weather_medium } from "./medium";
 export { CLOUD_GENERA, cloud_layer, type CloudGenus } from "./genera";
 export {
   default_weather_day,

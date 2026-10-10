@@ -2,6 +2,8 @@ import {
   HalfFloatType,
   Matrix4,
   type Camera,
+  Color,
+  type Object3D,
   type PerspectiveCamera,
   RenderTarget,
   RGBAFormat,
@@ -53,7 +55,11 @@ import {
   type Renderer,
   type TextureNode,
 } from "three/webgpu";
-import { KOSCHMIEDER } from "@aeronautic/core";
+import {
+  KOSCHMIEDER,
+  set_scene_medium,
+  type SceneMedium,
+} from "@aeronautic/core";
 import {
   EARTH_RADIUS_M,
   noise_salts,
@@ -61,6 +67,7 @@ import {
   type ResolvedLayer,
 } from "./field";
 import { bake_map, layer_has_map, type MapFrame } from "./map";
+import { weather_medium } from "./medium";
 import { ICE_ASYMMETRY, RAIN_ASYMMETRY } from "./microphysics";
 import {
   create_half_texture,
@@ -185,6 +192,13 @@ const mie = (cosine: F, phase: V4): F => {
 export type CloudsOptions = {
   /** How finely: a quality's name, or its settings, or some of them */
   quality?: WeatherQualityName | Partial<WeatherQuality>;
+
+  /**
+   * The scene the other effects are drawn in. Inside a cloud they are drawn
+   * in it, as a medium: each fades into the cloud with how far it is, where
+   * the clouds alone would be drawn behind them whole
+   */
+  scene?: Object3D | null;
 };
 
 /**
@@ -203,6 +217,12 @@ export class CloudsNode extends TempNode {
   readonly weather: Weather;
   readonly camera: Camera;
   quality: WeatherQuality;
+
+  /** The scene the other effects are drawn in, to set the cloud's medium on */
+  scene: Object3D | null;
+
+  /** The cloud round the camera, as a medium, as of the last frame */
+  readonly medium: SceneMedium = { extinction: 0, color: new Color() };
 
   /** The scene's depth, to stop the rays at: set by `over` */
   depthNode: TextureNode | null = null;
@@ -308,6 +328,7 @@ export class CloudsNode extends TempNode {
     this.weather = weather;
     this.camera = camera;
     this.quality = resolve_weather_quality(options.quality);
+    this.scene = options.scene ?? null;
     this.updateBeforeType = NodeUpdateType.FRAME;
 
     this.#march.textures[0].name = "clouds.light";
@@ -988,6 +1009,19 @@ export class CloudsNode extends TempNode {
     this.#moved.value.subVectors(origin, this.#previous_origin);
     this.#previous_origin.copy(origin);
 
+    // The cloud round the camera, for the effects drawn in it: a frame late
+    // for any drawn before the clouds, a frame's flight not to be seen
+    const { x, y, z } = this.#camera_position.value;
+
+    weather_medium(weather, x, y, z, this.medium);
+
+    if (this.scene) {
+      set_scene_medium(
+        this.scene,
+        this.medium.extinction > 0 ? this.medium : null,
+      );
+    }
+
     // March
     renderer.setRenderTarget(this.#march);
     this.#quad.material = this.#march_material;
@@ -1025,6 +1059,8 @@ export class CloudsNode extends TempNode {
   }
 
   dispose(): void {
+    if (this.scene) set_scene_medium(this.scene, null);
+
     this.#march.dispose();
 
     for (const target of this.#history) target.dispose();
