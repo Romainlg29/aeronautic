@@ -1,0 +1,101 @@
+{
+  "name": "@aeronautic/weather",
+  "version": "0.1.0",
+  "description": "Physically based volumetric clouds and storms for three.js and React Three Fiber: seeded cumulus, stratus, cirrus and cumulonimbus with their rain, their base at the lifted condensation level, their optics from their droplets, lit by Mie scattering and their own shadow, raymarched in TSL for WebGPU, and shared with the other effects flying through them",
+  "keywords": [
+    "atmosphere",
+    "cirrus",
+    "cloud",
+    "clouds",
+    "cumulonimbus",
+    "cumulus",
+    "mie",
+    "r3f",
+    "rain",
+    "raymarching",
+    "react-three-fiber",
+    "shader",
+    "storm",
+    "three",
+    "three.js",
+    "threejs",
+    "tsl",
+    "vfx",
+    "volumetric",
+    "weather",
+    "webgpu"
+  ],
+  "homepage": "https://romainlg29.github.io/aeronautic/docs/weather/start/introduction/",
+  "bugs": {
+    "url": "https://github.com/Romainlg29/aeronautic/issues"
+  },
+  "license": "MIT",
+  "author": "Romain Le Gall (https://github.com/Romainlg29)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Romainlg29/aeronautic.git",
+    "directory": "packages/weather"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    },
+    "./physics": {
+      "types": "./dist/physics.d.ts",
+      "default": "./dist/physics.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "pnpm build"
+  },
+  "devDependencies": {
+    "@aeronautic/core": "workspace:^",
+    "@react-three/fiber": "^9.8.1",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.3.0",
+    "@types/three": "~0.186.0",
+    "react": "^19.3.0",
+    "three": "~0.186.1",
+    "tsdown": "^0.23.0",
+    "typescript": "~6.0.2",
+    "vitest": "^4.1.4"
+  },
+  "peerDependencies": {
+    "@aeronautic/core": "workspace:^",
+    "@react-three/fiber": "^9.0.0 || ^10.0.0-alpha.0",
+    "react": "^19.0.0",
+    "three": ">=0.186.0 <0.187.0"
+  },
+  "peerDependenciesMeta": {
+    "@react-three/fiber": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
+  }
+}
