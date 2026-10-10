@@ -34,6 +34,7 @@ const EXAMPLES = {
   "atmosphere-vapor": load(() => import("@/examples/atmosphere-vapor")),
   "atmosphere-contrails": load(() => import("@/examples/atmosphere-contrails")),
   "atmosphere-lights": load(() => import("@/examples/atmosphere-lights")),
+  weather: load(() => import("@/examples/weather")),
   "atmosphere-countermeasures": load(
     () => import("@/examples/atmosphere-countermeasures"),
   ),

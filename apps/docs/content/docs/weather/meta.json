@@ -1,0 +1,10 @@
+{
+  "title": "Weather",
+  "description": "Volumetric clouds and storms from a seed, formed and lit as the air makes them",
+  "icon": "Cloud",
+  "root": true,
+  "pages": [
+    "---[Play]Examples---",
+    "...examples"
+  ]
+}

@@ -2,6 +2,8 @@ import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { volume_pass } from "@aeronautic/core";
 import { useFlightStore, VolumePassContext } from "@aeronautic/core/react";
+import type { Weather } from "@aeronautic/weather";
+import { useClouds } from "@aeronautic/weather/react";
 import {
   aerialPerspective,
   AtmosphereContext,
@@ -97,6 +99,13 @@ const BLUEST_EXTINCTION_PER_KM = Math.max(
 );
 const AIR_VISIBLE_M =
   (-Math.log(1 - 1 / 256) / BLUEST_EXTINCTION_PER_KM) * 1000;
+
+// The air's meteorological range at sea level, as takram's air has it:
+// Koschmieder's 3.912 over its extinction at 550 nm, the green channel
+const AIR_VISIBILITY_M =
+  (3.912 /
+    (PARAMETERS.rayleighScattering.y + PARAMETERS.mieExtinction.y)) *
+  1000;
 
 // The camera's exposure, in EV at ISO 100, before the meter has read the sky:
 // sunny sixteen
@@ -256,6 +265,12 @@ type AtmosphereProps = {
    */
   altitudeM?: number;
 
+  /**
+   * The weather whose clouds are drawn in the sky, lit by the atmosphere's
+   * sun and sky, under the plumes and the vapour
+   */
+  weather?: Weather;
+
   children?: ReactNode;
 };
 
@@ -275,6 +290,7 @@ export const Atmosphere: FC<AtmosphereProps> = ({
   latitudeDeg: latitude_deg = 35,
   longitudeDeg: longitude_deg = 139,
   altitudeM: altitude_prop = 0,
+  weather,
   children,
 }) => {
   const { gl, scene, camera } = useThree();
@@ -404,6 +420,8 @@ export const Atmosphere: FC<AtmosphereProps> = ({
   // vapour over it: the sky is drawn where nothing was, so it goes behind
   // them, and they see through the air as it is in front of what is behind.
   // Taken in from where the air first shows, over as far again
+  const clouds = useClouds({ weather: weather ?? null });
+
   const split = useMemo(
     () =>
       volume_pass(scene, camera, {
@@ -419,7 +437,7 @@ export const Atmosphere: FC<AtmosphereProps> = ({
           ) as unknown as Node<"vec4">;
 
           // The far plane's depth gives no distance in a float: it is sky
-          return mix(
+          const aired = mix(
             color,
             graded,
             select(
@@ -428,9 +446,12 @@ export const Atmosphere: FC<AtmosphereProps> = ({
               smoothstep(AIR_VISIBLE_M, 2 * AIR_VISIBLE_M, distance),
             ),
           );
+
+          // The clouds in front of it, the plumes and the vapour over both
+          return clouds ? clouds.over(aired, depth) : aired;
         },
       }),
-    [scene, camera],
+    [scene, camera, clouds],
   );
 
   const pipeline = useMemo(() => {
@@ -493,7 +514,7 @@ export const Atmosphere: FC<AtmosphereProps> = ({
       .transformDirection(atmosphere.matrixWorldToECEF.value);
 
     // Measured again only when the light at the aircraft can have changed
-    const key = `${sun_elevation_deg},${sun_azimuth_deg},${Math.round(altitude_m)}`;
+    const key = `${sun_elevation_deg},${sun_azimuth_deg},${Math.round(altitude_m)},${weather ? weather.seed : ""}`;
     const state = measured.current;
 
     if (state.busy || state.key === key) return;
@@ -541,6 +562,26 @@ export const Atmosphere: FC<AtmosphereProps> = ({
         const ev100 = Math.log2((lux * ISO) / INCIDENT_METER_C);
 
         renderer.toneMappingExposure = exposure_at(ev100);
+
+        // The clouds in the same light: the dome's radiance above, the
+        // ground's below, both Lambertian
+        weather?.set({
+          look: {
+            sunDirection: sun_world.toArray() as Vector3Tuple,
+            sun: direct,
+            sky: indirect.map((lux) => lux / (2 * Math.PI) / Math.PI) as Vector3Tuple,
+            ground: direct.map(
+              (sun_lux, i) =>
+                (GROUND_ALBEDO * (sun_lux * sin_elevation + indirect[i] / (2 * Math.PI))) /
+                Math.PI,
+            ) as Vector3Tuple,
+            exposure: 1,
+            visibilityM: AIR_VISIBILITY_M,
+            // The air's own light far off: the dome's, an estimate of the
+            // horizon's
+            haze: indirect.map((lux) => lux / (2 * Math.PI) / Math.PI) as Vector3Tuple,
+          },
+        });
 
         set_lighting({
           sunDirection: sun_world.toArray() as Vector3Tuple,
