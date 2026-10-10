@@ -1,0 +1,12 @@
+{
+  "title": "Guides",
+  "icon": "BookOpen",
+  "pages": [
+    "layers",
+    "the-day",
+    "the-light",
+    "flying-through",
+    "quality",
+    "without-react"
+  ]
+}

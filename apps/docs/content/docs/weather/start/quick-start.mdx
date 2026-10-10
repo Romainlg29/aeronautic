@@ -1,0 +1,77 @@
+---
+title: Quick start
+description: "A sky of cumulus in a few lines."
+---
+
+`<Weather>` holds the sky, its layers are its children, and `useClouds()`
+gives the node that draws them for the camera. Composite it over the scene
+where the frame is put together:
+
+```tsx
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { useEffect, useMemo } from "react";
+import { pass } from "three/tsl";
+import { RenderPipeline, type WebGPURenderer } from "three/webgpu";
+import { webgpu_gl } from "@aeronautic/core/react";
+import { CloudLayer, useClouds, Weather } from "@aeronautic/weather/react";
+
+// The scene, then the clouds in front of whatever it left behind them
+const Sky = () => {
+  const { gl, scene, camera } = useThree();
+  const clouds = useClouds();
+
+  const pipeline = useMemo(() => {
+    const drawn = pass(scene, camera);
+    const pipeline = new RenderPipeline(gl as unknown as WebGPURenderer);
+
+    pipeline.outputNode = clouds
+      ? clouds.over(
+          drawn.getTextureNode("output"),
+          drawn.getTextureNode("depth"),
+        )
+      : drawn.getTextureNode("output");
+
+    return pipeline;
+  }, [gl, scene, camera, clouds]);
+
+  useEffect(() => () => pipeline.dispose(), [pipeline]);
+  useFrame(() => pipeline.render(), 1);
+
+  return null;
+};
+
+export const App = () => (
+  <Canvas gl={webgpu_gl()} camera={{ position: [0, 2, 0], far: 1e5 }}>
+    <Weather seed={7}>
+      <CloudLayer genus="cumulus-mediocris" />
+      <Sky />
+    </Weather>
+  </Canvas>
+);
+```
+
+The scene is in metres, its origin at the weather's `origin`, by default
+over the sea at sea level. The clouds' base is the day's condensation level,
+about 680 m on the default day: look up and they are there.
+
+## A storm
+
+`<Storm>` puts a cumulonimbus where it is told, x and z in metres:
+
+```tsx
+<Weather day={{ temperatureOffsetK: 12, surfaceHumidity: 0.75 }}>
+  <CloudLayer genus="cumulus-humilis" cover={0.25} />
+  <Storm at={[25_000, 5000]} diameterM={10_000} />
+  <Sky />
+</Weather>
+```
+
+## The light
+
+`look` lights the clouds: the sun's illuminance, the sky's and the ground's
+radiance, in the scene's own light units, and what one of them is drawn as.
+The defaults are a clear day in units where the sky is drawn at about its
+colour. Under a physical sky, give its light; see
+[the light](/docs/weather/guides/the-light).
+
+Next, [layers and genera](/docs/weather/guides/layers).

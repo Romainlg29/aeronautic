@@ -1,0 +1,75 @@
+---
+title: Takram's atmosphere
+description: "Clouds under @takram/three-atmosphere's sky: composited in the volume pass's backdrop, lit by its sun and sky."
+---
+
+<Example name="weather" />
+
+The genera under
+[`@takram/three-atmosphere`](https://www.npmjs.com/package/@takram/three-atmosphere)'s
+sky. Bring the sun down and the clouds redden with the light that reaches
+them through the long air, and their shaded sides darken.
+
+The setup, the volume pass with the aerial perspective as its backdrop and
+the scene's place on the earth, is on [core's page](/docs/core/integrations/takram-atmosphere).
+
+## In the backdrop
+
+The clouds go in front of the atmosphere's aerial perspective, and the
+volume pass's plumes and vapour over both. So they are composited at the end
+of the backdrop:
+
+```tsx
+const clouds = useClouds();
+
+const split = useMemo(
+  () =>
+    volume_pass(scene, camera, {
+      backdropNode: ({ color, depth }) => {
+        const aired = aerialPerspective(color, depth);
+
+        return clouds ? clouds.over(aired, depth) : aired;
+      },
+    }),
+  [scene, camera, clouds],
+);
+```
+
+`over` takes the scene's depth: the clouds stop at the airframe, and the
+terrain hides those behind it.
+
+## The light
+
+The look is the atmosphere's light where the scene is, read with takram's
+`getSplitScalarIlluminance` (see core's page), all of it already in the
+atmosphere's units, so the exposure is 1:
+
+```ts
+const sin_elevation = Math.max(Math.sin(elevation), 0);
+
+weather.set({
+  look: {
+    sunDirection: sun_world.toArray(),
+    // The solar irradiance through the air above
+    sun: direct,
+    // The dome's horizontal irradiance, as a Lambertian radiance
+    sky: indirect.map((e) => e / (2 * Math.PI) / Math.PI),
+    // The sunlit ground under it, of albedo GROUND_ALBEDO
+    ground: direct.map(
+      (e, i) =>
+        (GROUND_ALBEDO * (e * sin_elevation + indirect[i] / (2 * Math.PI))) /
+        Math.PI,
+    ),
+    exposure: 1,
+    visibilityM: AIR_VISIBILITY_M,
+    haze: indirect.map((e) => e / (2 * Math.PI) / Math.PI),
+  },
+});
+```
+
+The sun's light reaches the clouds already reddened by the air between them
+and space. The air between the camera and the clouds is takram's own, as
+`visibilityM`: Koschmieder's 3.912 over its extinction at 550 nm. The haze it fades to is the dome's radiance, an estimate
+of the horizon's.
+
+<Source file="weather.tsx" />

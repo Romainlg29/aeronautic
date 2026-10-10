@@ -4,7 +4,17 @@
   "icon": "Cloud",
   "root": true,
   "pages": [
+    "---[Rocket]Start here---",
+    "...start",
+    "---[BookOpen]Guides---",
+    "...guides",
     "---[Play]Examples---",
-    "...examples"
+    "...examples",
+    "---[Plug]Integrations---",
+    "...integrations",
+    "---[Braces]Reference---",
+    "...reference",
+    "---[Atom]How it works---",
+    "...how-it-works"
   ]
 }

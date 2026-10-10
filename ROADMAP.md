@@ -20,6 +20,22 @@ The flares, their smoke, chaff and the programs are out, in 0.1. Still to come:
   the ignition delay are estimates for now; measured data on an MTV flare's
   intensity against airspeed and altitude would replace them.
 
+## `@aeronautic/weather`
+
+The genera, the storms and flying through them are out, in 0.1. Still to come:
+
+- **Lightning**: the stepped leader and the return stroke inside and under a
+  cumulonimbus, from the charge its updraft separates, lighting the cloud
+  from within.
+- **Hail**: the stones a storm's updraft holds up, from its speed, falling
+  in a shaft beside the rain.
+- **Cirrus's fibres**: the fall streaks of ice crystals sheared by the wind,
+  in place of stretched billows.
+- **A storm's towers at its scale**: billows within billows, fractal as
+  convection is, where today a ten-kilometre tower's billows are of one
+  size and terrace under a low sun.
+- **The clouds' shadows** on the ground and the scene below them.
+
 ## `@aeronautic/rotor`
 
 Helicopter and tiltrotor effects, from the rotor's disc loading.
