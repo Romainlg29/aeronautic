@@ -213,9 +213,6 @@ export type WeatherQuality = {
   mapSize: number;
   mapExtentM: number;
 
-  /** The sun's shadow map's texels a side */
-  shadowSize: number;
-
   /** The share of each frame's ray kept over the history: lower is smoother */
   blend: number;
 };
@@ -232,7 +229,6 @@ export const WEATHER_QUALITY: Record<WeatherQualityName, WeatherQuality> = {
     rangeM: 60_000,
     mapSize: 384,
     mapExtentM: 96_000,
-    shadowSize: 256,
     blend: 0.08,
   },
   medium: {
@@ -243,7 +239,6 @@ export const WEATHER_QUALITY: Record<WeatherQualityName, WeatherQuality> = {
     rangeM: 80_000,
     mapSize: 512,
     mapExtentM: 128_000,
-    shadowSize: 384,
     blend: 0.1,
   },
   high: {
@@ -254,7 +249,6 @@ export const WEATHER_QUALITY: Record<WeatherQualityName, WeatherQuality> = {
     rangeM: 120_000,
     mapSize: 1024,
     mapExtentM: 192_000,
-    shadowSize: 512,
     blend: 0.12,
   },
 };

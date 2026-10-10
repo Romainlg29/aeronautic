@@ -147,6 +147,9 @@ const MARCHED = struct({ color: "vec4", info: "vec4" }, "CloudsMarched");
 // The scene's depth of nothing: the sky
 const NOWHERE = 1e9;
 
+const scratch_size = new Vector2();
+const scratch_origin = new Vector3();
+
 type FloatUniform = Node<"float"> & { value: number };
 
 const float_uniform = (value = 0): FloatUniform =>
@@ -955,7 +958,7 @@ export class CloudsNode extends TempNode {
 
     // The size: the drawing buffer's, scaled
     const quality = this.quality;
-    const size = renderer.getDrawingBufferSize(new Vector2());
+    const size = renderer.getDrawingBufferSize(scratch_size);
     const width = Math.max(Math.round(size.x * quality.resolutionScale), 1);
     const height = Math.max(Math.round(size.y * quality.resolutionScale), 1);
 
@@ -1004,7 +1007,7 @@ export class CloudsNode extends TempNode {
     this.#frame_index.value = (this.#frame_index.value + 1) % 64;
 
     // How far the weather moved past the scene since the last frame
-    const origin = new Vector3(...weather.origin);
+    const origin = scratch_origin.fromArray(weather.origin);
 
     this.#moved.value.subVectors(origin, this.#previous_origin);
     this.#previous_origin.copy(origin);
@@ -1022,23 +1025,31 @@ export class CloudsNode extends TempNode {
       );
     }
 
-    // March
-    renderer.setRenderTarget(this.#march);
-    this.#quad.material = this.#march_material;
-    this.#quad.render(renderer);
-
-    // Resolve into one history, from the other
     const read = this.#history[this.#current];
     const write = this.#history[1 - this.#current];
 
-    this.#history_node.value = read.texture;
-    renderer.setRenderTarget(write);
-    this.#quad.material = this.#resolve_material;
-    this.#quad.render(renderer);
+    if (this.#layers.length === 0) {
+      // No cloud: nothing to march, and no history to keep
+      renderer.setRenderTarget(write);
+      renderer.setClearColor(0x000000, 0);
+      renderer.clear();
+      this.#had_history.value = 0;
+    } else {
+      // March
+      renderer.setRenderTarget(this.#march);
+      this.#quad.material = this.#march_material;
+      this.#quad.render(renderer);
+
+      // Resolve into one history, from the other
+      this.#history_node.value = read.texture;
+      renderer.setRenderTarget(write);
+      this.#quad.material = this.#resolve_material;
+      this.#quad.render(renderer);
+      this.#had_history.value = 1;
+    }
 
     this.#texture_node.value = write.texture;
     this.#current = 1 - this.#current;
-    this.#had_history.value = 1;
 
     this.#previous_view_projection.value.multiplyMatrices(
       camera.projectionMatrix,

@@ -15,6 +15,12 @@ import {
 } from "@aeronautic/countermeasures/react";
 import { Lights, type LightsHandle } from "@aeronautic/lights/react";
 import { WingVapor, type WingVaporHandle } from "@aeronautic/wing-vapor/react";
+import {
+  CloudLayer,
+  useClouds,
+  useWeather,
+  Weather,
+} from "@aeronautic/weather/react";
 import { angle_of_attack_for_load } from "@aeronautic/wing-vapor/physics";
 import {
   type FC,
@@ -32,6 +38,7 @@ import {
   type HemisphereLight,
   type Object3D,
   Quaternion,
+  Vector3,
 } from "three";
 import { WebGPURenderer } from "three/webgpu";
 import { airframe_only, Exhaust, useFighter } from "@/examples/fighter";
@@ -117,6 +124,19 @@ const SKIES = {
 
 // How long the sky takes to go from day to night, in seconds
 const FADE_S = 0.6;
+
+// The clouds form in the same air the fighter flies in down low: its warmth
+// and its humidity, so their base is that air's condensation level, a few
+// hundred metres over the sea
+const WEATHER_DAY = {
+  temperatureOffsetK: AIR.temperatureOffsetK,
+  surfaceHumidity: AIR.relativeHumidity,
+};
+
+// The sea under them, seen from above: water's albedo with the sun high,
+// about 6 % (Payne 1972)
+const SEA_ALBEDO = 0.06;
+const SUN_SINE = SUN[1] / Math.hypot(...SUN);
 
 /**
  * How far the sky is from day to night, shared by everything that fades with
@@ -214,6 +234,44 @@ const SkyFade: FC<{
 
 const DEG = Math.PI / 180;
 
+const haze = new Color();
+
+/**
+ * The clouds' light, as the vapor's: the sun and the sky the scene's lights
+ * fade between, the sea lit by both under them, and the background as the
+ * air's own colour far off.
+ * @param night How far the sky is to night, 0 to 1
+ * @returns The weather's look
+ */
+const cloud_look = (night: number) => {
+  const day = SKIES.day.look;
+  const dark = SKIES.night.look;
+  const sun = mix_rgb(day.sunColor, dark.sunColor, night).map(
+    (value) => value * mix(day.sunIntensity, dark.sunIntensity, night),
+  ) as [number, number, number];
+  const sky = mix_rgb(day.skyColor, dark.skyColor, night).map(
+    (value) => value * mix(day.skyIntensity, dark.skyIntensity, night),
+  ) as [number, number, number];
+
+  haze.lerpColors(DAY_BACKGROUND, NIGHT_BACKGROUND, night);
+
+  return {
+    sunDirection: SUN,
+    sun,
+    sky,
+    // A Lambertian sea's radiance, under the sun and the whole dome
+    ground: sun.map(
+      (value, i) =>
+        (SEA_ALBEDO * (value * SUN_SINE + Math.PI * sky[i])) / Math.PI,
+    ) as [number, number, number],
+    haze: haze.toArray() as [number, number, number],
+  };
+};
+
+const DAY_CLOUDS = cloud_look(0);
+
+const forward = new Vector3();
+
 // Where the plumes and the vapor start; `SkyFade` takes them on from there
 const DAY_PROFILE = { exposure: SKIES.day.exposure };
 
@@ -284,6 +342,7 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({
   const trails = useRef<ContrailsHandle>(null);
   const lights = useRef<LightsHandle>(null);
   const countermeasures = useRef<CountermeasuresHandle>(null);
+  const weather = useWeather();
 
   // Each press of V lets the program go as chaff; its first count, nothing
   const chaffed = useRef(chaff);
@@ -365,6 +424,7 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({
       });
       vapor.current?.updateLook(look);
       trails.current?.updateLook(look);
+      weather?.set({ look: cloud_look(night) });
     }
 
     if (!flight || !attitude.current || !body.current) return;
@@ -442,6 +502,17 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({
 
     // The nose is up off the flight path by the angle of attack
     body.current.rotation.x = state.alpha;
+
+    // It goes nowhere, so the weather goes by it instead: the scene flown
+    // through the clouds along its heading, at its airspeed
+    if (weather) {
+      attitude.current.getWorldDirection(forward).negate();
+
+      const level = Math.hypot(forward.x, forward.z) || 1;
+
+      weather.velocity[0] = (forward.x / level) * airspeed_m_s;
+      weather.velocity[1] = (forward.z / level) * airspeed_m_s;
+    }
   });
 
   return (
@@ -499,6 +570,12 @@ const Viewpoint: FC<{ level: Level }> = ({ level }) => {
 
   return null;
 };
+
+/**
+ * The frame graded with the weather's clouds in front of the sky.
+ * @returns Nothing; it takes over rendering
+ */
+const CloudyGrade: FC = () => <Grade clouds={useClouds({ quality: "low" })} />;
 
 /**
  * The landing page's sky: the fighter, fullscreen, flown from the keyboard
@@ -560,17 +637,22 @@ const FlightScene: FC<{ sky: Sky; level: Level; flight: Flight } & Pilot> = ({
         color={SKIES.day.sunColor}
       />
       <Reflections intensity={SKIES.day.reflections} />
-      {/* Context doesn't cross into the canvas: the same flight again */}
+      {/* Context doesn't cross into the canvas: the same flight again. The
+          weather takes its altitude from it, but leaves its air alone */}
       <FlightProvider flight={flight}>
-        <Suspense fallback={null}>
-          <Fighter
-            dusk={dusk}
-            keys={keys}
-            levers={levers}
-            flares={flares}
-            chaff={chaff}
-          />
-        </Suspense>
+        <Weather day={WEATHER_DAY} look={DAY_CLOUDS} couple={false}>
+          <CloudLayer genus="cumulus-mediocris" />
+          <Suspense fallback={null}>
+            <Fighter
+              dusk={dusk}
+              keys={keys}
+              levers={levers}
+              flares={flares}
+              chaff={chaff}
+            />
+          </Suspense>
+          <CloudyGrade />
+        </Weather>
       </FlightProvider>
       <OrbitControls
         // Looking a little below it, so it sits above the page's title
@@ -582,7 +664,6 @@ const FlightScene: FC<{ sky: Sky; level: Level; flight: Flight } & Pilot> = ({
         makeDefault
       />
       <Viewpoint level={level} />
-      <Grade />
     </Canvas>
   );
 };

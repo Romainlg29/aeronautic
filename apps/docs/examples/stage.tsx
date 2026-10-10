@@ -1,6 +1,7 @@
 import type { AfterburnerBatch } from "@aeronautic/afterburner";
 import type { ContrailLook, Contrails } from "@aeronautic/contrails";
 import type { Lights } from "@aeronautic/lights";
+import type { CloudsNode } from "@aeronautic/weather";
 import type { VaporLook, WingVapor } from "@aeronautic/wing-vapor";
 import { OrbitControls } from "@react-three/drei";
 import { Moon, Sun } from "lucide-react";
@@ -37,21 +38,28 @@ import { NO_SHADOWS } from "@/lib/no-shadows";
 
 /**
  * Draw the frame through bloom, then AgX.
+ * @param props The clouds to draw in front of the scene, if any
  * @returns Nothing; it takes over rendering
  */
-export const Grade: FC = () => {
+export const Grade: FC<{ clouds?: CloudsNode | null }> = ({
+  clouds = null,
+}) => {
   const { gl, scene, camera } = useThree();
   const renderer = gl as unknown as WebGPURenderer;
 
   const pipeline = useMemo(() => {
-    const color = pass(scene, camera).getTextureNode("output");
+    const scene_pass = pass(scene, camera);
+    const drawn = scene_pass.getTextureNode("output");
+    const color = clouds
+      ? clouds.over(drawn, scene_pass.getTextureNode("depth"))
+      : drawn;
     const glow = bloom(color, 0.3, 0.2, 1);
     const render_pipeline = new RenderPipeline(renderer);
 
     render_pipeline.outputNode = color.add(glow);
 
     return render_pipeline;
-  }, [renderer, scene, camera]);
+  }, [renderer, scene, camera, clouds]);
 
   useEffect(() => {
     renderer.toneMapping = AgXToneMapping;
