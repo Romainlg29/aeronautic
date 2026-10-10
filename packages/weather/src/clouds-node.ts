@@ -23,7 +23,7 @@ import {
   getViewPosition,
   If,
   int,
-  interleavedGradientNoise,
+  hash,
   Loop,
   max,
   min,
@@ -108,7 +108,7 @@ import type { Weather } from "./weather";
 // step's light is integrated as Hillaire has it, so a long step loses no
 // energy.
 //
-// The ray starts at a different place along its first step every frame, and
+// Each step is sampled at a different place along it every frame, and
 // the frames are blended: each texel's last value is found where the cloud it
 // saw was the frame before, and kept unless it strays outside what the
 // texel's neighbours see now
@@ -140,6 +140,13 @@ const FINE_STEPS = 8;
 // Fine steps against coarse: a coarse step strides this many fine ones
 const COARSE_STRIDE = 4;
 
+// The golden ratio, whose fractions of a frame count fill a step evenly
+const GOLDEN_RATIO = (1 + Math.sqrt(5)) / 2;
+
+// How many deviations from its neighbours' mean a texel's history may stray:
+// one, as Salvi (2016) has it
+const CLIP_DEVIATIONS = 1;
+
 // What a ray hands back: its light and its alpha, and where it saw cloud,
 // where the scene was, and what it saw through
 const MARCHED = struct({ color: "vec4", info: "vec4" }, "CloudsMarched");
@@ -154,6 +161,54 @@ type FloatUniform = Node<"float"> & { value: number };
 
 const float_uniform = (value = 0): FloatUniform =>
   uniform(value) as unknown as FloatUniform;
+
+/**
+ * A texture sampled through a Catmull–Rom spline rather than bilinearly, in
+ * five bilinear taps (Jimenez 2016). Bilinear resampling every frame blurs a
+ * history a little more each time, as it is kept; the spline passes through
+ * the texels, so it does not.
+ * @param source The texture
+ * @param uv Where
+ * @param size Its size in texels
+ * @returns The sample, its weights normalised
+ */
+const catmull_rom = (source: TextureNode, uv: V2, size: V2): V4 => {
+  const position = uv.mul(size);
+  const centre = floor(position.sub(0.5)).add(0.5);
+  const f = position.sub(centre);
+
+  // The spline's four weights, from the texel below the point's to the one
+  // two above
+  const w0 = f.mul(f.mul(f.mul(-0.5).add(1)).sub(0.5));
+  const w1 = f.mul(f).mul(f.mul(1.5).sub(2.5)).add(1);
+  const w2 = f.mul(f.mul(f.mul(-1.5).add(2)).add(0.5));
+  const w3 = f.mul(f).mul(f.mul(0.5).sub(0.5));
+
+  // The middle two in one bilinear tap, between them
+  const w12 = w1.add(w2);
+  const t0 = centre.sub(1).div(size);
+  const t3 = centre.add(2).div(size);
+  const t12 = centre.add(w2.div(w12)).div(size);
+
+  const tap = (x: F, y: F, weight: F) => source.sample(vec2(x, y)).mul(weight);
+  const weights = [
+    w12.x.mul(w0.y),
+    w0.x.mul(w12.y),
+    w12.x.mul(w12.y),
+    w3.x.mul(w12.y),
+    w12.x.mul(w3.y),
+  ] as F[];
+
+  const sum = tap(t12.x as F, t0.y as F, weights[0])
+    .add(tap(t0.x as F, t12.y as F, weights[1]))
+    .add(tap(t12.x as F, t12.y as F, weights[2]))
+    .add(tap(t3.x as F, t12.y as F, weights[3]))
+    .add(tap(t12.x as F, t3.y as F, weights[4]));
+
+  return sum
+    .div(weights.reduce((a, b) => a.add(b) as F))
+    .max(0) as unknown as V4;
+};
 
 /**
  * Henyey and Greenstein's phase function.
@@ -449,10 +504,13 @@ export class CloudsNode extends TempNode {
       );
       const then_uv = clip.xy.div(clip.w).mul(vec2(0.5, -0.5)).add(0.5).toVar();
 
-      // The neighbourhood's range, to keep a stale history inside
+      // The neighbourhood's spread, to keep a stale history inside: its mean
+      // give or take a deviation (Salvi 2016), tighter than its range, which
+      // lets a ghost of the cloud as it was through wherever the march's
+      // jitter is wide
       const texel = vec2(1).div(this.#resolution);
-      const low = now.toVar();
-      const high = now.toVar();
+      const first = now.toVar();
+      const second = now.mul(now).toVar();
 
       for (let j = -1; j <= 1; j++) {
         for (let i = -1; i <= 1; i++) {
@@ -460,12 +518,21 @@ export class CloudsNode extends TempNode {
 
           const near = this.#march_color.sample(uv.add(texel.mul(vec2(i, j))));
 
-          low.assign(min(low, near));
-          high.assign(max(high, near));
+          first.addAssign(near);
+          second.addAssign(near.mul(near));
         }
       }
 
-      const then = this.#history_node.sample(then_uv).clamp(low, high);
+      const mean = first.div(9).toVar();
+      const deviation = sqrt(second.div(9).sub(mean.mul(mean)).max(0)).mul(
+        CLIP_DEVIATIONS,
+      );
+
+      const then = catmull_rom(
+        this.#history_node,
+        then_uv as unknown as V2,
+        this.#resolution as unknown as V2,
+      ).clamp(mean.sub(deviation), mean.add(deviation));
       const valid = then_uv
         .greaterThanEqual(vec2(0))
         .all()
@@ -656,10 +723,17 @@ export class CloudsNode extends TempNode {
       const length = end.sub(start).max(0);
       const pixel = this.#pixel_angle;
 
-      // The first step starts somewhere different each frame
-      const jitter = interleavedGradientNoise(
-        screenCoordinate.xy.add(this.#frame_index.mul(5.588238)),
-      );
+      // Where in its step each sample is, somewhere different each frame:
+      // the steps still cover the whole ray, only where each is sampled moves
+      // A hash's white noise, not a gradient's: where the history is let go,
+      // as it is flying fast by a cloud, a gradient's lines show and white
+      // noise only grains. Each frame on by the golden ratio, so a texel's
+      // samples spread evenly along its steps over the frames
+      const jitter = hash(
+        floor(screenCoordinate.x).add(floor(screenCoordinate.y).mul(4099)),
+      )
+        .add(this.#frame_index.mul(GOLDEN_RATIO - 1))
+        .fract();
 
       const fine_step = (t: F): F =>
         t
@@ -671,23 +745,31 @@ export class CloudsNode extends TempNode {
           fine_step(t).mul(COARSE_STRIDE),
         ).clamp(this.#min_step, this.#max_step) as F;
 
-      const t = start.add(coarse_step(start).mul(jitter)).toVar();
+      const t = start.toVar();
       const fine = int(0).toVar();
-
-      // Where a stride last found cloud: the fine walk back to it counts
-      // nothing, however many fine steps a stride is
-      const found = float(0).toVar();
-
-      // How far the ray is integrated: a stride back never counts twice
-      const done = start.toVar();
+      const taken = float(0).toVar();
 
       Loop(this.#steps, () => {
         If(t.greaterThanEqual(end).or(through.lessThan(OPAQUE)), () => {
           Break();
         });
 
-        const p = eye.add(direction.mul(t)).toVar();
-        const step = float(0).toVar();
+        // The shortest step that still reaches the end in the steps left: a
+        // ray cut short is a cloud seen through, a long step only a coarser
+        // one, its light integrated over the step all the same. And no
+        // further than the scene, or the shell's edge: past either is cloud
+        // the ray never reaches
+        const enough = end.sub(t).div(float(this.#steps).sub(taken).max(1));
+        const step = max(
+          select(fine.equal(0), coarse_step(t), fine_step(t)),
+          enough,
+        )
+          .min(end.sub(t))
+          .toVar();
+
+        taken.addAssign(1);
+
+        const p = eye.add(direction.mul(t.add(step.mul(jitter)))).toVar();
         const sigma = float(0).toVar();
         const dense = float(0).toVar();
         const phased = float(0).toVar();
@@ -701,25 +783,19 @@ export class CloudsNode extends TempNode {
         If(fine.equal(0), () => {
           field(p, false, sigma, dense, { phased, up, down });
 
+          // Cloud in the stride: walk it again, finely
           If(dense.greaterThan(0), () => {
-            // Back a stride, as far as is counted, and walk on finely
             fine.assign(FINE_STEPS);
-            found.assign(t);
-            t.assign(t.sub(coarse_step(t)).max(done));
             sigma.assign(0);
-          }).Else(() => {
-            step.assign(coarse_step(t));
+            step.assign(0);
           });
         }).Else(() => {
-          step.assign(fine_step(t));
           field(p, true, sigma, dense, { phased, up, down });
 
           If(dense.greaterThan(0), () => {
             fine.assign(FINE_STEPS);
           }).Else(() => {
-            If(t.greaterThan(found), () => {
-              fine.subAssign(1);
-            });
+            fine.subAssign(1);
           });
         });
 
@@ -774,13 +850,12 @@ export class CloudsNode extends TempNode {
           const lost = through.mul(kept.oneMinus());
 
           light.addAssign(source.mul(kept.oneMinus()).div(sigma).mul(through));
-          front.addAssign(t.mul(lost));
+          front.addAssign(t.add(step.mul(0.5)).mul(lost));
           seen.addAssign(lost);
           through.mulAssign(kept);
         });
 
         t.addAssign(step);
-        done.assign(max(done, t));
       });
 
       const distance = select(
