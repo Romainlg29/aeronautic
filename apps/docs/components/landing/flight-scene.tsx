@@ -7,7 +7,6 @@ import {
 import type { Flight } from "@aeronautic/core";
 import { FlightProvider, useFlightStore } from "@aeronautic/core/react";
 import { Contrails, type ContrailsHandle } from "@aeronautic/contrails/react";
-import { humidity_over_water } from "@aeronautic/contrails/physics";
 import { ControlSurfaces } from "@aeronautic/controls/react";
 import {
   Countermeasures,
@@ -24,6 +23,7 @@ import {
 import { angle_of_attack_for_load } from "@aeronautic/wing-vapor/physics";
 import {
   type FC,
+  type ReactNode,
   type RefObject,
   Suspense,
   useEffect,
@@ -50,7 +50,15 @@ import {
 } from "@/examples/stage";
 import { CAMERA_FAR_M } from "@/lib/camera";
 import { NO_SHADOWS } from "@/lib/no-shadows";
-import { AIR, cruise_mach, START_THROTTLE } from "./flight-plan";
+import {
+  AIR,
+  air_at,
+  CEILING_M,
+  cruise_mach,
+  FLOOR_M,
+  HIGH_AIR,
+  START_THROTTLE,
+} from "./flight-plan";
 import type { Keys, Levers } from "./pilot";
 
 // The docs' fighter on a humid summer day, flown from the keyboard. It turns
@@ -64,21 +72,11 @@ const SUN: [number, number, number] = [5, 10, 5];
 
 export type Sky = "day" | "night";
 
-// Where it flies: low over the sea, or at the tropopause
+// Where it is sent: low over the sea, or at the tropopause. A new one each
+// time the button is pressed, so pressing it sends it there again however it
+// has been flown since
 export type Level = "low" | "high";
-
-// The ISA tropopause, -56.5 °C, in air 112 % saturated over ice: cold enough
-// for the engines' exhaust to make a contrail, humid enough for it to stay.
-// Down low, on the summer day, the exhaust is far too warm to make one
-const TROPOPAUSE_M = 11_000;
-const TROPOPAUSE_K = 216.65;
-const ICE_HUMIDITY = 1.12;
-
-const HIGH_AIR = {
-  altitudeM: TROPOPAUSE_M,
-  temperatureOffsetK: 0,
-  relativeHumidity: humidity_over_water(ICE_HUMIDITY, TROPOPAUSE_K),
-};
+export type Jump = { level: Level };
 
 // Where the camera goes when it climbs or descends: astern and to the right
 // for the plumes down low, ahead and to the right up high, the trails
@@ -503,15 +501,23 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({
     // The nose is up off the flight path by the angle of attack
     body.current.rotation.x = state.alpha;
 
-    // It goes nowhere, so the weather goes by it instead: the scene flown
-    // through the clouds along its heading, at its airspeed
+    // It goes nowhere, so the air goes by it instead. Its flight path is the
+    // attitude's nose, the body pitched up off it by the angle of attack, so
+    // it climbs at the airspeed's share along the vertical, the sine of the
+    // path's angle, and the weather goes by along its heading at the rest
+    attitude.current.getWorldDirection(forward).negate();
+
+    const altitude_m = clamp(
+      flight.values.altitudeM + forward.y * airspeed_m_s * delta,
+      FLOOR_M,
+      CEILING_M,
+    );
+
+    if (altitude_m !== flight.values.altitudeM) flight.set(air_at(altitude_m));
+
     if (weather) {
-      attitude.current.getWorldDirection(forward).negate();
-
-      const level = Math.hypot(forward.x, forward.z) || 1;
-
-      weather.velocity[0] = (forward.x / level) * airspeed_m_s;
-      weather.velocity[1] = (forward.z / level) * airspeed_m_s;
+      weather.velocity[0] = forward.x * airspeed_m_s;
+      weather.velocity[1] = forward.z * airspeed_m_s;
     }
   });
 
@@ -549,44 +555,49 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({
 };
 
 /**
- * Moves the camera to the level's view when the level changes, not before.
- * @param props Low or high
+ * Moves the camera to the level's view when the button sends it there, not
+ * before.
+ * @param props Where it was last sent
  * @returns Nothing
  */
-const Viewpoint: FC<{ level: Level }> = ({ level }) => {
+const Viewpoint: FC<{ jump: Jump }> = ({ jump }) => {
   const camera = useThree((three) => three.camera);
   const controls = useThree((three) => three.controls) as {
     update: () => void;
   } | null;
-  const shown = useRef(level);
+  const shown = useRef(jump);
 
   useEffect(() => {
-    if (shown.current === level) return;
+    if (shown.current === jump) return;
 
-    shown.current = level;
-    camera.position.set(...VIEWS[level]);
+    shown.current = jump;
+    camera.position.set(...VIEWS[jump.level]);
     controls?.update();
-  }, [camera, controls, level]);
+  }, [camera, controls, jump]);
 
   return null;
 };
 
 /**
- * The frame graded with the weather's clouds in front of the sky.
- * @returns Nothing; it takes over rendering
+ * The frame graded with the weather's clouds in front of the sky, and the
+ * fighter's effects drawn over them.
+ * @param props What flies in them
+ * @returns It; it takes over rendering
  */
-const CloudyGrade: FC = () => <Grade clouds={useClouds({ quality: "low" })} />;
+const CloudyGrade: FC<{ children: ReactNode }> = ({ children }) => (
+  <Grade clouds={useClouds({ quality: "low" })}>{children}</Grade>
+);
 
 /**
  * The landing page's sky: the fighter, fullscreen, flown from the keyboard
  * and looked round with the mouse.
- * @param props Day or night, low or high, the flight, and the pilot's keys
+ * @param props Day or night, where it was sent, the flight, and the pilot's keys
  *   and levers
  * @returns The canvas
  */
-const FlightScene: FC<{ sky: Sky; level: Level; flight: Flight } & Pilot> = ({
+const FlightScene: FC<{ sky: Sky; jump: Jump; flight: Flight } & Pilot> = ({
   sky,
-  level,
+  jump,
   flight,
   keys,
   levers,
@@ -603,10 +614,11 @@ const FlightScene: FC<{ sky: Sky; level: Level; flight: Flight } & Pilot> = ({
   // Read by the fade on its next frame
   dusk.target = sky === "night" ? 1 : 0;
 
-  // The air it flies in, read by everything on it from the flight
+  // The air it is sent to, read by everything on it from the flight; flown
+  // up or down from there, the air at each altitude on the way
   useEffect(() => {
-    flight.set(level === "high" ? HIGH_AIR : AIR);
-  }, [flight, level]);
+    flight.set(jump.level === "high" ? HIGH_AIR : AIR);
+  }, [flight, jump]);
 
   return (
     <Canvas
@@ -642,16 +654,17 @@ const FlightScene: FC<{ sky: Sky; level: Level; flight: Flight } & Pilot> = ({
       <FlightProvider flight={flight}>
         <Weather day={WEATHER_DAY} look={DAY_CLOUDS} couple={false}>
           <CloudLayer genus="cumulus-mediocris" />
-          <Suspense fallback={null}>
-            <Fighter
-              dusk={dusk}
-              keys={keys}
-              levers={levers}
-              flares={flares}
-              chaff={chaff}
-            />
-          </Suspense>
-          <CloudyGrade />
+          <CloudyGrade>
+            <Suspense fallback={null}>
+              <Fighter
+                dusk={dusk}
+                keys={keys}
+                levers={levers}
+                flares={flares}
+                chaff={chaff}
+              />
+            </Suspense>
+          </CloudyGrade>
         </Weather>
       </FlightProvider>
       <OrbitControls
@@ -663,7 +676,7 @@ const FlightScene: FC<{ sky: Sky; level: Level; flight: Flight } & Pilot> = ({
         maxDistance={90}
         makeDefault
       />
-      <Viewpoint level={level} />
+      <Viewpoint jump={jump} />
     </Canvas>
   );
 };

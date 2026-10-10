@@ -8,8 +8,8 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { type FC, type ReactNode, useState } from "react";
 import { app_name, repository, tagline } from "@/lib/shared";
-import { AIR, START_THROTTLE } from "./flight-plan";
-import type { Level, Sky } from "./flight-scene";
+import { AIR, START_THROTTLE, TROPOPAUSE_M } from "./flight-plan";
+import type { Jump, Sky } from "./flight-scene";
 import { Legend, usePilot } from "./pilot";
 
 const FlightScene = dynamic(() => import("./flight-scene"), { ssr: false });
@@ -79,14 +79,39 @@ const Readout: FC = () => {
   const gear = useFlight((f) => f.gear > 0.5);
   const flaps = useFlight((f) => f.flaps);
   const airbrake = useFlight((f) => f.airbrake > 0.5);
+  const altitude = useFlight((f) => Math.round(f.altitudeM / 10) * 10, {
+    hz: 10,
+  });
 
   return (
     <span className="font-mono text-xs text-white/70">
-      Mach {mach} · {load} g · thr {throttle} %{throttle > 100 && " WEP"}
+      {altitude.toLocaleString("en")} m · Mach {mach} · {load} g · thr{" "}
+      {throttle} %{throttle > 100 && " WEP"}
       {gear && " · gear"}
       {flaps > 0 && ` · flaps ${flaps < 1 ? "combat" : "landing"}`}
       {airbrake && " · brake"}
     </span>
+  );
+};
+
+/**
+ * Sends it to the tropopause, or back down to the sea, whichever is further
+ * from where it has been flown.
+ * @param props Where to send it
+ * @returns The button
+ */
+const LevelButton: FC<{ send: (jump: Jump) => void }> = ({ send }) => {
+  const high = useFlight((f) => f.altitudeM > TROPOPAUSE_M / 2);
+
+  return (
+    // Down low the exhaust is too warm for a contrail
+    <Button
+      onClick={() => send({ level: high ? "low" : "high" })}
+      label={high ? "Descend to the sea" : "Climb to the tropopause"}
+    >
+      {high ? <Waves /> : <Mountain />}
+      {high ? "Descend" : "Climb"}
+    </Button>
   );
 };
 
@@ -96,7 +121,7 @@ const Readout: FC = () => {
  */
 const Page: FC = () => {
   const [sky, set_sky] = useState<Sky>("day");
-  const [level, set_level] = useState<Level>("low");
+  const [jump, set_jump] = useState<Jump>({ level: "low" });
   const [flight] = useState(() => new Flight(START));
   const { keys, levers, flares, chaff } = usePilot();
 
@@ -112,7 +137,7 @@ const Page: FC = () => {
         <div className="absolute inset-0">
           <FlightScene
             sky={sky}
-            level={level}
+            jump={jump}
             flight={flight}
             keys={keys}
             levers={levers}
@@ -162,18 +187,7 @@ const Page: FC = () => {
               {sky === "day" ? <Moon /> : <Sun />}
               {sky === "day" ? "Night" : "Day"}
             </Button>
-            {/* Down low the exhaust is too warm for a contrail */}
-            <Button
-              onClick={() => set_level(level === "low" ? "high" : "low")}
-              label={
-                level === "low"
-                  ? "Climb to the tropopause"
-                  : "Descend to the sea"
-              }
-            >
-              {level === "low" ? <Mountain /> : <Waves />}
-              {level === "low" ? "Climb" : "Descend"}
-            </Button>
+            <LevelButton send={set_jump} />
             <span className="ml-auto hidden sm:block">
               <Readout />
             </span>

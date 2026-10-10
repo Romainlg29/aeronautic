@@ -1,4 +1,6 @@
 import type { AfterburnerBatch } from "@aeronautic/afterburner";
+import { volume_pass } from "@aeronautic/core";
+import { VolumePassContext } from "@aeronautic/core/react";
 import type { ContrailLook, Contrails } from "@aeronautic/contrails";
 import type { Lights } from "@aeronautic/lights";
 import type { CloudsNode } from "@aeronautic/weather";
@@ -38,28 +40,43 @@ import { NO_SHADOWS } from "@/lib/no-shadows";
 
 /**
  * Draw the frame through bloom, then AgX.
- * @param props The clouds to draw in front of the scene, if any
- * @returns Nothing; it takes over rendering
+ * @param props The clouds to draw in front of the scene, if any, and what is
+ *   drawn in them
+ * @returns The children; it takes over rendering
  */
-export const Grade: FC<{ clouds?: CloudsNode | null }> = ({
-  clouds = null,
-}) => {
+export const Grade: FC<{
+  clouds?: CloudsNode | null;
+  children?: ReactNode;
+}> = ({ clouds = null, children }) => {
   const { gl, scene, camera } = useThree();
   const renderer = gl as unknown as WebGPURenderer;
 
+  // With clouds, the opaque scene first and the clouds over it, then the
+  // plumes, the vapour and the lights over both. They write no depth, so
+  // clouds composited after them would be drawn over them; drawn over the
+  // clouds instead, they read the opaque depth and fade into the cloud
+  // round the camera themselves
+  const split = useMemo(
+    () =>
+      clouds
+        ? volume_pass(scene, camera, {
+            backdropNode: ({ color, depth }) => clouds.over(color, depth),
+          })
+        : null,
+    [scene, camera, clouds],
+  );
+
   const pipeline = useMemo(() => {
-    const scene_pass = pass(scene, camera);
-    const drawn = scene_pass.getTextureNode("output");
-    const color = clouds
-      ? clouds.over(drawn, scene_pass.getTextureNode("depth"))
-      : drawn;
+    const color = split
+      ? split.output
+      : pass(scene, camera).getTextureNode("output");
     const glow = bloom(color, 0.3, 0.2, 1);
     const render_pipeline = new RenderPipeline(renderer);
 
     render_pipeline.outputNode = color.add(glow);
 
     return render_pipeline;
-  }, [renderer, scene, camera, clouds]);
+  }, [renderer, scene, camera, split]);
 
   useEffect(() => {
     renderer.toneMapping = AgXToneMapping;
@@ -68,7 +85,7 @@ export const Grade: FC<{ clouds?: CloudsNode | null }> = ({
 
   useFrame(() => pipeline.render(), 1);
 
-  return null;
+  return <VolumePassContext value={split}>{children}</VolumePassContext>;
 };
 
 /**
