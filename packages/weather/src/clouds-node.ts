@@ -89,6 +89,7 @@ import {
 } from "./tsl/field";
 import {
   resolve_weather_quality,
+  STEPS_FROM_M,
   type WeatherQuality,
   type WeatherQualityName,
 } from "./types";
@@ -139,10 +140,6 @@ const FINE_STEPS = 8;
 
 // Fine steps against coarse: a coarse step strides this many fine ones
 const COARSE_STRIDE = 4;
-
-// Where the steps a ray is short of start to grow: they grow as the distance
-// past this, so the first is a few metres and not nothing
-const GEOMETRIC_FROM_M = 100;
 
 // The golden ratio, whose fractions of a frame count fill a step evenly
 const GOLDEN_RATIO = (1 + Math.sqrt(5)) / 2;
@@ -767,9 +764,9 @@ export class CloudsNode extends TempNode {
         // does. And no further than the scene, or the shell's edge: past
         // either is cloud the ray never reaches
         const left = float(this.#steps).sub(taken).max(1);
-        const near = t.add(GEOMETRIC_FROM_M);
+        const near = t.add(STEPS_FROM_M);
         const enough = near.mul(
-          pow(end.add(GEOMETRIC_FROM_M).div(near), left.reciprocal()).sub(1),
+          pow(end.add(STEPS_FROM_M).div(near), left.reciprocal()).sub(1),
         );
         const step = max(
           select(fine.equal(0), coarse_step(t), fine_step(t)),

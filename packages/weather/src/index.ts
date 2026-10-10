@@ -9,6 +9,7 @@ export {
   default_weather_day,
   default_weather_look,
   resolve_weather_quality,
+  steps_to,
   WEATHER_QUALITY,
   type CloudAnvil,
   type CloudCell,

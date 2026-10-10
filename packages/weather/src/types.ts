@@ -220,10 +220,32 @@ export type WeatherQuality = {
 /** Qualities, by name */
 export type WeatherQualityName = "low" | "medium" | "high";
 
+/**
+ * Where the steps of a ray grow from: they grow with the distance past this,
+ * so the first is a few metres and not nothing.
+ */
+export const STEPS_FROM_M = 100;
+
+/**
+ * How many steps a ray takes to its range, each no longer than a share of its
+ * distance past `STEPS_FROM_M`: the steps grow by that share, so it takes
+ * ln((range + from) / from) / ln(1 + share). Any fewer, and the far steps are
+ * longer than the small clouds there, a cloud caught by one frame's ray and
+ * missed by the next's, flickering as they go by.
+ * @param range_m How far the ray goes, metres
+ * @param share The longest step, as a share of its distance
+ * @returns The steps
+ */
+export const steps_to = (range_m: number, share: number): number =>
+  Math.ceil(
+    Math.log((range_m + STEPS_FROM_M) / STEPS_FROM_M) / Math.log(1 + share),
+  );
+
 export const WEATHER_QUALITY: Record<WeatherQualityName, WeatherQuality> = {
   low: {
     resolutionScale: 0.35,
-    steps: 64,
+    // A step at most 5 % of its distance: 150 m at 3 km
+    steps: steps_to(60_000, 0.05),
     minStepM: 8,
     maxStepM: 600,
     rangeM: 60_000,
@@ -233,7 +255,7 @@ export const WEATHER_QUALITY: Record<WeatherQualityName, WeatherQuality> = {
   },
   medium: {
     resolutionScale: 0.5,
-    steps: 96,
+    steps: steps_to(80_000, 0.04),
     minStepM: 5,
     maxStepM: 400,
     rangeM: 80_000,
@@ -243,7 +265,7 @@ export const WEATHER_QUALITY: Record<WeatherQualityName, WeatherQuality> = {
   },
   high: {
     resolutionScale: 0.6,
-    steps: 160,
+    steps: steps_to(120_000, 0.03),
     minStepM: 3,
     maxStepM: 250,
     rangeM: 120_000,
