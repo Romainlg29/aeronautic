@@ -140,6 +140,10 @@ const FINE_STEPS = 8;
 // Fine steps against coarse: a coarse step strides this many fine ones
 const COARSE_STRIDE = 4;
 
+// Where the steps a ray is short of start to grow: they grow as the distance
+// past this, so the first is a few metres and not nothing
+const GEOMETRIC_FROM_M = 100;
+
 // The golden ratio, whose fractions of a frame count fill a step evenly
 const GOLDEN_RATIO = (1 + Math.sqrt(5)) / 2;
 
@@ -756,10 +760,17 @@ export class CloudsNode extends TempNode {
 
         // The shortest step that still reaches the end in the steps left: a
         // ray cut short is a cloud seen through, a long step only a coarser
-        // one, its light integrated over the step all the same. And no
-        // further than the scene, or the shell's edge: past either is cloud
-        // the ray never reaches
-        const enough = end.sub(t).div(float(this.#steps).sub(taken).max(1));
+        // one, its light integrated over the step all the same. The steps
+        // left grow by a constant ratio, so they are short near the eye and
+        // long far off, as a pixel's footprint is, and a ray far longer than
+        // its neighbour, over the horizon, steps near the eye almost as it
+        // does. And no further than the scene, or the shell's edge: past
+        // either is cloud the ray never reaches
+        const left = float(this.#steps).sub(taken).max(1);
+        const near = t.add(GEOMETRIC_FROM_M);
+        const enough = near.mul(
+          pow(end.add(GEOMETRIC_FROM_M).div(near), left.reciprocal()).sub(1),
+        );
         const step = max(
           select(fine.equal(0), coarse_step(t), fine_step(t)),
           enough,
