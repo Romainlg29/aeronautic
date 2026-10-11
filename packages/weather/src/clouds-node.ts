@@ -874,8 +874,21 @@ export class CloudsNode extends TempNode {
       const alpha = through.oneMinus();
 
       // The air between the eye and the cloud: Koschmieder's, faded towards
-      // the horizon's light
-      const air = exp(this.#haze_extinction.mul(distance.min(1e7)).negate());
+      // the horizon's light. A sunlit cloud is brighter than the horizon,
+      // so it is still seen past the visibility, where a black one is not,
+      // and the march's range would cut it off there, a line along the far
+      // cloud. So the air lets nothing through by the range: less what it
+      // lets through there, made up to one again. Near the eye it is
+      // Koschmieder's; on the default look, whose visibility is the low
+      // range, it is nowhere off by more than 2 %, his threshold of seeing
+      const at_range = exp(this.#haze_extinction.mul(this.#range).negate());
+      const air = select(
+        this.#haze_extinction.greaterThan(0),
+        exp(this.#haze_extinction.mul(distance.min(this.#range)).negate())
+          .sub(at_range)
+          .div(at_range.oneMinus().max(1e-6)),
+        float(1),
+      );
       const color = light
         .mul(air)
         .add(this.#haze.mul(air.oneMinus()).mul(alpha))

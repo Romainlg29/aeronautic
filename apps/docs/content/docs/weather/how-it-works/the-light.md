@@ -56,3 +56,13 @@ so far, so a long step loses no energy and a fine one gains none.
 Between the eye and the cloud, the air keeps e<sup>−3.912 d / V</sup> of
 the cloud's light, Koschmieder's range V, and adds the haze in its place,
 over the ray's mean distance to what it saw.
+
+Koschmieder's range is where a black object fades into the horizon, at 2 %
+contrast. A sunlit cloud is several times brighter than the horizon, so it
+stays visible further off: about 1.6 V for one nine times as bright. The
+march stops at the quality's range, and a cloud cut off there would end in a
+line. So the air's transmittance is made to reach zero at the range:
+(e<sup>−3.912 d / V</sup> − e<sup>−3.912 R / V</sup>) / (1 −
+e<sup>−3.912 R / V</sup>). Near the eye this is Koschmieder's. On the
+default look, whose V is the low quality's range, it is never off by more
+than his 2 %.
