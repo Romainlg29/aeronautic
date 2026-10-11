@@ -750,10 +750,37 @@ export class CloudsNode extends TempNode {
       const fine = int(0).toVar();
       const taken = float(0).toVar();
 
+      // Where the last step began, and what the ray held there: a stride's
+      // sample can fall short of a cloud that begins further in, and the
+      // next finds it, so the walk goes back one step to find its edge.
+      // Otherwise, as much of every cloud's near edge is skipped as falls
+      // in the stride, by where the stride falls on it, row on row of
+      // bands where the history smooths the jitter's noise away
+      const back = {
+        t: start.toVar(),
+        through: float(1).toVar(),
+        front: float(0).toVar(),
+        seen: float(0).toVar(),
+        light: vec3(0).toVar(),
+      };
+      const here = {
+        t: start.toVar(),
+        through: float(1).toVar(),
+        front: float(0).toVar(),
+        seen: float(0).toVar(),
+        light: vec3(0).toVar(),
+      };
+
       Loop(this.#steps, () => {
         If(t.greaterThanEqual(end).or(through.lessThan(OPAQUE)), () => {
           Break();
         });
+
+        here.t.assign(t);
+        here.through.assign(through);
+        here.front.assign(front);
+        here.seen.assign(seen);
+        here.light.assign(light);
 
         // The shortest step that still reaches the end in the steps left: a
         // ray cut short is a cloud seen through, a long step only a coarser
@@ -791,11 +818,22 @@ export class CloudsNode extends TempNode {
         If(fine.equal(0), () => {
           field(p, false, sigma, dense, { phased, up, down });
 
-          // Cloud in the stride: walk it again, finely
+          // Cloud in the stride: walk it again finely, from where the last
+          // step began, as if it had not been taken
           If(dense.greaterThan(0), () => {
             fine.assign(FINE_STEPS);
             sigma.assign(0);
             step.assign(0);
+            t.assign(back.t);
+            through.assign(back.through);
+            front.assign(back.front);
+            seen.assign(back.seen);
+            light.assign(back.light);
+            here.t.assign(back.t);
+            here.through.assign(back.through);
+            here.front.assign(back.front);
+            here.seen.assign(back.seen);
+            here.light.assign(back.light);
           });
         }).Else(() => {
           field(p, true, sigma, dense, { phased, up, down });
@@ -864,6 +902,11 @@ export class CloudsNode extends TempNode {
         });
 
         t.addAssign(step);
+        back.t.assign(here.t);
+        back.through.assign(here.through);
+        back.front.assign(here.front);
+        back.seen.assign(here.seen);
+        back.light.assign(here.light);
       });
 
       const distance = select(
