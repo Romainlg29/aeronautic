@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import { angle_of_attack_for_load } from "./aerodynamics";
 import { moist_air } from "@aeronautic/core";
 import { shape_station, trapezoid_shape, type WingShape } from "./wing-shape";
+import { cloud_extinction, condensate, moistest } from "./condensation";
 import {
+  cone_deficit,
   cone_pocket,
+  VISIBLE_DEPTH,
   vapor_deficit,
   vapor_state,
   wing_deficit,
@@ -119,6 +122,37 @@ describe("vapor_state", () => {
     // And a few hundredths on it's gone
     expect(at(1.15).coneBoundM).toBe(0);
     expect(at(1.8).coneBoundM).toBe(0);
+  });
+
+  it("bounds the cone where what is left past it is too thin to see", () => {
+    // In a cloud every expansion condenses, however slight: the cone fades
+    // out rather than ending, and must not be cut off where it still shows
+    const saturated: VaporAir = { ...humid, relativeHumidity: 1 };
+    const air = moist_air(0, 1, 10);
+    const state = vapor_state(
+      airframe,
+      pulling(0.99 * air.soundMPerS, 1),
+      saturated,
+      look,
+    );
+    const { field } = state;
+    const x = (field.coneShock - 0.02) * field.bodyLengthM - field.noseM;
+    const scale = moistest(air, look.humiditySpread);
+
+    let depth = 0;
+
+    for (let r = field.coneBoundM; r < 2000; r += 0.5) {
+      const deficit = cone_deficit(state, x, field.bodyHeightM + r, 0);
+
+      depth +=
+        cloud_extinction(
+          condensate(1 - deficit, air, scale).waterKgPerM3,
+          1e-6,
+        ) * 0.5;
+    }
+
+    expect(field.coneBoundM).toBeGreaterThan(0);
+    expect(depth).toBeLessThan(VISIBLE_DEPTH);
   });
 
   it("swells the cone smoothly through the critical Mach number", () => {
