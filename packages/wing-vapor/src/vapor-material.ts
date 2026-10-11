@@ -35,6 +35,7 @@ import {
   If,
   Loop,
   cameraProjectionMatrix,
+  abs,
   clamp,
   dot,
   exp,
@@ -613,10 +614,33 @@ export const create_vapor_material = (
 
     const t = enter.toVar();
 
-    // Whether the march is inside something that can fog. Every time it comes
-    // in from clear air it is offset by a share of the step it will take,
-    // which turns the bands a sharp edge would leave into fine noise
+    // Whether the march is inside something that can fog. Coming in from
+    // clear air, it samples where it came in, then a share of a step on, the
+    // share different every pixel, which turns the bands a sharp edge would
+    // leave into fine noise, and then a step at a time to the surface the
+    // ray ends on, which it samples last
     const inside = float(0).toVar();
+
+    // The last sample inside: where it was, how far its air had cooled past
+    // its dew point's need, how much it stopped and the light it scattered.
+    // None before the first
+    const last_t = float(-1).toVar();
+    const last_deficit = float(0).toVar();
+    const last_extinction = float(0).toVar();
+    const last_source = vec3(0).toVar();
+
+    // A stretch of the ray: what it stops, the light it scatters and how
+    // far off its middle is. Every droplet scatters what it stops: an albedo
+    // of one. Fog between it and the camera takes its share of that, and puts
+    // its own colour in for the share of the backdrop it hides
+    const stretch = (depth: F, scattered: V3, middle: F) => {
+      const stopped = transmittance.mul(exp(depth.negate()).oneMinus()).toVar();
+      const fog = scene_fog_factor(u.fog, middle.mul(depth_per_metre)).toVar();
+
+      light.addAssign(scattered.mul(stopped).mul(fog.oneMinus()));
+      fogged.addAssign(stopped.mul(fog));
+      transmittance.mulAssign(exp(depth.negate()));
+    };
 
     Loop(
       { start: int(0), end: u.maxSteps, type: "int", condition: "<" },
@@ -640,26 +664,33 @@ export const create_vapor_material = (
         const footprint = t.mul(PIXEL_STEP).toVar();
 
         // Clear air: skip to the nearest part that could fog
+        // From the last sample, nothing condenses by here: the vapour taken
+        // as thinning out evenly to it
         If(outside.greaterThan(0), () => {
+          If(last_t.greaterThanEqual(0), () => {
+            stretch(
+              last_extinction.mul(0.5).mul(t.sub(last_t)),
+              last_source,
+              t.add(last_t).mul(0.5),
+            );
+          });
+
           t.addAssign(max(outside, max(footprint, 0.05)));
           inside.assign(0);
+          last_t.assign(-1);
           Continue();
         });
 
         // The part's own step, coarsened by what the view can spare, and never
         // finer than a pixel
-        const here = min(
-          max(sample.step.mul(u.stepScale as unknown as F), footprint),
-          leave.sub(t).add(1e-3),
+        const here = max(
+          sample.step.mul(u.stepScale as unknown as F),
+          footprint,
         ).toVar();
 
-        If(inside.lessThan(0.5), () => {
-          inside.assign(1);
-          t.addAssign(jitter.mul(here));
-          Continue();
-        });
-
         const deficit = sample.deficit.toVar();
+        const extinction = float(0).toVar();
+        const source = vec3(0).toVar();
 
         // Only below the dew point's deficit is there anything to look up
         If(deficit.greaterThan(f.saturationDeficit), () => {
@@ -694,8 +725,7 @@ export const create_vapor_material = (
             mix(water.y, water.z, patch),
           );
 
-          const extinction = max(grams, 0).mul(u.extinction as unknown as F);
-          const through = exp(extinction.mul(here).negate());
+          extinction.assign(max(grams, 0).mul(u.extinction as unknown as F));
 
           // How much cloud the sunlight crossed to get here
           const shade = float(0).toVar();
@@ -730,27 +760,66 @@ export const create_vapor_material = (
             });
           }
 
-          const source = sun_single
-            .mul(exp(shade.negate()))
-            .add(sun_multiple.mul(exp(shade.mul(-MULTIPLE_SHADE))))
-            .add(sky);
-
-          // Every droplet scatters what it stops: an albedo of one. Fog
-          // between it and the camera takes its share of that, and puts its
-          // own colour in for the share of the backdrop it hides
-          const stopped = transmittance.mul(through.oneMinus()).toVar();
-          const fog = scene_fog_factor(u.fog, t.mul(depth_per_metre)).toVar();
-
-          light.addAssign(source.mul(stopped).mul(fog.oneMinus()));
-          fogged.addAssign(stopped.mul(fog));
-          transmittance.mulAssign(through);
+          source.assign(
+            sun_single
+              .mul(exp(shade.negate()))
+              .add(sun_multiple.mul(exp(shade.mul(-MULTIPLE_SHADE))))
+              .add(sky),
+          );
         });
 
-        If(transmittance.lessThan(OPAQUE_TRANSMITTANCE), () => {
-          Break();
+        // The stretch back to the last sample, the cooling taken as even
+        // along it: only the share past the dew point fogs, from nothing
+        // where the air reaches it. A cone's sharp edge, or the sheet on a
+        // wing thinner than a step, is drawn where it is, and not all or
+        // nothing by where a pixel's samples happen to fall
+        If(last_t.greaterThanEqual(0), () => {
+          const need = f.saturationDeficit;
+          const wet_now = deficit.greaterThan(need);
+          const wet_then = last_deficit.greaterThan(need);
+          const share = select(
+            wet_now.and(wet_then),
+            float(1),
+            max(deficit, last_deficit)
+              .sub(need)
+              .div(abs(deficit.sub(last_deficit)).max(1e-6))
+              .clamp(0, 1),
+          );
+          const both = extinction.add(last_extinction).toVar();
+
+          stretch(
+            both.mul(0.5).mul(share).mul(t.sub(last_t)),
+            source
+              .mul(extinction)
+              .add(last_source.mul(last_extinction))
+              .div(both.max(1e-9)) as V3,
+            t.add(last_t).mul(0.5),
+          );
         });
 
-        t.addAssign(here);
+        last_t.assign(t);
+        last_deficit.assign(deficit);
+        last_extinction.assign(extinction);
+        last_source.assign(source);
+
+        If(
+          transmittance
+            .lessThan(OPAQUE_TRANSMITTANCE)
+            .or(t.greaterThanEqual(leave)),
+          () => {
+            Break();
+          },
+        );
+
+        // The next sample: a share of a step on from where it came in, a
+        // step on after, and never past the surface
+        t.assign(
+          min(
+            t.add(select(inside.lessThan(0.5), jitter, float(1)).mul(here)),
+            leave,
+          ),
+        );
+        inside.assign(1);
       },
     );
 
