@@ -1,5 +1,5 @@
 {
   "title": "Reference",
   "icon": "Braces",
-  "pages": ["components", "layer", "weather", "genera"]
+  "pages": ["components", "weather", "climates"]
 }

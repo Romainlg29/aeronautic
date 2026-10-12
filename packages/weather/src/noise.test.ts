@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   detail_channels,
+  detail_noise,
+  DETAIL_REACH,
+  field_noise,
   pcg3d,
   perlin,
   perlin_worley,
   seed_salt,
   shape_channels,
   shape_noise,
+  SHAPE_PEAK,
   unit,
   worley,
   worley_fbm,
@@ -67,11 +71,18 @@ describe("noise", () => {
       for (const value of [
         ...shape_channels(u, v, w, salt),
         ...detail_channels(u, v, w, salt),
-        shape_noise(shape_channels(u, v, w, salt)),
       ]) {
         expect(value).toBeGreaterThanOrEqual(0);
         expect(value).toBeLessThanOrEqual(1);
       }
+
+      // The shape noise is stretched, not clamped: never past its peak
+      const shape = shape_noise(shape_channels(u, v, w, salt));
+
+      expect(shape).toBeLessThanOrEqual(SHAPE_PEAK - DETAIL_REACH + 1e-3);
+      expect(
+        Math.abs(detail_noise(detail_channels(u, v, w, salt))),
+      ).toBeLessThan(0.4);
     }
   });
 
@@ -88,5 +99,24 @@ describe("noise", () => {
     expect(perlin_worley(1.2, 0.4, 2.9, 4, salt)).toBeGreaterThanOrEqual(
       worley_fbm(1.2, 0.4, 2.9, 4, salt),
     );
+  });
+});
+
+describe("the air's field noise", () => {
+  it("spans −1 to 1 at two standard deviations", () => {
+    let squares = 0;
+    let count = 0;
+
+    for (let i = 0; i < 150; i++) {
+      for (let j = 0; j < 150; j++) {
+        const v = field_noise(i * 0.137 + 3.1, j * 0.113 - 8.4, 0.7, 4242);
+
+        squares += v * v;
+        count++;
+      }
+    }
+
+    expect(Math.sqrt(squares / count)).toBeGreaterThan(0.4);
+    expect(Math.sqrt(squares / count)).toBeLessThan(0.6);
   });
 });

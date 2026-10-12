@@ -3,13 +3,14 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { volume_pass } from "@aeronautic/core";
 import { useFlightStore, VolumePassContext } from "@aeronautic/core/react";
 import type { Weather } from "@aeronautic/weather";
-import { useClouds } from "@aeronautic/weather/react";
+import { type UseCloudsOptions, useClouds } from "@aeronautic/weather/react";
 import {
   aerialPerspective,
   AtmosphereContext,
   AtmosphereLight,
   AtmosphereLightNode,
   AtmosphereParameters,
+  getIndirectLuminance,
   getIndirectLuminanceToPoint,
   getSplitIlluminance,
   getSplitScalarIlluminance,
@@ -37,10 +38,12 @@ import {
   cameraWorldMatrix,
   context,
   Fn,
+  If,
   instancedArray,
   mix,
   perspectiveDepthToViewZ,
   positionGeometry,
+  screenUV,
   select,
   smoothstep,
   uniform,
@@ -79,10 +82,15 @@ export const LUMINANCE_SCALE = PARAMETERS.luminanceScale;
 // a metered exposure the brightest unclipped luminance sits (Lagarde and de
 // Rousiers, "Moving Frostbite to PBR", 2014)
 const INCIDENT_METER_C = 330;
+
+// A reflected light meter's, in cd/m² at ISO 100 (ISO 2720; 12.5 for most
+// makers): what the camera reads off what else is in the frame
+const REFLECTED_METER_K = 12.5;
 const ISO = 100;
 const SATURATION = 1.2;
 
-// The ground's albedo as takram's model has it, lighting the vapour from below
+// The ground's albedo as takram's model has it by default, lighting the
+// vapour from below
 const GROUND_ALBEDO = PARAMETERS.groundAlbedo.x;
 
 // How far the air at sea level takes one display step, 1/256, off what is
@@ -103,8 +111,7 @@ const AIR_VISIBLE_M =
 // The air's meteorological range at sea level, as takram's air has it:
 // Koschmieder's 3.912 over its extinction at 550 nm, the green channel
 const AIR_VISIBILITY_M =
-  (3.912 /
-    (PARAMETERS.rayleighScattering.y + PARAMETERS.mieExtinction.y)) *
+  (3.912 / (PARAMETERS.rayleighScattering.y + PARAMETERS.mieExtinction.y)) *
   1000;
 
 // The camera's exposure, in EV at ISO 100, before the meter has read the sky:
@@ -170,11 +177,15 @@ export const useAtmosphereLighting = (): AtmosphereLighting | null =>
  * @param renderer The renderer, its context holding the atmosphere
  * @returns Where to ask, and how
  */
+// How many bearings the horizon's radiance is averaged over: the sky round
+// it changes over tens of degrees, towards the sun and away
+const HORIZON_SAMPLES = 8;
+
 const make_light_probe = (renderer: WebGPURenderer) => {
   // In the atmosphere's internal units: kilometres from the earth's centre
   const point = uniform(new Vector3());
   const toward_sun = uniform(new Vector3());
-  const result = instancedArray(2, "vec4");
+  const result = instancedArray(3, "vec4");
 
   const kernel = Fn(() => {
     const split = getSplitScalarIlluminance(point, toward_sun).toConst() as {
@@ -183,6 +194,25 @@ const make_light_probe = (renderer: WebGPURenderer) => {
 
     result.element(0).assign(vec4(split.get("direct"), 0));
     result.element(1).assign(vec4(split.get("indirect"), 0));
+
+    // The sky along the horizon, all the way round: what the air in front
+    // of anything far off turns to
+    const up = point.normalize().toConst();
+    const east = vec3(0, 0, 1).cross(up).normalize().toConst();
+    const north = up.cross(east).toConst();
+    let horizon: Node<"vec3"> = vec3(0);
+
+    for (let i = 0; i < HORIZON_SAMPLES; i++) {
+      const azimuth = (2 * Math.PI * i) / HORIZON_SAMPLES;
+      const ray = north.mul(Math.cos(azimuth)).add(east.mul(Math.sin(azimuth)));
+      const seen = getIndirectLuminance(point, ray, vec2(0), toward_sun) as {
+        get: (name: string) => Node<"vec3">;
+      };
+
+      horizon = horizon.add(seen.get("luminance"));
+    }
+
+    result.element(2).assign(vec4(horizon.div(HORIZON_SAMPLES), 0));
   })().compute(1);
 
   return {
@@ -191,8 +221,9 @@ const make_light_probe = (renderer: WebGPURenderer) => {
 
     /**
      * Run it.
-     * @returns The direct illuminance, and the indirect as takram's
-     *   split illuminance gives it: the horizontal irradiance times 2π
+     * @returns The direct illuminance, the indirect as takram's split
+     *   illuminance gives it, the horizontal irradiance times 2π, and the
+     *   horizon's mean radiance
      */
     read: async () => {
       renderer.compute(kernel);
@@ -204,6 +235,7 @@ const make_light_probe = (renderer: WebGPURenderer) => {
       return {
         direct: [data[0], data[1], data[2]] as Vector3Tuple,
         indirect: [data[4], data[5], data[6]] as Vector3Tuple,
+        horizon: [data[8], data[9], data[10]] as Vector3Tuple,
       };
     },
     dispose: () => {
@@ -247,6 +279,55 @@ const origin_in_atmosphere = (
   return result.copy(ecef).multiplyScalar(PARAMETERS.worldToUnit);
 };
 
+/**
+ * The ground a ray from the camera meets, lit as the aerial perspective
+ * lights a surface: its albedo under the sun and the sky there, over π,
+ * through the air between. Takram's sky stops at the air in front of it.
+ * @param atmosphere The atmosphere
+ * @param ray The ray, in ECEF, normalized
+ * @returns Its radiance, in the atmosphere's units; black off the ground
+ */
+const lit_ground = (atmosphere: AtmosphereContext, ray: Node<"vec3">) => {
+  const { parametersNode: parameters } = atmosphere;
+  const direction = ray.toConst();
+
+  // Where it meets the ground's sphere, in the atmosphere's units
+  const eye = atmosphere.cameraPositionUnit
+    .add(atmosphere.altitudeCorrectionUnit)
+    .toConst();
+  const bottom = parameters.bottomRadius as Node<"float">;
+  const along = eye.dot(direction).toConst();
+  const discriminant = along
+    .mul(along)
+    .sub(eye.dot(eye))
+    .add(bottom.mul(bottom))
+    .toConst();
+  const distance = along.negate().sub(discriminant.max(0).sqrt());
+  const point = eye.add(direction.mul(distance)).toConst();
+
+  const light = getSplitIlluminance(
+    point,
+    point.normalize(),
+    atmosphere.sunDirectionECEF,
+  ).toConst();
+  const through = getIndirectLuminanceToPoint(
+    eye,
+    point,
+    vec2(0),
+    atmosphere.sunDirectionECEF,
+  ).get("transmittance");
+  const lit = (parameters.groundAlbedo as Node<"vec3">)
+    .mul(light.get("direct").add(light.get("indirect")))
+    .div(Math.PI)
+    .mul(through);
+
+  return select(
+    discriminant.greaterThanEqual(0).and(distance.greaterThan(0)),
+    lit,
+    vec3(0),
+  );
+};
+
 type AtmosphereProps = {
   /** The sun's height above the horizon, in degrees */
   sunElevationDeg: number;
@@ -266,10 +347,26 @@ type AtmosphereProps = {
   altitudeM?: number;
 
   /**
+   * The ground's albedo, for the sky's light off it and the ground drawn:
+   * by default takram's, 0.3, a land's
+   */
+  groundAlbedo?: number;
+
+  /**
+   * What else the camera's meter sees, averaged over the frame, in cd/m²: a
+   * flame filling some of it. By default nothing, the camera set by the
+   * light alone
+   */
+  meteredCdM2?: number;
+
+  /**
    * The weather whose clouds are drawn in the sky, lit by the atmosphere's
    * sun and sky, under the plumes and the vapour
    */
   weather?: Weather;
+
+  /** How finely its clouds are drawn: by default `"medium"` */
+  cloudQuality?: UseCloudsOptions["quality"];
 
   children?: ReactNode;
 };
@@ -290,7 +387,10 @@ export const Atmosphere: FC<AtmosphereProps> = ({
   latitudeDeg: latitude_deg = 35,
   longitudeDeg: longitude_deg = 139,
   altitudeM: altitude_prop = 0,
+  groundAlbedo: ground_albedo = GROUND_ALBEDO,
+  meteredCdM2: metered_cd_m2 = 0,
   weather,
+  cloudQuality: cloud_quality,
   children,
 }) => {
   const { gl, scene, camera } = useThree();
@@ -298,14 +398,18 @@ export const Atmosphere: FC<AtmosphereProps> = ({
   const flight = useFlightStore();
 
   const atmosphere = useMemo(() => {
-    const made = new AtmosphereContext();
+    const parameters = PARAMETERS.clone();
+
+    parameters.groundAlbedo.setScalar(ground_albedo);
+
+    const made = new AtmosphereContext(parameters);
 
     // It raymarches the air in front of the scene with a noise that wants
     // temporal antialiasing to smooth it; without, the tables are steadier
     made.raymarchScattering = false;
 
     return made;
-  }, []);
+  }, [ground_albedo]);
 
   atmosphere.camera = camera;
 
@@ -350,7 +454,6 @@ export const Atmosphere: FC<AtmosphereProps> = ({
   useLayoutEffect(() => {
     const environment = skyEnvironment();
     const sky = environment.skyNode;
-    const { parametersNode: parameters } = atmosphere;
 
     const ground = Fn(() => {
       // The ray of the cube's face, from its clip space
@@ -364,44 +467,9 @@ export const Atmosphere: FC<AtmosphereProps> = ({
       const ray = atmosphere.matrixWorldToECEF
         .mul(vec4(direction, 0))
         .xyz.toVertexStage()
-        .normalize()
-        .toConst();
+        .normalize();
 
-      // Where it meets the ground's sphere, in the atmosphere's units
-      const eye = atmosphere.cameraPositionUnit
-        .add(atmosphere.altitudeCorrectionUnit)
-        .toConst();
-      const bottom = parameters.bottomRadius as Node<"float">;
-      const along = eye.dot(ray).toConst();
-      const discriminant = along
-        .mul(along)
-        .sub(eye.dot(eye))
-        .add(bottom.mul(bottom))
-        .toConst();
-      const distance = along.negate().sub(discriminant.max(0).sqrt());
-      const point = eye.add(ray.mul(distance)).toConst();
-
-      const light = getSplitIlluminance(
-        point,
-        point.normalize(),
-        atmosphere.sunDirectionECEF,
-      ).toConst();
-      const through = getIndirectLuminanceToPoint(
-        eye,
-        point,
-        vec2(0),
-        atmosphere.sunDirectionECEF,
-      ).get("transmittance");
-      const lit = (parameters.groundAlbedo as Node<"vec3">)
-        .mul(light.get("direct").add(light.get("indirect")))
-        .div(Math.PI)
-        .mul(through);
-
-      return select(
-        discriminant.greaterThanEqual(0).and(distance.greaterThan(0)),
-        lit,
-        vec3(0),
-      );
+      return lit_ground(atmosphere, ray);
     })();
 
     environment.skyNode = (sky as unknown as Node<"vec3">).add(
@@ -420,7 +488,10 @@ export const Atmosphere: FC<AtmosphereProps> = ({
   // vapour over it: the sky is drawn where nothing was, so it goes behind
   // them, and they see through the air as it is in front of what is behind.
   // Taken in from where the air first shows, over as far again
-  const clouds = useClouds({ weather: weather ?? null });
+  const clouds = useClouds({
+    weather: weather ?? null,
+    quality: cloud_quality,
+  });
 
   const split = useMemo(
     () =>
@@ -436,22 +507,44 @@ export const Atmosphere: FC<AtmosphereProps> = ({
             depth,
           ) as unknown as Node<"vec4">;
 
-          // The far plane's depth gives no distance in a float: it is sky
-          const aired = mix(
-            color,
-            graded,
-            select(
-              depth.r.greaterThanEqual(1),
-              1,
-              smoothstep(AIR_VISIBLE_M, 2 * AIR_VISIBLE_M, distance),
-            ),
-          );
+          // The far plane's depth gives no distance in a float: it is sky,
+          // and the ground under the horizon, lit, behind its air
+          const sky = depth.r.greaterThanEqual(1);
+          const aired = Fn(() => {
+            const result = mix(
+              color,
+              graded,
+              select(
+                sky,
+                1,
+                smoothstep(AIR_VISIBLE_M, 2 * AIR_VISIBLE_M, distance),
+              ),
+            ).toVar();
+
+            If(sky, () => {
+              // The pixel's ray through the scene's camera, not the pass's,
+              // unprojected at the near plane: at the far one its w is a
+              // difference of near-equal numbers
+              const view = uniform(camera.projectionMatrixInverse).mul(
+                vec4(screenUV.x.mul(2).sub(1), screenUV.y.mul(-2).add(1), 0, 1),
+              ).xyz;
+              const ray = atmosphere.matrixWorldToECEF
+                .mul(
+                  vec4(uniform(camera.matrixWorld).mul(vec4(view, 0)).xyz, 0),
+                )
+                .xyz.normalize();
+
+              result.addAssign(vec4(lit_ground(atmosphere, ray), 0));
+            });
+
+            return result;
+          })();
 
           // The clouds in front of it, the plumes and the vapour over both
           return clouds ? clouds.over(aired, depth) : aired;
         },
       }),
-    [scene, camera, clouds],
+    [scene, camera, clouds, atmosphere],
   );
 
   const pipeline = useMemo(() => {
@@ -514,7 +607,7 @@ export const Atmosphere: FC<AtmosphereProps> = ({
       .transformDirection(atmosphere.matrixWorldToECEF.value);
 
     // Measured again only when the light at the aircraft can have changed
-    const key = `${sun_elevation_deg},${sun_azimuth_deg},${Math.round(altitude_m)},${weather ? weather.seed : ""}`;
+    const key = `${metered_cd_m2},${sun_elevation_deg},${sun_azimuth_deg},${Math.round(altitude_m)},${weather ? weather.seed : ""}`;
     const state = measured.current;
 
     if (state.busy || state.key === key) return;
@@ -525,7 +618,7 @@ export const Atmosphere: FC<AtmosphereProps> = ({
 
     void probe
       .read()
-      .then(({ direct, indirect }) => {
+      .then(({ direct, indirect, horizon }) => {
         // Before the tables are built it reads nothing: try again
         if (!(indirect[1] > 0)) return;
 
@@ -536,7 +629,7 @@ export const Atmosphere: FC<AtmosphereProps> = ({
         const sky = direct.map((sun_lux, i) => {
           // The dome's horizontal irradiance, and the sunlit ground's
           const dome = indirect[i] / (2 * Math.PI);
-          const ground = GROUND_ALBEDO * (sun_lux * sin_elevation + dome);
+          const ground = ground_albedo * (sun_lux * sin_elevation + dome);
 
           // Each a Lambertian radiance, E / π, over half the sphere
           return (dome / Math.PI + ground / Math.PI) / 2;
@@ -550,7 +643,7 @@ export const Atmosphere: FC<AtmosphereProps> = ({
         const dome_response = (1 + Math.sin(elevation)) / 2;
         const metered = direct.map((sun_lux, i) => {
           const dome = indirect[i] / (2 * Math.PI);
-          const ground = GROUND_ALBEDO * (sun_lux * sin_elevation + dome);
+          const ground = ground_albedo * (sun_lux * sin_elevation + dome);
 
           return sun_lux * dome_response + 1.5 * dome + 0.5 * ground;
         });
@@ -558,8 +651,13 @@ export const Atmosphere: FC<AtmosphereProps> = ({
           (0.2126 * metered[0] + 0.7152 * metered[1] + 0.0722 * metered[2]) /
           PARAMETERS.luminanceScale;
 
-        // EV = log2(E S / C), at ISO 100
-        const ev100 = Math.log2((lux * ISO) / INCIDENT_METER_C);
+        // EV = log2(E S / C), at ISO 100: as the luminance that reads the
+        // same off a reflected meter, L = E K / C, so what else is in the
+        // frame adds to it. EV = log2(L S / K)
+        const ev100 = Math.log2(
+          ((lux * REFLECTED_METER_K) / INCIDENT_METER_C + metered_cd_m2) *
+            (ISO / REFLECTED_METER_K),
+        );
 
         renderer.toneMappingExposure = exposure_at(ev100);
 
@@ -569,17 +667,19 @@ export const Atmosphere: FC<AtmosphereProps> = ({
           look: {
             sunDirection: sun_world.toArray() as Vector3Tuple,
             sun: direct,
-            sky: indirect.map((lux) => lux / (2 * Math.PI) / Math.PI) as Vector3Tuple,
+            sky: indirect.map(
+              (lux) => lux / (2 * Math.PI) / Math.PI,
+            ) as Vector3Tuple,
             ground: direct.map(
               (sun_lux, i) =>
-                (GROUND_ALBEDO * (sun_lux * sin_elevation + indirect[i] / (2 * Math.PI))) /
+                (ground_albedo *
+                  (sun_lux * sin_elevation + indirect[i] / (2 * Math.PI))) /
                 Math.PI,
             ) as Vector3Tuple,
             exposure: 1,
             visibilityM: AIR_VISIBILITY_M,
-            // The air's own light far off: the dome's, an estimate of the
-            // horizon's
-            haze: indirect.map((lux) => lux / (2 * Math.PI) / Math.PI) as Vector3Tuple,
+            // The air's own light far off: the horizon's, all the way round
+            haze: horizon,
           },
         });
 

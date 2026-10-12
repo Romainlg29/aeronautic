@@ -1,22 +1,44 @@
 import {
-  curved_altitude,
-  erosion_at,
-  hand_clouds,
-  layer_column,
-  layer_density,
-  layer_extinction,
-  noise_coordinates,
-  noise_salts,
-  resolve_layer,
-  type Cloud,
-  type ResolvedLayer,
-} from "./field";
-import { visibility } from "./microphysics";
+  air_column,
+  clamp_air,
+  CLIMATES,
+  field_salts,
+  make_climate,
+  type AirColumn,
+  type Climate,
+  type ClimateName,
+} from "./climate";
 import {
-  default_weather_day,
+  Convection,
+  evolve_cell,
+  type Cell,
+  type CellSpec,
+  type Region,
+} from "./convection";
+import {
+  cloud_extinction,
+  EARTH_RADIUS_M,
+  noise_scales,
+  water_table,
+  type CloudExtinction,
+  type NoiseScales,
+  type ShapeFrame,
+} from "./density";
+import {
+  diagnose,
+  empty_column,
+  prepare,
+  type CloudColumn,
+  type Prepared,
+} from "./diagnose";
+import { Lightning, type LightningEvents } from "./lightning";
+import { cells_in, WeatherMap, type MapSource } from "./map";
+import { seed_offset } from "./noise";
+import { visibility } from "./physics";
+import type { WeatherContext, WeatherPlugin } from "./plugin";
+import {
   default_weather_look,
-  type CloudLayer,
-  type WeatherDay,
+  WEATHER_QUALITY,
   type WeatherLook,
 } from "./types";
 
@@ -27,14 +49,14 @@ export type WeatherOptions = {
   /** Every cloud's seed: the same seed, the same sky */
   seed?: number;
 
-  /** The layers, low to high or any order */
-  layers?: readonly CloudLayer[];
+  /** The climate the sky is drawn from: its name, or its own */
+  climate?: ClimateName | Climate;
 
-  /** The day they form in */
-  day?: Partial<WeatherDay>;
-
-  /** How they are lit */
+  /** How it is lit */
   look?: Partial<WeatherLook>;
+
+  /** What it is made of past its climate: storms, fronts, anything */
+  plugins?: readonly WeatherPlugin[];
 };
 
 /**
@@ -62,28 +84,35 @@ export type WeatherSample = {
    */
   up: number;
   down: number;
+
+  /** How hard it rains there, mm/h, under the cloud or not */
+  rainMmPerH: number;
 };
 
+// How long a frame may spend baking the map, ms: the rest of the bake waits
+// for the next
+const BAKE_BUDGET_MS = 1.5;
+
 /**
- * The weather: its layers of cloud, the day they formed in, how they are lit,
- * and where the scene is in them.
+ * The weather: a climate, the seed its sky is drawn with, the plugins that
+ * add to it, how it is lit, and where the scene is in it.
  *
- * Its own frame is metres, x and z along the ground and y up, and its clouds
- * drift through it with their winds. The scene's origin sits at `origin` in
- * it: its x and z, and its altitude. Move the origin, or give it a velocity,
- * and the scene flies through the weather; the clouds are drawn and sampled
- * round it.
+ * Its own frame is metres, x and z along the ground and y up. The scene's
+ * origin sits at `origin` in it: its x and z, and its altitude. Its clouds
+ * drift through it with the climate's wind, and change as they go: call
+ * `advance` every frame, and it runs the clock, moves the scene at its
+ * velocity, bakes the map round the camera, and flashes the lightning.
  *
- * Change its layers, its day or its seed through `set`, or change them in
- * place and call `changed`, and whatever draws it rebuilds what it must.
+ * Change its climate, its seed or its plugins through `set` and `use`, or
+ * in place and call `changed`, and the map is baked again at once.
  */
 export class Weather {
   seed: number;
-  layers: CloudLayer[];
-  day: WeatherDay;
+  climate: Climate;
   look: WeatherLook;
+  plugins: WeatherPlugin[];
 
-  /** Its clock, seconds: the winds and the updrafts move with it */
+  /** Its clock, seconds */
   time = 0;
 
   /**
@@ -98,23 +127,61 @@ export class Weather {
    */
   velocity: [number, number] = [0, 0];
 
-  /** Counts every change to the layers, the day or the seed */
+  /**
+   * Where the scene's camera is, in the scene: the map is baked round it,
+   * and the thunder heard there
+   */
+  listener: [number, number, number] = [0, 0, 0];
+
+  /** Counts every change to the climate, the seed or the plugins */
   version = 0;
 
-  #resolved: { version: number; layers: ResolvedLayer[]; hand: Cloud[][] } = {
-    version: -1,
-    layers: [],
-    hand: [],
+  /** The lightning */
+  readonly lightning: Lightning;
+
+  /** The map round the camera */
+  map: WeatherMap;
+
+  #built = -1;
+  #prepared!: Prepared;
+  #salts!: Uint32Array;
+  #convection!: Convection;
+  #table!: Float32Array;
+  #scales!: NoiseScales;
+  #shape!: ShapeFrame;
+  #context!: WeatherContext;
+  #source: MapSource;
+  #air: AirColumn = {
+    humidity: 0,
+    warmthK: 0,
+    capM: 0,
+    midHumidity: 0,
+    highHumidity: 0,
+    liftMPerS: 0,
   };
+  #column = empty_column();
+  #extinction: CloudExtinction = { water: 0, ice: 0, rain: 0, up: 0, down: 0 };
+  #specs: CellSpec[] = [];
+  #cells: Cell[] = [];
 
   /**
-   * @param options Its seed, layers, day and look
+   * @param options Its seed, climate, look and plugins
    */
   constructor(options: WeatherOptions = {}) {
     this.seed = options.seed ?? 1;
-    this.layers = [...(options.layers ?? [])];
-    this.day = { ...default_weather_day(), ...options.day };
+    this.climate = resolve_climate(options.climate);
     this.look = { ...default_weather_look(), ...options.look };
+    this.plugins = [...(options.plugins ?? [])];
+    this.lightning = new Lightning(this.seed);
+    this.map = new WeatherMap(
+      WEATHER_QUALITY.medium.mapSize,
+      WEATHER_QUALITY.medium.mapExtentM,
+    );
+
+    this.#source = {
+      column: (x, z, out) => this.#compute_column(x, z, out),
+      cells: (region) => this.#cells_over(region),
+    };
   }
 
   /**
@@ -124,11 +191,17 @@ export class Weather {
    */
   set(options: WeatherOptions): this {
     if (options.seed !== undefined) this.seed = options.seed;
-    if (options.layers) this.layers = [...options.layers];
-    if (options.day) Object.assign(this.day, options.day);
+    if (options.climate !== undefined) {
+      this.climate = resolve_climate(options.climate);
+    }
     if (options.look) Object.assign(this.look, options.look);
+    if (options.plugins) this.plugins = [...options.plugins];
 
-    if (options.seed !== undefined || options.layers || options.day) {
+    if (
+      options.seed !== undefined ||
+      options.climate !== undefined ||
+      options.plugins
+    ) {
       this.changed();
     }
 
@@ -136,73 +209,184 @@ export class Weather {
   }
 
   /**
-   * Say the layers, the day or the seed were changed in place.
+   * Say the climate, the seed or a plugin was changed in place.
    */
   changed(): void {
     this.version++;
   }
 
   /**
-   * Add a layer.
-   * @param layer The layer
+   * Add a plugin.
+   * @param plugin The plugin
    * @returns Take it away again
    */
-  add(layer: CloudLayer): () => void {
-    this.layers.push(layer);
+  use(plugin: WeatherPlugin): () => void {
+    this.plugins.push(plugin);
     this.changed();
 
     return () => {
-      const index = this.layers.indexOf(layer);
+      const index = this.plugins.indexOf(plugin);
 
       if (index >= 0) {
-        this.layers.splice(index, 1);
+        this.plugins.splice(index, 1);
         this.changed();
       }
     };
   }
 
   /**
-   * Run the clock, and move the scene through the weather at its velocity.
+   * Listen for its lightning: each flash as it strikes, and its thunder as
+   * it reaches the listener.
+   * @param event What for
+   * @param listener What to call
+   * @returns Stop listening
+   */
+  on<K extends keyof LightningEvents>(
+    event: K,
+    listener: LightningEvents[K],
+  ): () => void {
+    return this.lightning.on(event, listener);
+  }
+
+  /**
+   * Size the map: as large as the farthest cloud drawn, and as fine.
+   * @param size Its texels a side
+   * @param extent_m Its side, metres
+   */
+  resize_map(size: number, extent_m: number): void {
+    if (this.map.size === size && this.map.extentM === extent_m) return;
+
+    this.map.dispose();
+    this.map = new WeatherMap(size, extent_m);
+  }
+
+  /** The climate's tables, as built for it */
+  get prepared(): Prepared {
+    this.#build();
+
+    return this.#prepared;
+  }
+
+  /** The clouds' water table */
+  get table(): Float32Array {
+    this.#build();
+
+    return this.#table;
+  }
+
+  /** What the clouds' shapes are sampled with */
+  get shapes(): ShapeFrame {
+    this.#build();
+    this.#update_shapes();
+
+    return this.#shape;
+  }
+
+  /** The storms now, round the camera */
+  get cells(): readonly Cell[] {
+    return this.#cells;
+  }
+
+  /**
+   * Where a point of the scene is in the low clouds' air: its x and z in the
+   * weather, less how far the wind has carried the clouds.
+   * @param x The point, in the scene
+   * @param z The point
+   * @returns Its x and z in the air
+   */
+  air_at(x: number, z: number): [number, number] {
+    const [wx, wz] = this.climate.wind;
+
+    return [
+      this.origin[0] + x - wx * this.time,
+      this.origin[2] + z - wz * this.time,
+    ];
+  }
+
+  /**
+   * Where a point of the low clouds' air is in the scene: the inverse of
+   * `air_at`, its altitude to the scene's height.
+   * @param x The point, in the air
+   * @param altitude_m Its altitude
+   * @param z The point
+   * @returns It, in the scene
+   */
+  to_scene(x: number, altitude_m: number, z: number): [number, number, number] {
+    const [wx, wz] = this.climate.wind;
+
+    return [
+      x - this.origin[0] + wx * this.time,
+      altitude_m - this.origin[1],
+      z - this.origin[2] + wz * this.time,
+    ];
+  }
+
+  /**
+   * Run the clock, move the scene through the weather at its velocity, bake
+   * the map round the camera, and flash the lightning.
    * @param delta_s Seconds
    */
   advance(delta_s: number): void {
     this.time += delta_s;
     this.origin[0] += this.velocity[0] * delta_s;
     this.origin[2] += this.velocity[1] * delta_s;
-  }
 
-  /**
-   * The layers, worked out for the day, and the clouds placed by hand in
-   * each; worked out again only when something changed.
-   * @returns Them
-   */
-  resolve(): { layers: ResolvedLayer[]; hand: Cloud[][] } {
-    const cache = this.#resolved;
+    const rebuilt = this.#build();
+    const context = this.#context;
 
-    if (cache.version !== this.version) {
-      cache.version = this.version;
-      cache.layers = this.layers.map((layer, index) =>
-        resolve_layer(layer, this.day, this.seed, index),
-      );
-      cache.hand = cache.layers.map(hand_clouds);
+    context.time = this.time;
+
+    for (const plugin of this.plugins) plugin.update?.(context, delta_s);
+
+    this.#bake(rebuilt);
+
+    // The storms now: those the map was baked with, evolved to the clock
+    this.#cells.length = 0;
+
+    for (const cell of this.map.cells) {
+      const now = evolve_cell(cell.spec, this.#prepared, this.time);
+
+      if (now) this.#cells.push(now);
     }
 
-    return cache;
+    const [lx, ly, lz] = this.listener;
+    const [ax, az] = this.air_at(lx, lz);
+
+    this.lightning.update(this.#cells, this.time, delta_s, {
+      groundM: this.climate.groundM,
+      temperatureOffsetK: this.climate.temperatureOffsetK,
+      latitudeDeg: this.climate.latitudeDeg,
+      listener: [ax, this.origin[1] + ly, az],
+    });
   }
 
   /**
-   * Where a point of the scene is in a layer's air: its x and z in the
-   * weather, less how far the layer's wind has carried its clouds.
-   * @param layer The layer
+   * The air over a point of the scene, as the clouds form in it.
    * @param x The point, in the scene
    * @param z The point
-   * @returns Its x and z in the layer's air
+   * @returns The air, in a scratch object
    */
-  air(layer: CloudLayer, x: number, z: number): [number, number] {
-    return [
-      this.origin[0] + x - layer.windMPerS[0] * this.time,
-      this.origin[2] + z - layer.windMPerS[1] * this.time,
-    ];
+  air(x: number, z: number): AirColumn {
+    this.#build();
+
+    const [ax, az] = this.air_at(x, z);
+
+    return this.#air_over(ax, az, this.#air);
+  }
+
+  /**
+   * The clouds over a point of the scene, as the map holds them.
+   * @param x The point, in the scene
+   * @param z The point
+   * @param out Where to write them
+   * @returns out
+   */
+  column(x: number, z: number, out: CloudColumn = empty_column()): CloudColumn {
+    this.#build();
+
+    const [ax, az] = this.air_at(x, z);
+
+    return this.map.column(ax, az, out) ?? this.#compute_column(ax, az, out);
   }
 
   /**
@@ -214,72 +398,191 @@ export class Weather {
    * @returns Its extinction, and whether it is in cloud
    */
   sample(x: number, y: number, z: number): WeatherSample {
-    const { layers, hand } = this.resolve();
-    const [shape_salt, detail_salt] = noise_salts(this.seed);
-    const altitude = curved_altitude(x, this.origin[1] + y, z);
+    this.#build();
+    this.#update_shapes();
 
-    let water = 0;
-    let ice = 0;
-    let rain = 0;
-    let up = 0;
-    let down = 0;
-
-    for (const [index, resolved] of layers.entries()) {
-      if (altitude < this.day.groundM || altitude > resolved.topM) continue;
-
-      const [ax, az] = this.air(resolved.layer, x, z);
-      const column = layer_column(resolved, hand[index], ax, az);
-
-      if (column.height <= 0 && column.anvil <= 0 && column.rain <= 0) {
-        continue;
-      }
-
-      let density = 0;
-
-      if (altitude >= resolved.baseM) {
-        density = layer_density(
-          resolved,
-          column,
-          altitude,
-          erosion_at(
-            noise_coordinates(resolved, ax, altitude, az, this.time),
-            shape_salt,
-            detail_salt,
-          ),
-        );
-      }
-
-      const [w, i, r] = layer_extinction(
-        resolved,
-        column,
-        altitude,
-        density,
-        this.day.groundM,
-      );
-
-      water += w;
-      ice += i;
-      rain = Math.max(rain, r);
-
-      const here = w + i + r;
-      const top =
-        column.anvil > 0 ? resolved.topM : resolved.baseM + column.height;
-
-      up += here * Math.max(top - altitude, 0);
-      down += here * Math.max(altitude - resolved.baseM, 0);
-    }
-
-    const extinction = water + ice + rain;
+    const [ax, az] = this.air_at(x, z);
+    const column =
+      this.map.column(ax, az, this.#column) ??
+      this.#compute_column(ax, az, this.#column);
+    const altitude =
+      this.origin[1] + y + (x * x + z * z) / (2 * EARTH_RADIUS_M);
+    const e = cloud_extinction(
+      column,
+      ax,
+      altitude,
+      az,
+      this.climate,
+      this.#table,
+      this.#shape,
+      this.#extinction,
+    );
+    const extinction = e.water + e.ice + e.rain;
 
     return {
       extinction,
-      water,
-      ice,
-      rain,
+      water: e.water,
+      ice: e.ice,
+      rain: e.rain,
       visibilityM: visibility(extinction),
-      inCloud: water + ice > 0,
-      up,
-      down,
+      inCloud: e.water + e.ice > 0,
+      up: e.up,
+      down: e.down,
+      rainMmPerH: altitude < column.baseM ? column.rainMmPerH : 0,
     };
   }
+
+  /**
+   * Build what the climate, the seed and the plugins make, if they changed.
+   * @returns Whether it was built again
+   */
+  #build(): boolean {
+    if (this.#built === this.version) return false;
+
+    this.#built = this.version;
+    this.#prepared = prepare(this.climate);
+    this.#salts = field_salts(this.seed);
+    this.#table = water_table(this.#prepared);
+    this.#scales = noise_scales(this.#prepared);
+    this.#context = {
+      time: this.time,
+      seed: this.seed,
+      climate: this.climate,
+      prepared: this.#prepared,
+    };
+    this.#convection = new Convection(
+      this.#prepared,
+      this.#salts,
+      this.seed,
+      (air, x, z, t) => {
+        const time = this.#context.time;
+
+        this.#context.time = t;
+
+        for (const plugin of this.plugins)
+          plugin.air?.(air, x, z, this.#context);
+
+        this.#context.time = time;
+        clamp_air(air);
+      },
+    );
+
+    const [ux, uz] = this.climate.upperWind;
+    const upper = Math.hypot(ux, uz) || 1;
+
+    this.#shape = {
+      scales: this.#scales,
+      offset: seed_offset(this.seed),
+      upper: [ux / upper, uz / upper],
+      drift: [0, 0],
+    };
+
+    return true;
+  }
+
+  #update_shapes(): void {
+    const [ux, uz] = this.climate.upperWind;
+    const [wx, wz] = this.climate.wind;
+
+    this.#shape = {
+      ...this.#shape,
+      drift: [(ux - wx) * this.time, (uz - wz) * this.time],
+    };
+  }
+
+  /**
+   * The air over a point of the air's frame: the climate's, and the plugins'.
+   */
+  #air_over(x: number, z: number, out: AirColumn): AirColumn {
+    air_column(this.climate, this.#salts, x, z, this.time, out);
+
+    const context = this.#context;
+
+    context.time = this.time;
+
+    for (const plugin of this.plugins) plugin.air?.(out, x, z, context);
+
+    return clamp_air(out);
+  }
+
+  /**
+   * The clouds over a point of the air's frame, before the storms.
+   */
+  #compute_column(x: number, z: number, out: CloudColumn): CloudColumn {
+    const air = this.#air_over(x, z, this.#air);
+
+    diagnose(this.#prepared, air, out);
+
+    for (const plugin of this.plugins) {
+      plugin.column?.(out, air, x, z, this.#context);
+    }
+
+    return out;
+  }
+
+  /**
+   * The storms over a region now: the climate's and the plugins'.
+   */
+  #cells_over(region: Region): Cell[] {
+    const specs = this.#specs;
+
+    specs.length = 0;
+    this.#convection.cells(region, this.time, specs);
+
+    const context = this.#context;
+
+    context.time = this.time;
+
+    for (const plugin of this.plugins) plugin.cells?.(region, context, specs);
+
+    const cells: Cell[] = [];
+
+    for (const spec of specs) {
+      const cell = evolve_cell(spec, this.#prepared, this.time);
+
+      if (cell) cells.push(cell);
+    }
+
+    return cells_in(cells, region);
+  }
+
+  /**
+   * Bake the map round the camera: at once when the weather changed or the
+   * camera is near its edge, else a little each frame, again and again, as
+   * the clouds change.
+   * @param urgent Whether the weather changed
+   */
+  #bake(urgent: boolean): void {
+    const map = this.map;
+    const [ax, az] = this.air_at(this.listener[0], this.listener[2]);
+    const shown = map.frame;
+    const far =
+      !shown ||
+      Math.max(Math.abs(ax - shown.x), Math.abs(az - shown.z)) >
+        map.extentM * 0.3;
+
+    if (urgent || far) {
+      map.bake(map.frame_at(ax, az), this.#source);
+
+      return;
+    }
+
+    if (!map.baking) map.start(map.frame_at(ax, az), this.#source);
+
+    map.step(this.#source, BAKE_BUDGET_MS);
+  }
 }
+
+/**
+ * A climate by name, or its own.
+ * @param climate The climate
+ * @returns It
+ */
+const resolve_climate = (
+  climate: ClimateName | Climate | undefined,
+): Climate =>
+  typeof climate === "object"
+    ? climate
+    : climate
+      ? make_climate(climate)
+      : { ...CLIMATES.fair };

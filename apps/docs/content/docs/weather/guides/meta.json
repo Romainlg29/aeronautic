@@ -2,8 +2,9 @@
   "title": "Guides",
   "icon": "BookOpen",
   "pages": [
-    "layers",
-    "the-day",
+    "climates",
+    "plugins",
+    "rain-and-lightning",
     "the-light",
     "flying-through",
     "quality",

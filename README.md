@@ -232,40 +232,44 @@ export const Jet = ({ fired }: { fired: number }) => (
 
 ## Weather
 
-**Volumetric clouds**, every genus from fair-weather cumulus to cirrus, and
-**storms**: a cumulonimbus where it is told, its tower to the tropopause, its
-anvil downwind, its rain under it. The same **seed** makes the same sky on any
-machine. Each cloud is **formed as the air makes it**: its base at the day's
-lifted condensation level, its water from the moist adiabat, its droplets from
-the air mass's aerosol, its optics from their size. It is lit by **Mie
-scattering**, the sun through the cloud and the light scattered many times
-over. Fly into it and the flight's air is saturated, so the vapour forms; the
-plumes, the vapour, the contrails and the lights fade into the cloud.
+**Weather that is different everywhere**: a **climate** is the air over the
+ground, its humidity, its warmth, its inversion, its middle and high air,
+each a field that changes over the ground and the hours, and every cloud
+follows from it. Fair-weather cumulus thicken into a deck, a line of showers
+builds, a **storm** fires where the air is unstable, grows, rains, spreads
+its anvil and dies, its **lightning** lighting the cloud from within and its
+**thunder** reaching you at the speed of sound. **Plugins** add storms,
+fronts, patches of air or anything of your own. The same **seed** makes the
+same sky on any machine. Fly into it and the flight's air is saturated, so
+the vapour forms; the plumes, the vapour, the contrails and the lights fade
+into the cloud.
 
 ```bash
 pnpm add @aeronautic/weather @aeronautic/core three@~0.186 @react-three/fiber
 ```
 
-Give `<Weather>` its layers, and composite `useClouds()` over the scene:
+Give `<Weather>` a climate, and composite `useClouds()` over the scene:
 
 ```tsx
 import {
-  CloudLayer,
+  Lightning,
+  Rain,
   Storm,
   useClouds,
   Weather,
 } from "@aeronautic/weather/react";
 
-<Weather seed={7}>
-  <CloudLayer genus="cumulus-mediocris" />
+<Weather seed={7} climate="unsettled">
   <Storm at={[25_000, 5000]} />
+  <Rain />
+  <Lightning />
   <Sky /> {/* clouds.over(color, depth) in its pipeline */}
 </Weather>;
 ```
 
 [Weather docs](https://romainlg29.github.io/aeronautic/docs/weather/start/introduction/)
 · [README](packages/weather/README.md)
-· [How it works](https://romainlg29.github.io/aeronautic/docs/weather/how-it-works/the-water/)
+· [How it works](https://romainlg29.github.io/aeronautic/docs/weather/how-it-works/the-air/)
 
 ## The repository
 

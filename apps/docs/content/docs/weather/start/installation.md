@@ -24,13 +24,13 @@ pnpm add @react-three/fiber react react-dom
 
 ## Entry points
 
-| import                        | what's in it                                                                       |
-| ----------------------------- | ---------------------------------------------------------------------------------- |
-| `@aeronautic/weather/react`   | `<Weather>`, `<CloudLayer>`, `<Storm>`, `useClouds` and `useWeather`.              |
-| `@aeronautic/weather`         | The `Weather`, the `CloudsNode`, the genera, the quality presets, defaults, types. |
-| `@aeronautic/weather/physics` | The adiabat, the droplets, Mie, the field and the map behind the clouds.           |
+| import                        | what's in it                                                                    |
+| ----------------------------- | ------------------------------------------------------------------------------- |
+| `@aeronautic/weather/react`   | `<Weather>`, the plugins' components, `<Rain>`, `<Lightning>`, `useClouds`.     |
+| `@aeronautic/weather`         | The `Weather`, the `CloudsNode`, the climates, the plugins, the rain and bolts. |
+| `@aeronautic/weather/physics` | The adiabat, the droplets, the rain, Mie and the lightning's rate.              |
 
 The renderer must be three's `WebGPURenderer`. `webgpu_gl()` from
 `@aeronautic/core/react` makes one for `<Canvas gl>`.
 
-Next, [a sky of cumulus](../quick-start/).
+Next, [a day's sky](../quick-start/).

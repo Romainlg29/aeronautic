@@ -1,47 +1,55 @@
 ---
 title: Components
-description: "<Weather>, <CloudLayer>, <Storm>, useClouds and useWeather."
+description: "<Weather>, its plugins, <Rain>, <Lightning>, useClouds and useWeather."
 ---
 
 From `@aeronautic/weather/react`.
 
 ## `<Weather>`
 
-The weather the layers inside it are part of.
+The weather the components inside it are part of.
 
-| prop        | default | what it is                                                                          |
-| ----------- | ------- | ----------------------------------------------------------------------------------- |
-| `seed`      | `1`     | Every cloud's seed: the same seed, the same sky.                                    |
-| `day`       |         | Part of a [`WeatherDay`](/docs/weather/guides/the-day): the air the clouds form in. |
-| `look`      |         | Part of a [`WeatherLook`](/docs/weather/guides/the-light): their light.             |
-| `timeScale` | `1`     | Its clock against the frame's. 0 holds the sky still.                               |
-| `origin`    |         | Where the scene's origin is in the weather, `[x, z]` in metres.                     |
-| `altitudeM` | `0`     | The origin's altitude outside a `<FlightProvider>`; inside one, the flight's.       |
-| `weather`   |         | A `Weather` made elsewhere, to share it.                                            |
-| `couple`    | `true`  | Whether the `<FlightProvider>`'s flight flies in the weather's air.                 |
-| `aircraft`  |         | A ref to the aircraft, where the flight's air is sampled. By default the origin.    |
+| prop        | default  | what it is                                                                       |
+| ----------- | -------- | -------------------------------------------------------------------------------- |
+| `seed`      | `1`      | Every cloud's seed: the same seed, the same sky.                                 |
+| `climate`   | `"fair"` | A [climate](/docs/weather/guides/climates)'s name, or its own.                   |
+| `look`      |          | Part of a [`WeatherLook`](/docs/weather/guides/the-light): their light.          |
+| `timeScale` | `1`      | Its clock against the frame's. 0 holds the sky still.                            |
+| `origin`    |          | Where the scene's origin is in the weather, `[x, z]` in metres.                  |
+| `altitudeM` | `0`      | The origin's altitude outside a `<FlightProvider>`; inside one, the flight's.    |
+| `weather`   |          | A `Weather` made elsewhere, to share it.                                         |
+| `couple`    | `true`   | Whether the `<FlightProvider>`'s flight flies in the weather's air.              |
+| `aircraft`  |          | A ref to the aircraft, where the flight's air is sampled. By default the origin. |
 
-## `<CloudLayer>`
+The climate and the look are compared by value, so they can be written
+inline.
 
-A layer of the nearest `<Weather>` while mounted. `genus` is the genus it
-starts from, by default `"cumulus-mediocris"`; every other prop is a field of
-the [layer](/docs/weather/reference/layer) over the genus's. It is compared
-by value, so it can be written inline.
+## The plugins
 
-## `<Storm>`
+Each adds its plugin to the nearest `<Weather>` while mounted, its props
+compared by value. See [plugins](/docs/weather/guides/plugins).
 
-A cumulonimbus layer holding one cloud, where it is told.
+| component                   | what it is                             |
+| --------------------------- | -------------------------------------- |
+| `<Storm {...StormOptions}>` | A cumulonimbus, where it is told.      |
+| `<Front {...FrontOptions}>` | A cold or a warm front moving through. |
+| `<Patch {...PatchOptions}>` | A patch of different air.              |
+| `<WeatherPlugin plugin>`    | Any plugin. Keep it the same object.   |
 
-| prop             | default    | what it is                           |
-| ---------------- | ---------- | ------------------------------------ |
-| `at`             |            | Where it stands, `[x, z]` in metres. |
-| `diameterM`      | `8000`     | Its tower's diameter at its base.    |
-| `topM`           | tropopause | Its top, above sea level.            |
-| `anvilDiameterM` | `40000`    | How wide its anvil spreads.          |
-| `rainMmPerH`     | `40`       | How hard it rains under its core.    |
+`usePlugin(plugin)` does the same from a component of your own; null adds
+nothing.
 
-Any other prop is a field of its layer: its `windMPerS` carries it and
-drifts its anvil, its `updraftMPerS` boils its billows.
+## `<Rain>` and `<Lightning>`
+
+The rain's streaks round the camera, and the flashes' channels under the
+cloud, drawn in the `<VolumePassContext>`'s pass if there is one. See
+[rain and lightning](/docs/weather/guides/rain-and-lightning).
+
+| prop        | of            | what it is                                 |
+| ----------- | ------------- | ------------------------------------------ |
+| `weather`   | both          | The weather, by default the nearest.       |
+| `onFlash`   | `<Lightning>` | Called with each `Flash` as it strikes.    |
+| `onThunder` | `<Lightning>` | Called with each `Thunder` as it is heard. |
 
 ## `useClouds(options?)`
 

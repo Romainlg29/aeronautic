@@ -329,6 +329,59 @@ export const shape_channels = (
   ];
 };
 
+// The shape tile is a few cells across, and a sky of it repeats: a lattice
+// of the same clouds to the horizon. Cellular noise of two sets of points is
+// that of their union, the nearer of the two, so the tile is read twice, the
+// second time turned by the golden angle about the vertical and moved off
+// by an irrational step, and the nearer point kept: the two lattices never
+// line up again, so neither does the sky. Twice the points in each tile, so
+// each is read 2^(1/3) as large, and the cells stay the size they were
+export const UNION_SCALE = 2 ** (-1 / 3);
+const UNION_TURN = Math.PI * (3 - Math.sqrt(5));
+export const UNION_COS = Math.cos(UNION_TURN);
+export const UNION_SIN = Math.sin(UNION_TURN);
+export const UNION_OFFSET: readonly [number, number, number] = [
+  (Math.sqrt(5) - 1) / 2,
+  Math.SQRT2 - 1,
+  Math.sqrt(3) - 1,
+];
+
+/**
+ * The shape texture's channels at a point, read as two tiles' union.
+ * @param u Where, in tiles, unwrapped
+ * @param v Where
+ * @param w Where
+ * @param salt The seed's salt
+ * @returns Its four channels, each the nearer point's
+ */
+export const shape_union = (
+  u: number,
+  v: number,
+  w: number,
+  salt: number,
+): [number, number, number, number] => {
+  const wrap = (x: number) => x - Math.floor(x);
+  const a = shape_channels(
+    wrap(u * UNION_SCALE),
+    wrap(v * UNION_SCALE),
+    wrap(w * UNION_SCALE),
+    salt,
+  );
+  const b = shape_channels(
+    wrap((UNION_COS * u - UNION_SIN * w) * UNION_SCALE + UNION_OFFSET[0]),
+    wrap(v * UNION_SCALE + UNION_OFFSET[1]),
+    wrap((UNION_SIN * u + UNION_COS * w) * UNION_SCALE + UNION_OFFSET[2]),
+    salt,
+  );
+
+  return [
+    Math.max(a[0], b[0]),
+    Math.max(a[1], b[1]),
+    Math.max(a[2], b[2]),
+    Math.max(a[3], b[3]),
+  ];
+};
+
 /**
  * The detail texture's three channels at a point of its tile.
  * @param u Where in the tile, 0 to 1
@@ -367,40 +420,181 @@ export const SHAPE_WEIGHTS: readonly [number, number, number] = [
   (OCTAVE * OCTAVE) / SHAPE_SUM,
 ];
 
-// Where the noises' values fall, their 5th and 95th percentiles over 20 000
-// points of the tile. Each is stretched over 0 to 1 from them, so a billow
-// wears its full reach in and a tower is not just worn evenly
-export const SHAPE_SPREAD: readonly [number, number] = [0.3, 0.66];
-export const DETAIL_SPREAD: readonly [number, number] = [0.31, 0.68];
+// Where the shape noise's values fall, two tiles' union, its 5th and 95th
+// percentiles and its peak over 40 000 points of 16 tiles across. It is
+// stretched over 0 to 1 from them, so a billow wears its full reach in and
+// a tower is not just worn evenly; it is not clamped, so its strongest
+// cores, up to its peak, stand out above the rest
+export const SHAPE_SPREAD: readonly [number, number] = [0.436, 0.724];
+const SHAPE_PEAK_VALUE = 0.904;
+
+// The detail is the shape's octave ladder carried on: its three octaves
+// each twice as fine again, weighted as the shape's are, and the whole a
+// further OCTAVE³ down, so the edge is as rough as Lovejoy's from the tile
+// down to a cell of the finest. Its median and peak over the same points
+const DETAIL_MEDIAN = 0.464;
+const DETAIL_PEAK = 0.803;
+
+/** The detail's share of the shape noise, in its stretched units */
+const DETAIL_SHARE = OCTAVE ** 3 / (SHAPE_SPREAD[1] - SHAPE_SPREAD[0]);
+
+/** The most the detail lifts the shape noise anywhere */
+export const DETAIL_REACH = (DETAIL_PEAK - DETAIL_MEDIAN) * DETAIL_SHARE;
+
+/**
+ * The shape noise's peak with its detail: the strongest core in the tile,
+ * the one that reaches a cumulus layer's top
+ */
+export const SHAPE_PEAK =
+  remap(SHAPE_PEAK_VALUE, ...SHAPE_SPREAD, 0, 1) + DETAIL_REACH;
 
 /**
  * The shape the clouds' billows take from the shape texture: its three
  * cellular octaves, weighted as cloud edges are rough, stretched over their
  * spread.
  * @param channels The shape texture's four channels
- * @returns 0 to 1
+ * @returns 0 to 1 over its 5th to 95th percentiles, its peak above
  */
 export const shape_noise = (
   channels: readonly [number, number, number, number],
-): number => {
-  const value =
+): number =>
+  remap(
     channels[1] * SHAPE_WEIGHTS[0] +
-    channels[2] * SHAPE_WEIGHTS[1] +
-    channels[3] * SHAPE_WEIGHTS[2];
-
-  return Math.min(Math.max(remap(value, ...SHAPE_SPREAD, 0, 1), 0), 1);
-};
+      channels[2] * SHAPE_WEIGHTS[1] +
+      channels[3] * SHAPE_WEIGHTS[2],
+    ...SHAPE_SPREAD,
+    0,
+    1,
+  );
 
 /**
- * The detail texture's channels, summed as one octave each, stretched over
- * their spread.
+ * What the detail adds to the shape noise: its three octaves, weighted as
+ * the shape's, about their median, at their share.
  * @param channels The detail texture's three channels
- * @returns 0 to 1
+ * @returns In the shape noise's units, about 0
  */
 export const detail_noise = (
   channels: readonly [number, number, number],
-): number => {
-  const value = channels[0] * 0.625 + channels[1] * 0.25 + channels[2] * 0.125;
+): number =>
+  (channels[0] * SHAPE_WEIGHTS[0] +
+    channels[1] * SHAPE_WEIGHTS[1] +
+    channels[2] * SHAPE_WEIGHTS[2] -
+    DETAIL_MEDIAN) *
+  DETAIL_SHARE;
 
-  return Math.min(Math.max(remap(value, ...DETAIL_SPREAD, 0, 1), 0), 1);
+/** detail_noise's terms, for the shader: its weights and offset, scaled */
+export const DETAIL_TERMS = {
+  weights: SHAPE_WEIGHTS.map((w) => w * DETAIL_SHARE) as unknown as readonly [
+    number,
+    number,
+    number,
+  ],
+  offset: DETAIL_MEDIAN * DETAIL_SHARE,
+};
+
+// The salts every texture is baked with: one tile for every seed, the seed
+// moving where the sky samples it instead, so the textures are baked once
+export const SHAPE_SALT = seed_salt(0x5a17);
+export const DETAIL_SALT = seed_salt(0xde7a);
+
+/**
+ * Where a seed's sky samples the tiles from: its own offset, 0 to 1 each way.
+ * @param seed The seed
+ * @returns The offset, in tiles
+ */
+export const seed_offset = (seed: number): [number, number, number] => {
+  const h = pcg3d(seed | 0, 0x2545f491, 0x6c8e9cf5);
+
+  return [unit(h[0]), unit(h[1]), unit(h[2])];
+};
+
+// A period so long the field never visibly repeats: 2^16 cells
+const UNBOUNDED = 65_536;
+
+/**
+ * Smooth noise over the ground and through time, for the air's fields: two
+ * octaves of gradient noise, the second half the first's size and weight,
+ * scaled so that −1 to 1 is two standard deviations: 95 % of the ground.
+ * @param x Where, in the field's cells
+ * @param z Where, in its cells
+ * @param t When, in its lifetimes
+ * @param salt Its own salt
+ * @returns About −1 to 1, now and then past
+ */
+export const field_noise = (
+  x: number,
+  z: number,
+  t: number,
+  salt: number,
+): number =>
+  (perlin(x, z, t, UNBOUNDED, salt) +
+    0.5 * perlin(x * 2 + 17.3, z * 2 + 5.1, t * 2, UNBOUNDED, salt)) *
+  FIELD_SCALE;
+
+// The two octaves' standard deviation, measured over 720 000 points: 0.2145.
+// Its peaks are three and a half times that, so a field's amplitude is what
+// it reaches on one ground in twenty, and its extremes are held by its limits
+const FIELD_SCALE = 0.5 / 0.2145;
+
+/** The coverage table's entries, from no cover to all of it */
+export const COVERAGE_SIZE = 64;
+
+let coverage_table: Float32Array | null = null;
+
+/**
+ * Where the shape noise must be cut so that a share of the sky is cloud: its
+ * quantiles, measured over the tile. A cover of 0.3 cuts it at its 70th
+ * percentile, so 30 % of the sky's base is cloud, as a cover means.
+ * @returns The threshold at each cover from 0 to 1, `COVERAGE_SIZE` of them
+ */
+export const coverage_thresholds = (): Float32Array => {
+  if (coverage_table) return coverage_table;
+
+  // Points spread evenly over the sky: the R3 sequence (Roberts 2018), over
+  // many tiles across, as the union never repeats, and one period of it
+  // up
+  const count = 8192;
+  const across = 16;
+  const values = new Float32Array(count);
+  const g = 1.2207440846057596;
+
+  for (let i = 0; i < count; i++) {
+    const u = (0.5 + i / g) % 1;
+    const v = (0.5 + i / (g * g)) % 1;
+    const w = (0.5 + i / (g * g * g)) % 1;
+
+    values[i] = shape_noise(
+      shape_union(u * across, v / UNION_SCALE, w * across, SHAPE_SALT),
+    );
+  }
+
+  values.sort();
+
+  const table = new Float32Array(COVERAGE_SIZE);
+
+  for (let i = 0; i < COVERAGE_SIZE; i++) {
+    const cover = i / (COVERAGE_SIZE - 1);
+    const at = Math.min(Math.max((1 - cover) * (count - 1), 0), count - 1);
+
+    table[i] = values[Math.round(at)];
+  }
+
+  // No cover at all: past the noise's top, so nothing shows
+  table[0] = 1.0001;
+  coverage_table = table;
+
+  return table;
+};
+
+/**
+ * The threshold for a cover, from the table.
+ * @param cover 0 to 1
+ * @returns The shape noise's value a cloud is above
+ */
+export const coverage_threshold = (cover: number): number => {
+  const table = coverage_thresholds();
+  const at = Math.min(Math.max(cover, 0), 1) * (COVERAGE_SIZE - 1);
+  const i = Math.min(Math.floor(at), COVERAGE_SIZE - 2);
+
+  return table[i] + (table[i + 1] - table[i]) * (at - i);
 };

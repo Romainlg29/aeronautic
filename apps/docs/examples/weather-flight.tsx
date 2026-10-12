@@ -1,26 +1,20 @@
 import { Flight } from "@aeronautic/core";
 import { FlightProvider } from "@aeronautic/core/react";
 import { Weather } from "@aeronautic/weather";
-import {
-  CloudLayer,
-  Weather as WeatherProvider,
-} from "@aeronautic/weather/react";
+import { Weather as WeatherProvider } from "@aeronautic/weather/react";
 import { type FC, useMemo, useState } from "react";
 import { AtmosphereStage } from "./atmosphere";
 import { Fighter } from "./atmosphere-vapor";
 import { Slider } from "./fighter";
 
-// The fighter flown into a deck of stratocumulus. The weather and the flight
-// are one air: in the cloud the flight's is saturated, so the wings pull
-// vapour as they would, and the plumes and the vapour fade into the cloud
-// round the camera with how far they are
+// The fighter flown into an overcast day's deck of stratocumulus, its top
+// near a kilometre. The weather and the flight are one air: in the cloud the
+// flight's is saturated, so the wings pull vapour as they would, and the
+// plumes and the vapour fade into the cloud round the camera with how far
+// they are
 
-// The deck: from 1500 m, 800 m thick, the whole sky
-const BASE_M = 1500;
-const DEPTH_M = 800;
-
-// Where it starts: inside, the top a few hundred metres over
-const ALTITUDE_M = 1900;
+// Where it starts: in the deck, its top a little over
+const ALTITUDE_M = 750;
 const MACH = 0.85;
 const ALPHA_DEG = 10;
 
@@ -55,8 +49,8 @@ export const WeatherFlight: FC = () => {
           <div className="example-controls">
             <Slider
               label="altitude"
-              min={800}
-              max={3000}
+              min={200}
+              max={2000}
               step={10}
               start={ALTITUDE_M}
               write={(f, altitude_m) => {
@@ -80,13 +74,7 @@ export const WeatherFlight: FC = () => {
       >
         {/* Context doesn't cross into the canvas: the same flight again */}
         <FlightProvider flight={flight}>
-          <WeatherProvider weather={weather}>
-            <CloudLayer
-              genus="stratocumulus"
-              baseM={BASE_M}
-              depthM={DEPTH_M}
-              cover={1}
-            />
+          <WeatherProvider weather={weather} climate="overcast">
             <Fighter />
           </WeatherProvider>
         </FlightProvider>

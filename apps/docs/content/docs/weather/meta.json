@@ -1,6 +1,6 @@
 {
   "title": "Weather",
-  "description": "Volumetric clouds and storms from a seed, formed and lit as the air makes them",
+  "description": "Volumetric clouds, rain and lightning from a climate, different everywhere, formed and lit as the air makes them",
   "icon": "Cloud",
   "root": true,
   "pages": [

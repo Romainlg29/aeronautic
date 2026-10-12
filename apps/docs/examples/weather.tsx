@@ -1,25 +1,21 @@
-import {
-  CLOUD_GENERA,
-  cloud_layer,
-  type CloudGenus,
-  Weather,
-} from "@aeronautic/weather";
-import { CloudLayer, Weather as WeatherProvider } from "@aeronautic/weather/react";
+import { CLIMATES, type ClimateName, Weather } from "@aeronautic/weather";
+import { Weather as WeatherProvider } from "@aeronautic/weather/react";
 import { type FC, useMemo, useState } from "react";
 import { AtmosphereStage } from "./atmosphere";
 
-// The weather's clouds in takram's sky: one layer of a genus, from the seed,
-// lit by the atmosphere's sun and sky. Everything about a genus is its
-// presets': its base at the day's condensation level or its usual height,
-// its sizes, its water
+// The weather's clouds in takram's sky: a day of a climate, from the seed,
+// lit by the atmosphere's sun and sky. Every cloud follows from the air it
+// forms in, and the air is different everywhere: a field of cumulus here,
+// clear air there, a deck further off
+
+const NAMES = Object.keys(CLIMATES) as ClimateName[];
 
 /**
- * A layer of cloud over the ground, the genus, the cover and the sun yours.
+ * A day's sky, the climate, the seed and the sun yours.
  * @returns The example
  */
 export const WeatherExample: FC = () => {
-  const [genus, set_genus] = useState<CloudGenus>("cumulus-mediocris");
-  const [cover, set_cover] = useState(cloud_layer("cumulus-mediocris").cover);
+  const [climate, set_climate] = useState<ClimateName>("fair");
   const [sun_deg, set_sun_deg] = useState(35);
   const [seed, set_seed] = useState(1);
 
@@ -36,33 +32,19 @@ export const WeatherExample: FC = () => {
       overlay={
         <div className="example-controls">
           <label>
-            genus
+            climate
             <select
-              value={genus}
-              onChange={(event) => {
-                const next = event.target.value as CloudGenus;
-
-                set_genus(next);
-                set_cover(cloud_layer(next).cover);
-              }}
+              value={climate}
+              onChange={(event) =>
+                set_climate(event.target.value as ClimateName)
+              }
             >
-              {CLOUD_GENERA.map((name) => (
+              {NAMES.map((name) => (
                 <option key={name} value={name}>
-                  {name.replace("-", " ")}
+                  {name}
                 </option>
               ))}
             </select>
-          </label>
-          <label>
-            cover {Math.round(cover * 100)} %
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.01}
-              value={cover}
-              onChange={(event) => set_cover(event.target.valueAsNumber)}
-            />
           </label>
           <label>
             sun {sun_deg}°
@@ -81,9 +63,7 @@ export const WeatherExample: FC = () => {
         </div>
       }
     >
-      <WeatherProvider weather={weather} seed={seed}>
-        <CloudLayer genus={genus} cover={cover} />
-      </WeatherProvider>
+      <WeatherProvider weather={weather} climate={climate} seed={seed} />
     </AtmosphereStage>
   );
 };

@@ -1,8 +1,8 @@
 import {
-  HalfFloatType,
-  Matrix4,
   type Camera,
   Color,
+  HalfFloatType,
+  Matrix4,
   type Object3D,
   type PerspectiveCamera,
   RenderTarget,
@@ -10,6 +10,7 @@ import {
   type Texture,
   Vector2,
   Vector3,
+  Vector4,
 } from "three";
 import {
   Break,
@@ -21,9 +22,8 @@ import {
   fract,
   Fn,
   getViewPosition,
-  If,
-  int,
   hash,
+  If,
   Loop,
   max,
   min,
@@ -62,32 +62,42 @@ import {
 } from "@aeronautic/core";
 import {
   EARTH_RADIUS_M,
-  noise_salts,
+  TABLE_ROW_COUNT,
+  TABLE_ROWS,
   TABLE_SIZE,
-  type ResolvedLayer,
-} from "./field";
-import { bake_map, layer_has_map, type MapFrame } from "./map";
-import { weather_medium } from "./medium";
-import { ICE_ASYMMETRY, RAIN_ASYMMETRY } from "./microphysics";
+  table_at,
+} from "./density";
+import { LIGHTNING_EFFICACY } from "./lightning";
+import {
+  ALBEDO,
+  DIFFUSE_ASYMMETRY,
+  LIGHT_FIRST_M,
+  LIGHT_STEPS,
+  weather_medium,
+} from "./medium";
+import {
+  droplet_coefficient,
+  effective_radius,
+  ICE_ASYMMETRY,
+  mie_phase,
+  RAIN_ASYMMETRY,
+  type AirMass,
+} from "./physics";
 import {
   create_half_texture,
   create_noise_textures,
   type NoiseTextures,
 } from "./textures";
+import { DETAIL_SALT, SHAPE_SALT } from "./noise";
 import {
-  create_layer_nodes,
-  detail_noise,
-  layer_column,
-  layer_density,
-  layer_extinction,
-  layer_key,
-  layer_occupied,
-  noise_coordinates,
-  shape_noise,
-  update_layer_nodes,
-  type LayerNodes,
-} from "./tsl/field";
+  cloud_at,
+  create_field_nodes,
+  map_column,
+  update_field_nodes,
+  type FieldNodes,
+} from "./tsl/density";
 import {
+  look_lux,
   resolve_weather_quality,
   STEPS_FROM_M,
   type WeatherQuality,
@@ -95,24 +105,32 @@ import {
 } from "./types";
 import type { Weather } from "./weather";
 
+// The haze's scale height: the aerosols are mixed through the boundary layer
+// and thin out above it, their extinction falling as e^(−h / H) with H about
+// 1.2 km (Bruneton & Neyret 2008, Hillaire 2020)
+const AEROSOL_SCALE_M = 1200;
+
 // The clouds, raymarched at a reduced resolution and resolved over the frames
 //
-// Each frame, a ray a texel: through the shell of air the layers fill, round
-// the earth's curve, stopping at the scene and at the range. It strides over
-// clear air, and steps back and walks finely once it meets cloud, as finely as
-// a pixel's footprint there. At each step in cloud: the droplets', the ice's
-// and the rain's extinction, from the layer's water and its column; the sun
-// through the cloud towards it, in six steps each twice the last; the sky
-// above and the ground below through the cloud over and under; Mie's phase
-// for the droplets' size, and the light scattered many times over as the
-// two-stream approximation has it. The
-// step's light is integrated as Hillaire has it, so a long step loses no
-// energy.
+// Each frame, a ray a texel: through the shell of air the clouds fill, round
+// the earth's curve, from where it enters to where it leaves, the scene, or
+// the range. It walks it in steps that grow with the distance as a pixel's
+// footprint does, each just long enough that the steps it has left reach the
+// end, and it never goes back: there is one walk, the same for clear air and
+// cloud, so nothing in it can switch from frame to frame and show as a line.
+// Each step's light is integrated over its whole length as Hillaire has it,
+// so a long step dims the ray as much as the short ones it stands for, and
+// is sampled somewhere different along it every frame.
 //
-// Each step is sampled at a different place along it every frame, and
-// the frames are blended: each texel's last value is found where the cloud it
-// saw was the frame before, and kept unless it strays outside what the
-// texel's neighbours see now
+// At each step in cloud: the droplets', the ice's and the rain's extinction;
+// the sun through the cloud towards it, in six steps each twice the last;
+// its light scattered once, by Mie's phase for each layer's droplets, and
+// many times, as the diffuse light the cloud holds (medium.ts); the sky above and the ground below
+// through the cloud over and under; and the lightning's.
+//
+// Then the frames are blended: each texel's last value is found where the
+// cloud it saw was the frame before, and kept unless it strays outside what
+// the texel's neighbours see now
 
 type F = Node<"float">;
 type V2 = Node<"vec2">;
@@ -120,26 +138,10 @@ type V3 = Node<"vec3">;
 type V4 = Node<"vec4">;
 type M4 = Node<"mat4">;
 
-/** What a step in cloud keeps of its light, the rest scattered on */
-const ALBEDO = 1;
-
-// The droplets' asymmetry averaged over the visible, for the diffuse light:
-// about 0.85 (Hansen and Travis 1974)
-const DIFFUSE_ASYMMETRY = 0.85;
-
-// The light march: six steps, the first 30 m, each twice the last, so 1.9 km
-// of cloud towards the sun, the near cloud finely
-const LIGHT_STEPS = 6;
-const LIGHT_FIRST_M = 30;
+type Uniform<T, N> = N & { value: T };
 
 // Below this transmittance, a ray has nothing left to see through
 const OPAQUE = 0.01;
-
-// How many empty steps a ray walks finely after cloud before it strides again
-const FINE_STEPS = 8;
-
-// Fine steps against coarse: a coarse step strides this many fine ones
-const COARSE_STRIDE = 4;
 
 // The golden ratio, whose fractions of a frame count fill a step evenly
 const GOLDEN_RATIO = (1 + Math.sqrt(5)) / 2;
@@ -147,6 +149,17 @@ const GOLDEN_RATIO = (1 + Math.sqrt(5)) / 2;
 // How many deviations from its neighbours' mean a texel's history may stray:
 // one, as Salvi (2016) has it
 const CLIP_DEVIATIONS = 1;
+
+// How much of the detail's reach it fades out over, towards its end: a share
+// of it, so its edge is not a line
+const DETAIL_FADE = 0.3;
+
+/** The most flashes lighting the clouds at once */
+export const LIGHTS = 4;
+
+// The share of a flash's distance to a point of cloud that is cloud as thick
+// as the point's own: the light comes through gaps as well. An estimate
+const LIGHTNING_PATH_SHARE = 0.5;
 
 // What a ray hands back: its light and its alpha, and where it saw cloud,
 // where the scene was, and what it saw through
@@ -158,10 +171,14 @@ const NOWHERE = 1e9;
 const scratch_size = new Vector2();
 const scratch_origin = new Vector3();
 
-type FloatUniform = Node<"float"> & { value: number };
-
-const float_uniform = (value = 0): FloatUniform =>
-  uniform(value) as unknown as FloatUniform;
+const float_uniform = (value = 0) =>
+  uniform(value) as unknown as Uniform<number, F>;
+const vec3_uniform = (value = new Vector3()) =>
+  uniform(value) as unknown as Uniform<Vector3, V3>;
+const vec4_uniform = () =>
+  uniform(new Vector4()) as unknown as Uniform<Vector4, V4>;
+const mat4_uniform = () =>
+  uniform(new Matrix4()) as unknown as Uniform<Matrix4, M4>;
 
 /**
  * A texture sampled through a Catmull–Rom spline rather than bilinearly, in
@@ -178,14 +195,11 @@ const catmull_rom = (source: TextureNode, uv: V2, size: V2): V4 => {
   const centre = floor(position.sub(0.5)).add(0.5);
   const f = position.sub(centre);
 
-  // The spline's four weights, from the texel below the point's to the one
-  // two above
   const w0 = f.mul(f.mul(f.mul(-0.5).add(1)).sub(0.5));
   const w1 = f.mul(f).mul(f.mul(1.5).sub(2.5)).add(1);
   const w2 = f.mul(f.mul(f.mul(-1.5).add(2)).add(0.5));
   const w3 = f.mul(f).mul(f.mul(0.5).sub(0.5));
 
-  // The middle two in one bilinear tap, between them
   const w12 = w1.add(w2);
   const t0 = centre.sub(1).div(size);
   const t3 = centre.add(2).div(size);
@@ -214,7 +228,7 @@ const catmull_rom = (source: TextureNode, uv: V2, size: V2): V4 => {
 /**
  * Henyey and Greenstein's phase function.
  * @param cosine The cosine of the scattering angle
- * @param g Its asymmetry
+ * @param asymmetry Its asymmetry
  * @returns Per steradian
  */
 const henyey_greenstein = (cosine: F, asymmetry: F | number): F => {
@@ -229,8 +243,8 @@ const henyey_greenstein = (cosine: F, asymmetry: F | number): F => {
 };
 
 /**
- * Jendersie and d'Eon's fit to Mie scattering by droplets: Henyey–Greenstein
- * and Draine, mixed.
+ * Jendersie and d'Eon's fit to Mie scattering by droplets: physics.ts's
+ * `mie`.
  * @param cosine The cosine of the scattering angle
  * @param phase Its fit: the HG lobe, Draine's g and α, Draine's weight
  * @returns Per steradian
@@ -238,12 +252,35 @@ const henyey_greenstein = (cosine: F, asymmetry: F | number): F => {
 const mie = (cosine: F, phase: V4): F => {
   const g = phase.y;
   const alpha = phase.z;
-  const draine = henyey_greenstein(cosine, g)
+  const draine = henyey_greenstein(cosine, g as F)
     .mul(alpha.mul(cosine).mul(cosine).add(1))
     .div(alpha.mul(g.mul(g).mul(2).add(1)).div(3).add(1));
 
-  return mix(henyey_greenstein(cosine, phase.x), draine, phase.w) as F;
+  return mix(henyey_greenstein(cosine, phase.x as F), draine, phase.w) as F;
 };
+
+/**
+ * The share of a diffuse light a slab lets through: medium.ts's `diffuse`.
+ * @param depth Its optical depth
+ * @returns 0 to 1
+ */
+const diffuse = (depth: F): F =>
+  float(1).div(depth.mul(0.75 * (1 - DIFFUSE_ASYMMETRY)).add(1)) as F;
+
+/**
+ * The sun's light scattered many times at a point, per its extinction and
+ * the sun's illuminance: medium.ts's `scattered_many`.
+ * @param sun_depth The optical depth towards the sun
+ * @param column_depth The optical depth of the cloud through the point
+ * @returns Per steradian
+ */
+const scattered_many = (sun_depth: F, column_depth: F): F =>
+  diffuse(column_depth)
+    .oneMinus()
+    .mul(diffuse(sun_depth))
+    .div(Math.PI)
+    .sub(exp(sun_depth.negate()).div(4 * Math.PI))
+    .max(0) as F;
 
 /**
  * Where the clouds are drawn, and how.
@@ -308,67 +345,57 @@ export class CloudsNode extends TempNode {
   #state = undefined as unknown as RendererUtils.RendererState;
 
   #noise: NoiseTextures | null = null;
-  #salts = [-1, -1];
-
+  #table = create_half_texture(TABLE_SIZE, TABLE_ROW_COUNT, "clouds.water");
+  #field: FieldNodes | null = null;
+  #map_textures: readonly Texture[] | null = null;
   #version = -1;
-  #key = "";
-  #layers: ResolvedLayer[] = [];
-  #nodes: LayerNodes[] = [];
-  #maps: (ReturnType<typeof create_half_texture> | null)[] = [];
-  #frames: (MapFrame | null)[] = [];
-  #table: ReturnType<typeof create_half_texture> | null = null;
-  #built = false;
+  #empty = true;
+  #last_time = 0;
 
   // The scene camera, as the passes' own quads see it
-  #projection_inverse = uniform(new Matrix4()) as unknown as M4 & {
-    value: Matrix4;
-  };
-  #camera_world = uniform(new Matrix4()) as unknown as M4 & {
-    value: Matrix4;
-  };
-  #camera_position = uniform(new Vector3()) as unknown as V3 & {
-    value: Vector3;
-  };
+  #projection_inverse = mat4_uniform();
+  #camera_world = mat4_uniform();
+  #camera_position = vec3_uniform();
   #near = float_uniform(0.1);
   #far = float_uniform(1000);
 
-  // Last frame's view projection, and how far the weather moved past the
+  // Last frame's view projection, and how far the clouds moved past the
   // scene since
-  #previous_view_projection = uniform(new Matrix4()) as unknown as M4 & {
-    value: Matrix4;
-  };
-  #moved = uniform(new Vector3()) as unknown as V3 & { value: Vector3 };
+  #previous_view_projection = mat4_uniform();
+  #moved = vec3_uniform();
   #had_history = float_uniform(0);
   #previous_origin = new Vector3();
 
-  #resolution = uniform(new Vector2(1, 1)) as unknown as V2 & {
-    value: Vector2;
-  };
+  #resolution = uniform(new Vector2(1, 1)) as unknown as Uniform<Vector2, V2>;
   #pixel_angle = float_uniform(1e-3);
   #frame_index = float_uniform(0);
 
-  // The weather's day and look
+  // The shell the clouds fill, and the scene origin's altitude
   #altitude = float_uniform(0);
-  #ground = float_uniform(0);
   #low = float_uniform(0);
   #high = float_uniform(0);
-  #sun_direction = uniform(new Vector3(0, 1, 0)) as unknown as V3 & {
-    value: Vector3;
-  };
-  #sun = uniform(new Vector3(1, 1, 1)) as unknown as V3 & { value: Vector3 };
-  #sky = uniform(new Vector3()) as unknown as V3 & { value: Vector3 };
-  #ground_light = uniform(new Vector3()) as unknown as V3 & {
-    value: Vector3;
-  };
+
+  // The look
+  #sun_direction = vec3_uniform(new Vector3(0, 1, 0));
+  #sun = vec3_uniform(new Vector3(1, 1, 1));
+  #sky = vec3_uniform();
+  #ground_light = vec3_uniform();
   #exposure = float_uniform(1);
-  #haze = uniform(new Vector3()) as unknown as V3 & { value: Vector3 };
+  #haze = vec3_uniform();
   #haze_extinction = float_uniform(0);
+  #ground = float_uniform(0);
+
+  // Each droplet layer's Mie fit: the cumulus', the sheets', the altostratus'
+  #phases = [vec4_uniform(), vec4_uniform(), vec4_uniform()];
+
+  // The flashes: where, in the scene, and their light in the scene's units
+  #lights = Array.from({ length: LIGHTS }, vec4_uniform);
 
   // The quality's
-  #steps = uniform(96, "int") as unknown as Node<"int"> & { value: number };
+  #steps = uniform(96, "int") as unknown as Uniform<number, Node<"int">>;
   #min_step = float_uniform(5);
-  #max_step = float_uniform(400);
   #range = float_uniform(80_000);
+  #detail = float_uniform(8000);
   #blend = float_uniform(0.1);
 
   #texture_node: TextureNode;
@@ -430,12 +457,11 @@ export class CloudsNode extends TempNode {
       perspectiveDepthToViewZ(depth.sample(uv).x, near, far) as F;
 
     return Fn(() => {
-      // The scene first, so it is drawn before the clouds read its depth
       const behind = vec4(color).toVar();
       const own = scene_z(screenUV as unknown as V2).toVar();
 
-      // As volume_pass upsamples: from the four texels round the pixel,
-      // each as far as its scene sits at the pixel's own depth
+      // From the four texels round the pixel, each as far as its scene sits
+      // at the pixel's own depth, so the clouds do not bleed over an edge
       const at = screenUV.mul(resolution).sub(0.5);
       const base = floor(at);
       const between = fract(at);
@@ -506,9 +532,7 @@ export class CloudsNode extends TempNode {
       const then_uv = clip.xy.div(clip.w).mul(vec2(0.5, -0.5)).add(0.5).toVar();
 
       // The neighbourhood's spread, to keep a stale history inside: its mean
-      // give or take a deviation (Salvi 2016), tighter than its range, which
-      // lets a ghost of the cloud as it was through wherever the march's
-      // jitter is wide
+      // give or take a deviation (Salvi 2016)
       const texel = vec2(1).div(this.#resolution);
       const first = now.toVar();
       const second = now.mul(now).toVar();
@@ -546,27 +570,12 @@ export class CloudsNode extends TempNode {
   }
 
   /**
-   * The march's fragment, for the layers as they are.
+   * The march's fragment.
    * @param depth_node The scene's depth
-   * @param shape The shape noise
-   * @param detail The detail noise
-   * @param table The water table
+   * @param field The clouds' textures and where the scene is in them
    * @returns Its fragment
    */
-  #march_fragment(
-    depth_node: TextureNode,
-    shape: Texture,
-    detail: Texture,
-    table: Texture,
-  ): Node {
-    const layers = this.#layers;
-    const nodes = this.#nodes;
-    const count = layers.length;
-
-    if (count === 0) {
-      return outputStruct(vec4(0), vec4(NOWHERE, NOWHERE, 1, 0));
-    }
-
+  #march_fragment(depth_node: TextureNode, field: FieldNodes): Node {
     const altitude_of = (p: V3): F =>
       this.#altitude.add(p.y).add(dot(p.xz, p.xz).div(2 * EARTH_RADIUS_M)) as F;
 
@@ -583,7 +592,7 @@ export class CloudsNode extends TempNode {
         float(NOWHERE),
       );
 
-      // The shell of air the layers fill, round the earth's curve: spheres
+      // The shell of air the clouds fill, round the earth's curve: spheres
       // about the earth's centre, under the scene's origin. Their c, the
       // eye's distance from the centre squared less the shell's radius
       // squared, is formed from altitudes, which a float holds finely
@@ -633,102 +642,20 @@ export class CloudsNode extends TempNode {
       const cosine = dot(direction, this.#sun_direction).toVar();
       const ice_phase = henyey_greenstein(cosine, ICE_ASYMMETRY).toVar();
       const rain_phase = henyey_greenstein(cosine, RAIN_ASYMMETRY).toVar();
-      const water_phases = nodes.map((layer) =>
-        mie(cosine, layer.phase).toVar(),
-      );
-
-      // The air at a point: its extinction, how much of it is the cloud's
-      // droplets and ice, and, when lit, its scattering weighted by each
-      // scatterer's phase, and the cloud over it and under it
-      const field = (
-        p: V3,
-        fine: boolean,
-        sigma: F,
-        dense: F | null,
-        lit: { phased: F; up: F; down: F } | null,
-      ) => {
-        const altitude = altitude_of(p).toVar();
-
-        for (const [index, layer] of nodes.entries()) {
-          const resolved = layers[index];
-          const lowest = layer_has_map(resolved) ? this.#ground : layer.base;
-
-          If(
-            altitude.greaterThan(lowest).and(altitude.lessThan(layer.top)),
-            () => {
-              const { column, air } = layer_column(
-                layer,
-                resolved,
-                p.xz as unknown as V2,
-              );
-
-              If(layer_occupied(layer, column, altitude, this.#ground), () => {
-                const at = noise_coordinates(layer, air, altitude);
-                const worn = shape_noise(shape as never, at.shape);
-                const fray = fine
-                  ? detail_noise(detail as never, at.detail)
-                  : float(1);
-                const density = layer_density(
-                  layer,
-                  column,
-                  altitude,
-                  worn,
-                  fray as F,
-                );
-                const extinction = layer_extinction(
-                  layer,
-                  table,
-                  count,
-                  column,
-                  altitude,
-                  select(
-                    altitude.greaterThanEqual(layer.base),
-                    density,
-                    float(0),
-                  ) as F,
-                  this.#ground,
-                ).toVar();
-                const here = extinction.x.add(extinction.y).add(extinction.z);
-
-                sigma.addAssign(here);
-                dense?.addAssign(extinction.x.add(extinction.y));
-
-                if (lit) {
-                  lit.phased.addAssign(
-                    water_phases[index]
-                      .mul(extinction.x)
-                      .add(ice_phase.mul(extinction.y))
-                      .add(rain_phase.mul(extinction.z)),
-                  );
-
-                  const top = select(
-                    column.y.greaterThan(0),
-                    layer.top,
-                    layer.base.add(column.x),
-                  );
-
-                  lit.up.addAssign(here.mul(top.sub(altitude).max(0)));
-                  lit.down.addAssign(here.mul(altitude.sub(layer.base).max(0)));
-                }
-              });
-            },
-          );
-        }
-      };
+      const water_phases = vec3(
+        mie(cosine, this.#phases[0]),
+        mie(cosine, this.#phases[1]),
+        mie(cosine, this.#phases[2]),
+      ).toVar();
 
       const light = vec3(0).toVar();
       const through = float(1).toVar();
       const front = float(0).toVar();
       const seen = float(0).toVar();
 
-      const length = end.sub(start).max(0);
-      const pixel = this.#pixel_angle;
-
-      // Where in its step each sample is, somewhere different each frame:
-      // the steps still cover the whole ray, only where each is sampled moves
-      // A hash's white noise, not a gradient's: where the history is let go,
-      // as it is flying fast by a cloud, a gradient's lines show and white
-      // noise only grains. Each frame on by the golden ratio, so a texel's
+      // Where in its step each sample is, somewhere different each frame: a
+      // hash's white noise, not a gradient's, whose lines show where the
+      // history is let go. Each frame on by the golden ratio, so a texel's
       // samples spread evenly along its steps over the frames
       const jitter = hash(
         floor(screenCoordinate.x).add(floor(screenCoordinate.y).mul(4099)),
@@ -736,114 +663,49 @@ export class CloudsNode extends TempNode {
         .add(this.#frame_index.mul(GOLDEN_RATIO - 1))
         .fract();
 
-      const fine_step = (t: F): F =>
-        t
-          .mul(pixel)
-          .clamp(this.#min_step, this.#max_step.div(COARSE_STRIDE)) as F;
-      const coarse_step = (t: F): F =>
-        max(
-          length.div(float(this.#steps)),
-          fine_step(t).mul(COARSE_STRIDE),
-        ).clamp(this.#min_step, this.#max_step) as F;
-
       const t = start.toVar();
-      const fine = int(0).toVar();
       const taken = float(0).toVar();
-
-      // Where the last step began, and what the ray held there: a stride's
-      // sample can fall short of a cloud that begins further in, and the
-      // next finds it, so the walk goes back one step to find its edge.
-      // Otherwise, as much of every cloud's near edge is skipped as falls
-      // in the stride, by where the stride falls on it, row on row of
-      // bands where the history smooths the jitter's noise away
-      const back = {
-        t: start.toVar(),
-        through: float(1).toVar(),
-        front: float(0).toVar(),
-        seen: float(0).toVar(),
-        light: vec3(0).toVar(),
-      };
-      const here = {
-        t: start.toVar(),
-        through: float(1).toVar(),
-        front: float(0).toVar(),
-        seen: float(0).toVar(),
-        light: vec3(0).toVar(),
-      };
+      const steps = float(this.#steps);
 
       Loop(this.#steps, () => {
         If(t.greaterThanEqual(end).or(through.lessThan(OPAQUE)), () => {
           Break();
         });
 
-        here.t.assign(t);
-        here.through.assign(through);
-        here.front.assign(front);
-        here.seen.assign(seen);
-        here.light.assign(light);
-
-        // The shortest step that still reaches the end in the steps left: a
-        // ray cut short is a cloud seen through, a long step only a coarser
-        // one, its light integrated over the step all the same. The steps
-        // left grow by a constant ratio, so they are short near the eye and
-        // long far off, as a pixel's footprint is, and a ray far longer than
-        // its neighbour, over the horizon, steps near the eye almost as it
-        // does. And no further than the scene, or the shell's edge: past
-        // either is cloud the ray never reaches
-        const left = float(this.#steps).sub(taken).max(1);
+        // A pixel's footprint, or, if longer, the shortest step that still
+        // reaches the end in the steps left: a ray cut short is a cloud seen
+        // through, where a long step is only a coarser one, its light
+        // integrated over it all the same. The steps left grow by a constant
+        // ratio, short near the eye and long far off, and a ray far longer
+        // than its neighbour, over the horizon, steps near the eye almost as
+        // it does
+        const left = steps.sub(taken).max(1);
         const near = t.add(STEPS_FROM_M);
         const enough = near.mul(
           pow(end.add(STEPS_FROM_M).div(near), left.reciprocal()).sub(1),
         );
-        const step = max(
-          select(fine.equal(0), coarse_step(t), fine_step(t)),
-          enough,
-        )
+        const step = max(t.mul(this.#pixel_angle), this.#min_step, enough)
           .min(end.sub(t))
           .toVar();
 
         taken.addAssign(1);
 
         const p = eye.add(direction.mul(t.add(step.mul(jitter)))).toVar();
-        const sigma = float(0).toVar();
-        const dense = float(0).toVar();
-        const phased = float(0).toVar();
-        const up = float(0).toVar();
-        const down = float(0).toVar();
+        const altitude = altitude_of(p).toVar();
+        const column = map_column(field, p.xz as unknown as V2);
 
-        // Rain is as smooth as the map it is baked in and strided through;
-        // only the cloud's droplets and ice, worn by the noise, are walked
-        // finely. A rain shaft walked finely spends the ray's steps before
-        // the tower over it
-        If(fine.equal(0), () => {
-          field(p, false, sigma, dense, { phased, up, down });
-
-          // Cloud in the stride: walk it again finely, from where the last
-          // step began, as if it had not been taken
-          If(dense.greaterThan(0), () => {
-            fine.assign(FINE_STEPS);
-            sigma.assign(0);
-            step.assign(0);
-            t.assign(back.t);
-            through.assign(back.through);
-            front.assign(back.front);
-            seen.assign(back.seen);
-            light.assign(back.light);
-            here.t.assign(back.t);
-            here.through.assign(back.through);
-            here.front.assign(back.front);
-            here.seen.assign(back.seen);
-            here.light.assign(back.light);
-          });
-        }).Else(() => {
-          field(p, true, sigma, dense, { phased, up, down });
-
-          If(dense.greaterThan(0), () => {
-            fine.assign(FINE_STEPS);
-          }).Else(() => {
-            fine.subAssign(1);
-          });
-        });
+        // The detail, faded out towards the end of its reach
+        const detail_share = this.#detail
+          .sub(t)
+          .div(this.#detail.mul(DETAIL_FADE))
+          .clamp(0, 1) as F;
+        const cloud = cloud_at(field, p, altitude, column, detail_share, true);
+        const sigma = cloud.water.x
+          .add(cloud.water.y)
+          .add(cloud.water.z)
+          .add(cloud.ice)
+          .add(cloud.rain)
+          .toVar();
 
         If(sigma.greaterThan(0), () => {
           // The sun through the cloud towards it
@@ -852,44 +714,69 @@ export class CloudsNode extends TempNode {
 
           Loop(LIGHT_STEPS, ({ i }: { i: Node<"int"> }) => {
             const size = exp2(float(i)).mul(LIGHT_FIRST_M);
-            const q = p.add(this.#sun_direction.mul(along.add(size.mul(0.5))));
-            const sigma_there = float(0).toVar();
+            const q = p
+              .add(this.#sun_direction.mul(along.add(size.mul(0.5))))
+              .toVar();
+            const there = cloud_at(
+              field,
+              q as unknown as V3,
+              altitude_of(q as unknown as V3),
+              map_column(field, q.xz as unknown as V2),
+              null,
+              false,
+            );
 
-            field(q as V3, false, sigma_there, null, null);
-            sun_depth.addAssign(sigma_there.mul(size));
+            sun_depth.addAssign(
+              there.water.x
+                .add(there.water.y)
+                .add(there.water.z)
+                .add(there.ice)
+                .add(there.rain)
+                .mul(size),
+            );
             along.addAssign(size);
           });
 
-          // Eddington's two-stream for light scattered many times: a slab
-          // of optical depth τ lets 1 / (1 + ¾ (1 − g) τ) of a diffuse light
-          // through, and reflects the rest
-          const diffuse = (depth: F) =>
-            float(1).div(depth.mul(0.75 * (1 - DIFFUSE_ASYMMETRY)).add(1));
-
-          // The sun's light scattered once, by each scatterer's phase,
-          // through the cloud towards it
-          const once = phased.mul(exp(sun_depth.negate()));
-
-          // And many times: the light the cloud's column reflects, R E / π
-          // at its sunlit face, the same every way, fading into the cloud
-          // as a diffuse light does. Its first scattering is counted above
-          const column = up.add(down);
-          const reflected = diffuse(column).oneMinus();
-          const many = sigma
-            .mul(reflected.div(Math.PI))
-            .mul(diffuse(sun_depth).sub(exp(sun_depth.negate())).max(0));
-
-          const sunlit = once.add(many);
+          // Scattered once, by each scatterer's phase, and many times, as
+          // the diffuse light the cloud holds
+          const sunlit = dot(cloud.water, water_phases)
+            .add(cloud.ice.mul(ice_phase))
+            .add(cloud.rain.mul(rain_phase))
+            .mul(exp(sun_depth.negate()))
+            .add(sigma.mul(scattered_many(sun_depth, cloud.up.add(cloud.down))))
+            .toVar();
 
           // The sky's and the ground's, each half the sphere, through the
           // cloud over and under
           const ambient = this.#sky
-            .mul(diffuse(up))
-            .add(this.#ground_light.mul(diffuse(down)))
+            .mul(diffuse(cloud.up))
+            .add(this.#ground_light.mul(diffuse(cloud.down)))
             .mul(0.5 * ALBEDO)
             .mul(sigma);
 
-          const source = this.#sun.mul(sunlit.mul(ALBEDO)).add(ambient);
+          // The flashes': each its light over 4π r², through the cloud
+          // between as a diffuse light, scattered every way alike
+          const flashes = float(0).toVar();
+
+          for (const flash of this.#lights) {
+            If(flash.w.greaterThan(0), () => {
+              const apart = flash.xyz.sub(p);
+              const r2 = dot(apart, apart).max(1e4);
+              const between = sigma.mul(sqrt(r2)).mul(LIGHTNING_PATH_SHARE);
+
+              flashes.addAssign(
+                flash.w
+                  .div(r2.mul(4 * Math.PI))
+                  .mul(diffuse(between as F))
+                  .mul(sigma.div(4 * Math.PI)),
+              );
+            });
+          }
+
+          const source = this.#sun
+            .mul(sunlit.mul(ALBEDO))
+            .add(ambient)
+            .add(vec3(flashes.mul(ALBEDO)));
 
           // Hillaire's integration over the step
           const kept = exp(sigma.mul(step).negate());
@@ -902,11 +789,6 @@ export class CloudsNode extends TempNode {
         });
 
         t.addAssign(step);
-        back.t.assign(here.t);
-        back.through.assign(here.through);
-        back.front.assign(here.front);
-        back.seen.assign(here.seen);
-        back.light.assign(here.light);
       });
 
       const distance = select(
@@ -917,19 +799,38 @@ export class CloudsNode extends TempNode {
       const alpha = through.oneMinus();
 
       // The air between the eye and the cloud: Koschmieder's, faded towards
-      // the horizon's light. A sunlit cloud is brighter than the horizon,
-      // so it is still seen past the visibility, where a black one is not,
-      // and the march's range would cut it off there, a line along the far
-      // cloud. So the air lets nothing through by the range: less what it
-      // lets through there, made up to one again. Near the eye it is
-      // Koschmieder's; on the default look, whose visibility is the low
-      // range, it is nowhere off by more than 2 %, his threshold of seeing
-      const at_range = exp(this.#haze_extinction.mul(this.#range).negate());
+      // the horizon's light. Its extinction is the visibility's at the
+      // ground, thinning with height as the aerosols do, so from above the
+      // haze the clouds under it are seen clearly. Along a ray from h₀ at μ
+      // up, over d, its optical depth is σ₀ e^(−h₀/H) d (1 − e^(−x)) / x,
+      // x = μ d / H. A sunlit cloud is brighter than the horizon, so it is
+      // still seen past the visibility, where a black one is not, and the
+      // march's range would cut it off there, a line along the far cloud.
+      // So the air lets nothing through by the range: less what it lets
+      // through there, made up to one again
+      const at_eye = this.#haze_extinction.mul(
+        exp(eye_altitude.sub(this.#ground).max(0).div(-AEROSOL_SCALE_M)),
+      );
+      const optical_depth = (d: F): F => {
+        const x = direction.y.mul(d).div(AEROSOL_SCALE_M).max(-60);
+        const spread = select(
+          x.abs().lessThan(1e-3),
+          x.mul(-0.5).add(1),
+          exp(x.negate()).oneMinus().div(x),
+        );
+
+        return at_eye.mul(d).mul(spread) as F;
+      };
+      const to_range = optical_depth(this.#range).toVar();
+      const to_cloud = optical_depth(distance.min(this.#range) as F);
+      const at_range = exp(to_range.negate());
       const air = select(
         this.#haze_extinction.greaterThan(0),
-        exp(this.#haze_extinction.mul(distance.min(this.#range)).negate())
-          .sub(at_range)
-          .div(at_range.oneMinus().max(1e-6)),
+        select(
+          to_range.lessThan(1e-3),
+          to_cloud.div(to_range.max(1e-12)).oneMinus(),
+          exp(to_cloud.negate()).sub(at_range).div(at_range.oneMinus()),
+        ),
         float(1),
       );
       const color = light
@@ -951,123 +852,102 @@ export class CloudsNode extends TempNode {
   }
 
   /**
-   * Bring the layers' textures, uniforms and shader up to the weather.
+   * Bring the textures, the uniforms and the shader up to the weather.
    * @param renderer The renderer
+   * @param depth The scene's depth
    */
-  #update_weather(renderer: Renderer): void {
+  #update_weather(renderer: Renderer, depth: TextureNode): void {
     const weather = this.weather;
-    const { layers, hand } = weather.resolve();
     const quality = this.quality;
 
-    // The noise, for the seed
-    const salts = noise_salts(weather.seed);
+    weather.resize_map(quality.mapSize, quality.mapExtentM);
 
-    this.#noise ??= create_noise_textures();
-
-    if (salts[0] !== this.#salts[0] || salts[1] !== this.#salts[1]) {
-      this.#noise.bake(renderer, salts[0], salts[1]);
-      this.#salts = salts;
+    // The noise: one tile for every seed, baked once
+    if (!this.#noise) {
+      this.#noise = create_noise_textures();
+      this.#noise.bake(renderer, SHAPE_SALT, DETAIL_SALT);
     }
 
+    // The water table and the droplets' phases, for the climate
     if (weather.version !== this.#version) {
       this.#version = weather.version;
-      this.#layers = layers;
 
-      const key = layers.map(layer_key).join("|");
+      const table = weather.table;
 
-      // The water table: a row a layer
-      if (!this.#table || this.#nodes.length !== layers.length) {
-        this.#table?.texture.dispose();
-        this.#table = create_half_texture(
-          TABLE_SIZE,
-          Math.max(layers.length, 1),
-          "clouds.water",
+      this.#table.write(table);
+
+      const air_mass = weather.climate.airMass;
+
+      // Each layer's droplets at a typical height in it, a kilometre into a
+      // cumulus and a few hundred metres into a sheet: their water from the
+      // table, their size from it (Martin et al. 1994)
+      const coefficient = (row: number, height: number) =>
+        table_at(table, row, height, 0);
+      const rows = [
+        [TABLE_ROWS.cumulus, 1000],
+        [TABLE_ROWS.stratus, 300],
+        [TABLE_ROWS.alto, 500],
+      ] as const;
+
+      for (const [index, [row, height]] of rows.entries()) {
+        // σ = C W^⅔, so W = (σ / C)^1.5 for the coefficient at d = 1
+        const sigma = coefficient(row, height);
+        const lwc = droplet_water(sigma, air_mass);
+        const phase = mie_phase(2 * effective_radius(lwc, air_mass));
+
+        this.#phases[index].value.set(
+          phase.hg,
+          phase.draine,
+          phase.alpha,
+          phase.weight,
         );
-      }
-
-      const rows = new Float32Array(
-        TABLE_SIZE * 4 * Math.max(layers.length, 1),
-      );
-
-      for (const [index, layer] of layers.entries()) {
-        rows.set(layer.table, index * TABLE_SIZE * 4);
-      }
-
-      this.#table.write(rows);
-
-      // The maps, each made again: what they hold may have changed
-      for (const map of this.#maps) map?.texture.dispose();
-
-      this.#maps = layers.map((layer) =>
-        layer_has_map(layer)
-          ? create_half_texture(quality.mapSize, quality.mapSize, "clouds.map")
-          : null,
-      );
-      this.#frames = layers.map(() => null);
-
-      if (key !== this.#key || !this.#built) {
-        this.#key = key;
-        this.#nodes = layers.map((layer, index) =>
-          create_layer_nodes(layer, this.#maps[index]?.texture ?? null),
-        );
-        this.#built = false;
-      } else {
-        for (const [index, nodes] of this.#nodes.entries()) {
-          nodes.map = this.#maps[index]?.texture ?? null;
-        }
-
-        // The map textures are new: the shader samples them afresh
-        this.#built = false;
       }
     }
 
-    // Each layer's map, baked again once the camera has crossed a quarter
-    let low = Infinity;
-    let high = -Infinity;
+    // The shader, for the map's textures
+    const map = weather.map;
 
-    for (const [index, resolved] of layers.entries()) {
-      const [ax, az] = weather.air(resolved.layer, 0, 0);
-      const map = this.#maps[index];
-      let frame = this.#frames[index];
-
-      if (map) {
-        const quarter = quality.mapExtentM / 4;
-
-        if (
-          !frame ||
-          Math.abs(ax - frame.x) > quarter ||
-          Math.abs(az - frame.z) > quarter
-        ) {
-          frame = {
-            x: ax,
-            z: az,
-            extent: quality.mapExtentM,
-            size: quality.mapSize,
-          };
-          this.#frames[index] = frame;
-          map.write(bake_map(resolved, hand[index], frame));
-        }
-      }
-
-      update_layer_nodes(
-        this.#nodes[index],
-        resolved,
-        ax,
-        az,
-        weather.time,
-        frame,
-        index,
-      );
-
-      low = Math.min(
-        low,
-        layer_has_map(resolved) ? weather.day.groundM : resolved.baseM,
-      );
-      high = Math.max(high, resolved.topM);
+    if (this.#map_textures !== map.textures || !this.#field) {
+      this.#map_textures = map.textures;
+      this.#field = create_field_nodes({
+        shape: this.#noise.shape.texture,
+        detail: this.#noise.detail.texture,
+        table: this.#table.texture,
+        map: map.textures,
+      });
+      this.#march_material.fragmentNode = this.#march_fragment(
+        depth,
+        this.#field,
+      ) as unknown as V4;
+      this.#march_material.needsUpdate = true;
     }
 
-    this.#low.value = Number.isFinite(low) ? low : 0;
-    this.#high.value = Number.isFinite(high) ? high : 0;
+    // Where the scene is in the air
+    update_field_nodes(
+      this.#field,
+      weather.air_at(0, 0),
+      weather.origin[1],
+      weather.climate,
+      weather.shapes,
+      map.frame,
+    );
+
+    // The shell the clouds fill: down to the ground under any rain, up to
+    // the cirrus or the tropopause over any ice
+    const { bounds } = map;
+    const { climate } = weather;
+
+    this.#empty = !Number.isFinite(bounds.lowM) || !map.frame;
+
+    const low = bounds.rain ? climate.groundM : bounds.lowM;
+    const ceiling = Math.max(
+      climate.cirrusBaseM + climate.cirrusDepthM,
+      climate.tropopauseM,
+    );
+
+    this.#low.value = Number.isFinite(low) ? Math.floor(low) : 0;
+    this.#ground.value = climate.groundM;
+    this.#high.value = Math.ceil(Math.min(bounds.highM, ceiling));
   }
 
   /**
@@ -1082,18 +962,21 @@ export class CloudsNode extends TempNode {
 
     this.#state = RendererUtils.resetRendererState(renderer, this.#state);
 
-    this.#update_weather(renderer);
+    const camera = this.camera as PerspectiveCamera;
 
-    if (!this.#built && this.#noise && this.#table) {
-      this.#march_material.fragmentNode = this.#march_fragment(
-        depth,
-        this.#noise.shape.texture,
-        this.#noise.detail.texture,
-        this.#table.texture,
-      ) as unknown as V4;
-      this.#march_material.needsUpdate = true;
-      this.#built = true;
-    }
+    camera.updateMatrixWorld();
+    this.#camera_position.value.setFromMatrixPosition(camera.matrixWorld);
+
+    const { weather } = this;
+
+    // The map is baked round the camera, and the thunder heard there
+    const { x, y, z } = this.#camera_position.value;
+
+    weather.listener[0] = x;
+    weather.listener[1] = y;
+    weather.listener[2] = z;
+
+    this.#update_weather(renderer, depth);
 
     // The size: the drawing buffer's, scaled
     const quality = this.quality;
@@ -1112,23 +995,17 @@ export class CloudsNode extends TempNode {
     this.#resolution.value.set(width, height);
 
     // The camera
-    const camera = this.camera as PerspectiveCamera;
-
-    camera.updateMatrixWorld();
     this.#projection_inverse.value.copy(camera.projectionMatrixInverse);
     this.#camera_world.value.copy(camera.matrixWorld);
-    this.#camera_position.value.setFromMatrixPosition(camera.matrixWorld);
     this.#near.value = camera.near;
     this.#far.value = camera.far;
     this.#pixel_angle.value =
       2 / (camera.projectionMatrix.elements[5] * height);
 
-    // The weather's day, look and quality
-    const { weather } = this;
+    // The look and the quality
     const { look } = weather;
 
     this.#altitude.value = weather.origin[1];
-    this.#ground.value = weather.day.groundM;
     this.#sun_direction.value.fromArray(look.sunDirection).normalize();
     this.#sun.value.fromArray(look.sun);
     this.#sky.value.fromArray(look.sky);
@@ -1140,21 +1017,42 @@ export class CloudsNode extends TempNode {
 
     this.#steps.value = quality.steps;
     this.#min_step.value = quality.minStepM;
-    this.#max_step.value = quality.maxStepM;
     this.#range.value = quality.rangeM;
+    this.#detail.value = quality.detailM;
     this.#blend.value = quality.blend;
     this.#frame_index.value = (this.#frame_index.value + 1) % 64;
 
-    // How far the weather moved past the scene since the last frame
+    // The flashes, brightest first, in the scene
+    const lux = look_lux(look);
+    const flashes = weather.lightning.brightest(weather.time, LIGHTS);
+
+    for (const [index, light] of this.#lights.entries()) {
+      const flash = flashes[index];
+
+      if (!flash) {
+        light.value.set(0, 0, 0, 0);
+        continue;
+      }
+
+      const [px, py, pz] = weather.to_scene(...flash.flash.centre);
+
+      light.value.set(px, py, pz, flash.powerW * LIGHTNING_EFFICACY * lux);
+    }
+
+    // How far the clouds moved past the scene since the last frame: the
+    // scene through the air, less the wind carrying them
     const origin = scratch_origin.fromArray(weather.origin);
+    const elapsed = weather.time - this.#last_time;
+    const [wx, wz] = weather.climate.wind;
 
     this.#moved.value.subVectors(origin, this.#previous_origin);
+    this.#moved.value.x -= wx * elapsed;
+    this.#moved.value.z -= wz * elapsed;
     this.#previous_origin.copy(origin);
+    this.#last_time = weather.time;
 
     // The cloud round the camera, for the effects drawn in it: a frame late
     // for any drawn before the clouds, a frame's flight not to be seen
-    const { x, y, z } = this.#camera_position.value;
-
     weather_medium(weather, x, y, z, this.medium);
 
     if (this.scene) {
@@ -1167,14 +1065,13 @@ export class CloudsNode extends TempNode {
     const read = this.#history[this.#current];
     const write = this.#history[1 - this.#current];
 
-    if (this.#layers.length === 0) {
+    if (this.#empty) {
       // No cloud: nothing to march, and no history to keep
       renderer.setRenderTarget(write);
       renderer.setClearColor(0x000000, 0);
       renderer.clear();
       this.#had_history.value = 0;
     } else {
-      // March
       renderer.setRenderTarget(this.#march);
       this.#quad.material = this.#march_material;
       this.#quad.render(renderer);
@@ -1218,13 +1115,24 @@ export class CloudsNode extends TempNode {
     this.#march_material.dispose();
     this.#resolve_material.dispose();
     this.#noise?.dispose();
-    this.#table?.texture.dispose();
-
-    for (const map of this.#maps) map?.texture.dispose();
+    this.#table.texture.dispose();
 
     super.dispose();
   }
 }
+
+/**
+ * The liquid water whose droplets' extinction, at a density of one, is a
+ * table's coefficient: σ = C W^⅔, so W = (σ / C)^1.5.
+ * @param sigma The coefficient, per metre
+ * @param air_mass What the droplets formed on
+ * @returns kg/m³
+ */
+const droplet_water = (sigma: number, air_mass: AirMass): number => {
+  const c = droplet_coefficient(air_mass);
+
+  return c > 0 ? (sigma / c) ** 1.5 : 0;
+};
 
 /**
  * The weather's clouds, for a camera.

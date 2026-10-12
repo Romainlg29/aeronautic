@@ -1,60 +1,72 @@
 ---
 title: The field
-description: "Where the clouds are: their columns, laid out from the seed, worn into billows."
+description: "Where the clouds are: the map's columns, cut from the noise at their cover, rough down to tens of metres."
 ---
 
-Each layer is laid out on the ground first, as columns: at every point, how
-high cloud reaches above the layer's base, how far inside a cloud's
-footprint the point is, how thick an anvil hangs there, and how hard it
-rains. The noise then carves billows into the columns, and the day's
-adiabat fills them with water.
+The [map](/docs/weather/how-it-works/the-air) says, at every point, how much
+of the sky each kind of cloud covers there and how high it reaches. The
+noise then says which points of it are the cloud: each layer is cut from the
+same shape noise at the threshold its cover sets, the noise's own quantile,
+so a cover of 0.3 is 30 % of the sky, whatever the noise's distribution.
+Where the cover changes over the map, the clouds thin out into clear sky
+over kilometres, never a uniform sheet of cloud everywhere.
 
 ## The cumulus
 
-A cumulus field is a power law of sizes, as many clouds of each diameter as
-D<sup>−b</sup>, b about 2 (Benner and Curry 1998). The sizes are drawn an
-octave at a time, each octave on its own grid of cells as wide as its
-largest cloud, so a cloud never leaves its cell and a point looks at one
-cell an octave. Each cell holds a cloud with the probability that gives the
-octave its share of the clouds, and the octaves, overlapping at random,
-cover the layer's `cover` of the sky.
+A cumulus's threshold rises with the height through it, to the noise's peak
+at the cumulus's top: each cloud is as tall as its noise stands above the
+cut, most shallow and a few deep, as a field's are. The top is the
+equilibrium level of the strongest parcel, and only the strongest core in
+the noise reaches it, so the tops are not cut off at one height. Its base is flat, at
+the condensation level. The threshold rises as h<sup>k</sup>: a small k, 0.5,
+lets few clouds grow deep, as in a fair-weather field; a storm's updraft
+raises it towards 3, keeping its tower solid nearly to its top.
 
-Each cloud is a dome on a flat base: a thermal's top is near a spherical
-cap (Scorer 1957), so a tower's is a half ellipsoid as wide as it and as
-tall as its aspect makes it. A larger `crown` squares it into a tower that
-rounds off only at its top.
+A cumulus field's cells are spaced as Rayleigh's convection rolls are, about
+twice the mixed layer's depth (2π / 3.117 of it), and the noise's tile holds
+four of them. So low cumulus on a humid day are small and close, and high
+ones on a dry day large and far apart.
 
-## The sheets and the storms
+## The sheets
 
-A stratiform layer is a sheet, holed where a coverage noise falls below the
-threshold that leaves its cover of sky. A storm is a cumulonimbus to the
-tropopause, its anvil a lens spreading under it, carried downwind, and its
-rain shaft under its core.
-
-What is kilometres across and smooth, a sheet's coverage, an anvil, the
-rain and the storms placed by hand, is baked into a weather map round the
-camera, four channels a texel, and baked again once the camera has crossed
-a quarter of it. The cumulus towers are worked out where they are sampled,
-at any scale.
+Stratocumulus, altostratus, cirrus and the anvils are sheets, cut from the
+noise at their cover and squashed four times flatter than wide, their
+density falling to their base and top as 1 − (2h − 1)<sup>4</sup>. The
+cirrus are drawn out along the wind four times their width, as its streaks
+are. These scales are estimates, from how such cloud looks.
 
 ## The billows
 
-A cumulus rises as a train of thermals each about half its width (Blyth,
-Cooper and Jensen 1988), so a billow is a quarter of the largest tower
-across. The columns' tops and bases are worn in by a billow where the shape
-noise is low, and further where the detail noise is, as cauliflower is; the
-edge is a detail wide. The billows boil upward at the
-layer's updraft and drift with its wind.
-
 The noise is cellular, inverted: its level sets are spheres about its
-feature points, so it heaps rounded lobes. The shape is three octaves of it,
-the detail three finer. Cloud edges are fractal from a kilometre to a
-thousand, their perimeter's dimension 1.35 (Lovejoy 1982), so a lobe half
-the size stands out 2<sup>−0.65</sup> = 0.64 as far: the shape's octaves are
-weighted so, and the detail wears in as far as a lobe its size stands out of
-a billow, about a fifth of a billow for a tenth of its size. Each noise is
-stretched over 0 to 1 from its 5th and 95th percentiles, so a billow wears
-its full reach in.
+feature points, so it heaps rounded lobes. The shape is three octaves of it
+over a Perlin–Worley base, the detail three finer. Cloud edges are fractal
+from a kilometre to a thousand, their perimeter's dimension 1.35 (Lovejoy
+1982), so a lobe half the size stands out 2<sup>−0.65</sup> = 0.64 as far:
+the octaves are weighted so. The shape noise is stretched over 0 to 1 from
+its 5th and 95th percentiles, so a billow wears its full reach in, and left
+unclamped above, so its strongest cores stand out.
+
+A tile a few cells across, laid over the sky, repeats: a lattice of the same
+clouds to the horizon. But the cellular noise of two sets of points is the
+noise of their union, the nearer point of the two. So the tile is read
+twice, the second time turned by the golden angle about the vertical and
+moved by an irrational step, and the nearer point kept. The two lattices
+never line up again, so neither does the sky. The union has twice the
+points, so each read is 2<sup>1/3</sup> as large and the cells keep their
+size. It costs one more texture read per sample. The union no longer
+repeats with the tile, so the shader can't wrap where the camera is by a
+whole tile to keep its single floats precise: each read is given its own
+place in its tile, worked out in doubles on the CPU, or the clouds would
+jump each time the camera crossed a tile.
+
+The detail carries the same ladder on: three more octaves, each twice as
+fine, weighted as the shape's, the first a further 0.64³ down, so a cloud's
+edge is rough from the noise's tile down to some tens of metres. It is
+added to the shape noise before the cut, so it moves the edge, not only the
+density at it, and it is sampled only within the quality's `detailM` of the
+camera, where the most it adds could make cloud; past it the detail is too
+fine to see. The billows boil upward at the cumulus's updraft and
+drift with the wind.
 
 ## The seed
 

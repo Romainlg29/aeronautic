@@ -8,18 +8,17 @@ resolved over the frames.
 
 ## The ray
 
-Each ray runs through the shell of air the layers fill, round the earth's
+Each ray runs through the shell of air the clouds fill, round the earth's
 curve: spheres about the earth's centre, under the scene's origin. From
 above it enters through the top, from below through the bottom, and inside
 from the eye. It stops at the scene's depth, and at the range.
 
-It strides over clear air, up to `maxStepM`, and once it meets cloud steps
-back a stride and walks finely, as finely as a pixel's footprint there and
-no finer than `minStepM`. Out of cloud it walks a few fine steps more before
-it strides again. Rain is as smooth as the map it is baked in, so a rain
-shaft is strided through, and only the cloud's droplets and ice are walked
-finely. A ray that lets through less than 1 % of the light
-stops: nothing behind would show.
+It walks it in steps that grow with the distance as a pixel's footprint
+does, no finer than `minStepM`, each just long enough that the steps it has
+left reach its end. It never goes back: there is one walk, the same through
+clear air and cloud, so nothing in it can switch from frame to frame and
+show as a line. A ray that lets through less than 1 % of the light stops:
+nothing behind would show.
 
 ## The frames
 
@@ -27,8 +26,8 @@ Each frame a ray starts somewhere different along its first step, and the
 frames are blended, `blend` of the new over the history. A texel's last
 value is found where the cloud it saw was the frame before, from the last
 frame's view and how far the weather moved since, and kept unless it strays
-outside what the texel's neighbours see now. A few dozen steps resolve over
-a few frames into what hundreds would show at once.
+outside what the texel's neighbours see now. A long step is sampled somewhere different along it each frame, so a
+few frames resolve what many more steps would show at once.
 
 ## The composite
 

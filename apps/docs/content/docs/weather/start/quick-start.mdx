@@ -1,11 +1,11 @@
 ---
 title: Quick start
-description: "A sky of cumulus in a few lines."
+description: "A day's sky in a few lines."
 ---
 
-`<Weather>` holds the sky, its layers are its children, and `useClouds()`
-gives the node that draws them for the camera. Composite it over the scene
-where the frame is put together:
+`<Weather>` holds the sky. `useClouds()` gives the node that draws its
+clouds for the camera: composite it over the scene where the frame is put
+together.
 
 ```tsx
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
@@ -13,7 +13,7 @@ import { useEffect, useMemo } from "react";
 import { pass } from "three/tsl";
 import { RenderPipeline, type WebGPURenderer } from "three/webgpu";
 import { webgpu_gl } from "@aeronautic/core/react";
-import { CloudLayer, useClouds, Weather } from "@aeronautic/weather/react";
+import { useClouds, Weather } from "@aeronautic/weather/react";
 
 // The scene, then the clouds in front of whatever it left behind them
 const Sky = () => {
@@ -42,26 +42,47 @@ const Sky = () => {
 
 export const App = () => (
   <Canvas gl={webgpu_gl()} camera={{ position: [0, 2, 0], far: 1e5 }}>
-    <Weather seed={7}>
-      <CloudLayer genus="cumulus-mediocris" />
+    <Weather climate="fair" seed={7}>
       <Sky />
     </Weather>
   </Canvas>
 );
 ```
 
-The scene is in metres, its origin at the weather's `origin`, by default
-over the sea at sea level. The clouds' base is the day's condensation level,
-about 680 m on the default day: look up and they are there.
+The scene is in metres, its origin at the weather's `origin`, by default at
+sea level. On a fair day the cumulus' base is about 800 m up, where the air
+under them condenses. Look up and they are there, thicker in one place and
+thinner in another.
 
-## A storm
+## Another day
 
-`<Storm>` puts a cumulonimbus where it is told, x and z in metres:
+`climate` is the day the sky is drawn from: `clear`, `fair`, `unsettled`,
+`stormy`, `overcast` or `frontal`. Or make your own from one of them:
 
 ```tsx
-<Weather day={{ temperatureOffsetK: 12, surfaceHumidity: 0.75 }}>
-  <CloudLayer genus="cumulus-humilis" cover={0.25} />
+import { make_climate } from "@aeronautic/weather";
+
+// A fair day, more humid, over the sea
+const humid = make_climate("fair", {
+  airMass: "maritime",
+  fields: { humidity: { mean: 0.85 } },
+});
+
+<Weather climate={humid}>
+```
+
+## A storm, its rain and its lightning
+
+`<Storm>` puts a cumulonimbus where it is told, x and z in metres. `<Rain>`
+draws the rain round the camera wherever it is raining, and `<Lightning>`
+draws the flashes' channels under the cloud and calls you with their
+thunder:
+
+```tsx
+<Weather climate="unsettled">
   <Storm at={[25_000, 5000]} diameterM={10_000} />
+  <Rain />
+  <Lightning onThunder={(thunder) => play(thunder.loudness)} />
   <Sky />
 </Weather>
 ```
@@ -74,4 +95,4 @@ The defaults are a clear day in units where the sky is drawn at about its
 colour. Under a physical sky, give its light; see
 [the light](/docs/weather/guides/the-light).
 
-Next, [layers and genera](/docs/weather/guides/layers).
+Next, [the climates](/docs/weather/guides/climates).

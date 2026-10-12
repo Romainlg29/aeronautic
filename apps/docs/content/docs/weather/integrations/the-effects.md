@@ -10,7 +10,7 @@ read, so none of them needs to know it is there.
 
 `@aeronautic/core`'s `Flight` is the air the aircraft flies in: its
 temperature, its humidity. Inside a `<FlightProvider>`, `<Weather>` writes
-the day's temperature into it every frame, and a relative humidity of 1
+the climate's temperature into it every frame, and a relative humidity of 1
 while the aircraft is in cloud, giving its own back as it leaves:
 
 - **The wing vapour** condenses wherever the wing's low pressure takes

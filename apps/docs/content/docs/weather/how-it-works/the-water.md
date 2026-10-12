@@ -1,13 +1,13 @@
 ---
 title: The water
-description: "From the day's air to the cloud's droplets, ice and rain."
+description: "From the climate's air to the cloud's droplets, ice and rain."
 ---
 
 A cloud is air lifted until it cools to its dew point, and lifted on: the
 water it carries past that height condenses on the aerosol in it. How much
 follows from the moist adiabat, how many droplets from the air's aerosol,
 and those two set the droplets' size. So each cloud's water is worked out
-from the day, as a meteorologist would work out the cloud.
+from the air under it, as a meteorologist would work out the cloud.
 
 ## The base
 
@@ -15,8 +15,8 @@ A parcel lifted from the ground cools dry-adiabatically, g / c<sub>p</sub>,
 about 9.8 K a kilometre, keeping its water, until the air it has cooled to
 can hold no more. That height, the lifted condensation level, is found by
 bisection; it is close to Espy's 125 m for each kelvin between the
-temperature and the dew point. On the default day, 15 °C and 70 % at sea
-level, it is 680 m.
+temperature and the dew point. At 15 °C and 70 % at sea level, it is
+680 m; the thermal's own warmth over the air round it lifts it a little.
 
 ## The water
 
@@ -26,8 +26,10 @@ water gives up its heat. What it condenses by each height is the most water
 the cloud can hold there: its adiabatic water, tabulated from base to top.
 
 A real cloud keeps only a share of it, as it mixes with the dry air round it
-and rains out: the layer's `adiabaticFraction`, near 0.8 in stratocumulus
-(Albrecht et al. 1990) and a third or less in deep convection (Warner 1955).
+and rains out. A deck keeps 0.8 of it (Albrecht et al. 1990), the deeper
+altostratus 0.6, an estimate. A cumulus keeps Warner's (1955) ratio, about
+0.7 at its base and falling towards 0.2 kilometres up, an estimate fit to
+his soundings' trend.
 
 ## The droplets
 
@@ -58,6 +60,12 @@ Fu (1996) fits it, β = IWC (a<sub>0</sub> + a<sub>1</sub> / D), and scatter
 it with an asymmetry of 0.75, their halos left out.
 
 ## The rain
+
+A cumulus rains once it is deep enough for its droplets to grow into drops:
+Freud and Rosenfeld (2012) find the depth about 5 m for each droplet a cubic
+centimetre of its core's water, so 400 m in marine air and 1.1 to 1.4 km
+over land. Deeper, it rains what its updraft condenses, a share of it
+reaching the ground, over the core, a quarter of the cloud's area.
 
 Under a raining cloud, from its base to the ground, the drops are Marshall
 and Palmer's (1948) for the rain rate: N(D) = N<sub>0</sub> e<sup>−ΛD</sup>.

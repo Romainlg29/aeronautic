@@ -5,7 +5,7 @@ description: "Clouds under @takram/three-atmosphere's sky: composited in the vol
 
 <Example name="weather" />
 
-The genera under
+The climates under
 [`@takram/three-atmosphere`](https://www.npmjs.com/package/@takram/three-atmosphere)'s
 sky. Bring the sun down and the clouds redden with the light that reaches
 them through the long air, and their shaded sides darken.
@@ -62,14 +62,24 @@ weather.set({
     ),
     exposure: 1,
     visibilityM: AIR_VISIBILITY_M,
-    haze: indirect.map((e) => e / (2 * Math.PI) / Math.PI),
+    // The sky along the horizon, averaged all the way round
+    haze: horizon,
   },
 });
 ```
 
 The sun's light reaches the clouds already reddened by the air between them
 and space. The air between the camera and the clouds is takram's own, as
-`visibilityM`: Koschmieder's 3.912 over its extinction at 550 nm. The haze it fades to is the dome's radiance, an estimate
-of the horizon's.
+`visibilityM`: Koschmieder's 3.912 over its extinction at 550 nm. The haze
+it fades to is the horizon's radiance, read with takram's
+`getIndirectLuminance` along eight bearings round it, so far clouds fade
+into the bright horizon sky, not into a darker dome.
+
+Takram's sky stops at the air in front of the ground, so from a few hundred
+metres up everything under the horizon is near black. The example lights
+the ground where the backdrop's ray meets it: its albedo under the sun and
+the sky there, over π, through the air between. The ray is the scene
+camera's, with its own matrices: inside a pass, `cameraWorldMatrix` is the
+pass's quad camera.
 
 <Source file="weather.tsx" />

@@ -22,13 +22,13 @@ useFrame(() => {
 
 Or set `<Weather origin={[x, z]}>` where the scene is. Its altitude is the
 `<FlightProvider>`'s flight's, or `altitudeM` outside one. The clouds drift
-with their layers' winds and boil at their updrafts as the clock runs;
+with the climate's winds and grow and die as the clock runs;
 `timeScale={0}` holds them still.
 
 ## In the flight's air
 
 Inside a `<FlightProvider>`, `<Weather>` makes the flight's air its own each
-frame: its temperature the day's, and its relative humidity 1 while the
+frame: its temperature the climate's, and its relative humidity 1 while the
 aircraft is in cloud, where the air is saturated, and its own again outside.
 The vapour and the contrails, which read the flight's air, form as they
 would in the cloud. `aircraft` is a ref to the aircraft when it is not at

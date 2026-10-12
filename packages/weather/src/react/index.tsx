@@ -3,10 +3,12 @@ import {
   shared_context,
   useFlightStore,
   useShallowStable,
+  useVolumePass,
 } from "@aeronautic/core/react";
 import { useFrame, useThree } from "@react-three/fiber";
 import {
   useContext,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -15,30 +17,38 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { Vector3, type Object3D } from "three";
+import { Vector2, Vector3, type Object3D } from "three";
+import { Bolts } from "../bolts";
+import type { Climate, ClimateName } from "../climate";
 import { CloudsNode, type CloudsOptions } from "../clouds-node";
-import { cloud_layer, type CloudGenus } from "../genera";
-import type {
-  CloudCell,
-  CloudLayer as Layer,
-  WeatherDay,
-  WeatherLook,
-  WeatherQuality,
-  WeatherQualityName,
-} from "../types";
+import type { Flash, Thunder } from "../lightning";
+import {
+  front,
+  patch,
+  storm,
+  type FrontOptions,
+  type PatchOptions,
+  type StormOptions,
+  type WeatherPlugin as Plugin,
+} from "../plugin";
+import { RainStreaks } from "../rain";
+import type { WeatherLook, WeatherQuality, WeatherQualityName } from "../types";
 import { Weather as Core } from "../weather";
 
 // The friendly API
 //
-// `<Weather>` holds the sky: its seed, its day and how it is lit, and runs its
-// clock. Its layers are its children, `<CloudLayer genus="cumulus-mediocris">`
-// and `<Storm at={[x, z]}>`, each added while it is mounted. `useClouds()`
-// draws them for the camera: composite its node with `over` where the scene
-// is graded, as `volume_pass`'s `backdropNode`, and every effect drawn in
-// that pass goes over the clouds, and fades into the cloud round the camera.
-// Inside a `<FlightProvider>`, the flight flies through the same weather: its
-// day is the weather's, and its air saturated in cloud, so its vapour and its
-// contrails form as they would
+// `<Weather>` holds the sky: its climate, its seed and how it is lit, and
+// runs its clock. What it is made of past its climate are its children,
+// plugins each added while mounted: `<Storm at={[x, z]}>`, `<Front
+// kind="warm">`, `<Patch>`, or any plugin of your own through
+// `<WeatherPlugin plugin={...}>`. `useClouds()` draws the clouds for the
+// camera: composite its node with `over` where the scene is graded, as
+// `volume_pass`'s `backdropNode`, and every effect drawn in that pass goes
+// over the clouds and fades into the cloud round the camera. `<Rain>` and
+// `<Lightning>` draw the rain's streaks round the camera and the flashes'
+// channels. Inside a `<FlightProvider>`, the flight flies through the same
+// weather: its air saturated in cloud, so its vapour and its contrails form
+// as they would
 
 const WeatherContext = shared_context<Core | null>("weather", null);
 
@@ -55,15 +65,18 @@ export type WeatherProps = {
   /** Every cloud's seed: the same seed, the same sky. By default 1 */
   seed?: number;
 
-  /** The day the clouds form in: its warmth, its humidity, the ground */
-  day?: Partial<WeatherDay>;
+  /**
+   * The climate the sky is drawn from: a name, `"fair"` by default, or one of
+   * your own, as `make_climate` makes it
+   */
+  climate?: ClimateName | Climate;
 
-  /** How they are lit: the sun, the sky, the ground, the haze */
+  /** How it is lit: the sun, the sky, the ground, the haze */
   look?: Partial<WeatherLook>;
 
   /**
-   * How fast its clock runs against the frame's: the winds and the updrafts
-   * move with it. By default 1; 0 holds the sky still
+   * How fast its clock runs against the frame's: the winds, the storms and
+   * the lightning move with it. By default 1; 0 holds the sky still
    */
   timeScale?: number;
 
@@ -80,9 +93,10 @@ export type WeatherProps = {
   weather?: Core;
 
   /**
-   * Whether the `<FlightProvider>`'s flight flies through the weather: its
-   * day made the weather's, and its relative humidity 1 while it is in cloud,
-   * where the air is saturated, its own again out of it. By default true
+   * Whether the `<FlightProvider>`'s flight flies through the weather: the
+   * climate's warmth made the flight's, and its relative humidity 1 while it
+   * is in cloud, where the air is saturated, its own again out of it. By
+   * default true
    */
   couple?: boolean;
 
@@ -98,13 +112,13 @@ export type WeatherProps = {
 const scratch_position = new Vector3();
 
 /**
- * The weather the clouds inside it are layers of.
- * @param props Its seed, day, look and clock
+ * The weather the plugins inside it add to.
+ * @param props Its climate, seed, look and clock
  * @returns Its children, inside it
  */
 export const Weather: FC<WeatherProps> = ({
   seed = 1,
-  day,
+  climate = "fair",
   look,
   timeScale: time_scale = 1,
   origin,
@@ -121,16 +135,15 @@ export const Weather: FC<WeatherProps> = ({
   // The flight's own humidity, kept while the cloud's is written over it
   const own_humidity = useRef<number | null>(null);
 
-  const stable_day = useShallowStable(day);
+  // Compared by value: a climate written inline is a new object every render
+  const climate_key =
+    typeof climate === "string" ? climate : JSON.stringify(climate);
+  const stable_climate = useMemo(() => climate, [climate_key]);
   const stable_look = useShallowStable(look);
 
   useLayoutEffect(() => {
-    weather.set({ seed });
-  }, [weather, seed]);
-
-  useLayoutEffect(() => {
-    if (stable_day) weather.set({ day: stable_day });
-  }, [weather, stable_day]);
+    weather.set({ seed, climate: stable_climate });
+  }, [weather, seed, stable_climate]);
 
   useLayoutEffect(() => {
     if (stable_look) weather.set({ look: stable_look });
@@ -161,7 +174,7 @@ export const Weather: FC<WeatherProps> = ({
     if (!air.inCloud) own_humidity.current = null;
 
     flight.set({
-      temperatureOffsetK: weather.day.temperatureOffsetK,
+      temperatureOffsetK: weather.climate.temperatureOffsetK,
       relativeHumidity: humidity ?? undefined,
     });
   });
@@ -185,80 +198,226 @@ export const Weather: FC<WeatherProps> = ({
 };
 
 /**
- * Add a layer to the nearest weather while mounted, again whenever it changes.
- * @param layer The layer
+ * Add a plugin to the nearest weather while mounted.
+ * @param plugin The plugin, or null for none
  */
-const useLayer = (layer: Layer): void => {
+export const usePlugin = (plugin: Plugin | null): void => {
   const weather = useWeather();
 
-  // Compared by value: a layer written inline is a new object every render
-  const key = JSON.stringify(layer);
-  const held = useMemo(() => layer, [key]);
-
-  useLayoutEffect(() => weather?.add(held), [weather, held]);
+  useLayoutEffect(
+    () => (weather && plugin ? weather.use(plugin) : undefined),
+    [weather, plugin],
+  );
 };
 
 /**
- * Props for `<CloudLayer>`: a genus, and any field of a layer over its.
+ * A plugin made from options, again whenever they change by value.
+ * @param make What makes it
+ * @param options Its options
  */
-export type CloudLayerProps = Partial<Layer> & {
-  /** The genus it starts from. By default cumulus mediocris */
-  genus?: CloudGenus;
+const useMadePlugin = <T,>(make: (options: T) => Plugin, options: T): void => {
+  const key = JSON.stringify(options);
+  const plugin = useMemo(() => make(options), [make, key]);
+
+  usePlugin(plugin);
 };
 
 /**
- * A layer of cloud in the nearest `<Weather>`: a genus, and any of its
- * fields changed.
- * @param props Its genus, and its fields
+ * Props for `<WeatherPlugin>`.
+ */
+export type WeatherPluginProps = {
+  /** The plugin: keep it the same object, or it is added again */
+  plugin: Plugin;
+};
+
+/**
+ * Any plugin, in the nearest `<Weather>` while mounted.
+ * @param props The plugin
  * @returns Nothing drawn: the weather's clouds are
  */
-export const CloudLayer: FC<CloudLayerProps> = ({
-  genus = "cumulus-mediocris",
-  ...overrides
-}) => {
-  useLayer(cloud_layer(genus, overrides));
+export const WeatherPlugin: FC<WeatherPluginProps> = ({ plugin }) => {
+  usePlugin(plugin);
+
+  return null;
+};
+
+/** Props for `<Storm>`: where it stands, and how large */
+export type StormProps = StormOptions;
+
+/**
+ * A cumulonimbus where it is told: its tower to the tropopause, its anvil
+ * spread downwind, its rain under it, its lightning.
+ * @param props Where, and how large
+ * @returns Nothing drawn: the weather's clouds are
+ */
+export const Storm: FC<StormProps> = (props) => {
+  useMadePlugin(storm, props);
+
+  return null;
+};
+
+/** Props for `<Front>`: which, where and how fast */
+export type FrontProps = FrontOptions;
+
+/**
+ * A front, moving through the weather.
+ * @param props Which, where and how fast
+ * @returns Nothing drawn: the weather's clouds are
+ */
+export const Front: FC<FrontProps> = (props) => {
+  useMadePlugin(front, props);
+
+  return null;
+};
+
+/** Props for `<Patch>`: where, how large, what */
+export type PatchProps = PatchOptions;
+
+/**
+ * A patch of different air: moister, drier, warmer, lifted.
+ * @param props Where, how large, and what
+ * @returns Nothing drawn: the weather's clouds are
+ */
+export const Patch: FC<PatchProps> = (props) => {
+  useMadePlugin(patch, props);
 
   return null;
 };
 
 /**
- * Props for `<Storm>`: where it stands, and any field of its layer.
+ * Where an effect's mesh goes: the volume pass's scene, or the canvas's.
+ * @param object The mesh
  */
-export type StormProps = Omit<Partial<Layer>, keyof CloudCell | "cells"> &
-  Omit<CloudCell, "at"> & {
-    /** Where it stands in the weather, x and z in metres */
-    at: readonly [number, number];
-  };
+const useEffectMesh = (object: Object3D | null): void => {
+  const pass = useVolumePass();
+  const scene = useThree((state) => state.scene);
+
+  useLayoutEffect(() => {
+    if (!object) return;
+
+    const parent = pass?.scene ?? scene;
+
+    parent.add(object);
+
+    return () => {
+      parent.remove(object);
+    };
+  }, [object, pass, scene]);
+};
+
+const scratch_size = new Vector2();
 
 /**
- * A cumulonimbus where it is told: its tower to the tropopause, its anvil
- * spread downwind, its rain under it.
- * @param props Where, how wide, and any field of its layer
- * @returns Nothing drawn: the weather's clouds are
+ * Props for `<Rain>`.
  */
-export const Storm: FC<StormProps> = ({
-  at,
-  diameterM: diameter_m = 8000,
-  topM: top_m,
-  anvilDiameterM: anvil_diameter_m,
-  rainMmPerH: rain,
-  ...overrides
+export type RainProps = {
+  /** The weather whose rain it draws. By default the nearest `<Weather>`'s */
+  weather?: Core | null;
+};
+
+/**
+ * The rain's streaks round the camera, where it is raining there: drawn in
+ * the `<VolumePassContext>`'s pass if there is one, else in the scene.
+ * @param props The weather
+ * @returns Nothing: its mesh is added where the effects are drawn
+ */
+export const Rain: FC<RainProps> = ({ weather: given }) => {
+  const provided = useWeather();
+  const weather = given === undefined ? provided : given;
+  const [rain, set_rain] = useState<RainStreaks | null>(null);
+
+  useLayoutEffect(() => {
+    if (!weather) return;
+
+    const made = new RainStreaks(weather);
+
+    set_rain(made);
+
+    return () => {
+      set_rain(null);
+      made.dispose();
+    };
+  }, [weather]);
+
+  useEffectMesh(rain);
+
+  useFrame(({ camera, gl }, delta) => {
+    rain?.update(camera, delta, gl.getDrawingBufferSize(scratch_size).y);
+  });
+
+  return null;
+};
+
+/**
+ * Props for `<Lightning>`.
+ */
+export type LightningProps = {
+  /** The weather whose lightning it draws. By default the nearest `<Weather>`'s */
+  weather?: Core | null;
+
+  /** Called as each flash strikes */
+  onFlash?: (flash: Flash) => void;
+
+  /**
+   * Called as each flash's thunder reaches the camera: its distance, how
+   * long it rolls, how loud. Play a sound here
+   */
+  onThunder?: (thunder: Thunder) => void;
+};
+
+/**
+ * The flashes' channels under the cloud, and their thunder: drawn in the
+ * `<VolumePassContext>`'s pass if there is one, else in the scene. Their
+ * light in the clouds is the clouds' own.
+ * @param props The weather, and what to call
+ * @returns Nothing: its mesh is added where the effects are drawn
+ */
+export const Lightning: FC<LightningProps> = ({
+  weather: given,
+  onFlash: on_flash,
+  onThunder: on_thunder,
 }) => {
-  useLayer(
-    cloud_layer("cumulonimbus", {
-      cover: 0,
-      ...overrides,
-      cells: [
-        {
-          at: [at[0], at[1]],
-          diameterM: diameter_m,
-          topM: top_m,
-          anvilDiameterM: anvil_diameter_m,
-          rainMmPerH: rain,
-        },
-      ],
-    }),
-  );
+  const provided = useWeather();
+  const weather = given === undefined ? provided : given;
+  const [bolts, set_bolts] = useState<Bolts | null>(null);
+  const handlers = useRef({ on_flash, on_thunder });
+
+  handlers.current = { on_flash, on_thunder };
+
+  useLayoutEffect(() => {
+    if (!weather) return;
+
+    const made = new Bolts(weather);
+
+    set_bolts(made);
+
+    return () => {
+      set_bolts(null);
+      made.dispose();
+    };
+  }, [weather]);
+
+  useEffect(() => {
+    if (!weather) return;
+
+    const off_flash = weather.on("flash", (flash) =>
+      handlers.current.on_flash?.(flash),
+    );
+    const off_thunder = weather.on("thunder", (thunder) =>
+      handlers.current.on_thunder?.(thunder),
+    );
+
+    return () => {
+      off_flash();
+      off_thunder();
+    };
+  }, [weather]);
+
+  useEffectMesh(bolts);
+
+  useFrame(({ camera, gl }) => {
+    bolts?.update(camera, gl.getDrawingBufferSize(scratch_size).y);
+  });
 
   return null;
 };
