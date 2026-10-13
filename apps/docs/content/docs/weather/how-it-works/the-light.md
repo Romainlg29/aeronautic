@@ -70,10 +70,11 @@ so far, so a long step loses no energy and a fine one gains none.
 ## The air
 
 Between the eye and the cloud, the air keeps e<sup>−τ</sup> of the
-cloud's light, over the ray's mean distance to what it saw, and lets as
-much of what is behind the cloud through in its place: the sky drawn there
-has the air in it already, so the far cloud fades into the sky beside it,
-by day or by night. Its extinction is 3.912 / V at the ground, Koschmieder's
+cloud's light, over the ray's mean distance to what it saw, and shows as
+much of the air's own light in its place: by default what is behind the
+cloud, since the sky drawn there has the air in it already, so the far cloud
+fades into the sky beside it, by day or by night. A sky with stars or a sun
+in it gives its light without them, or they would show through the cloud. Its extinction is 3.912 / V at the ground, Koschmieder's
 range V, and falls with height as the aerosols thin out above the boundary
 layer, e<sup>−h / H</sup> with H about 1.2 km (Bruneton and Neyret 2008,
 Hillaire 2020). Along a ray from h<sub>0</sub> above the ground, μ up, over

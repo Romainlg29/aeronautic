@@ -22,12 +22,22 @@ const PLAINS_NIGHT = make_climate("fair", {
   latitudeDeg: 35,
 });
 
+// Night is the sun 18° under the horizon, past the last of the twilight
+const NIGHT_DEG = -18;
+
+// A low-light video camera, as far open as it goes: f/1.4, 1/30 s, ISO
+// 12 800 (an estimate of a good one), EV100 = log2(N² / t) − log2(ISO / 100),
+// −1.1. A meter alone would open up past it until the empty night sky was
+// grey; held there, the sky stays black, the faint stars under it, and what
+// the flashes light is all there is to see
+const LOWEST_EV100 = Math.log2(1.4 ** 2 * 30) - Math.log2(12_800 / 100);
+
 /**
  * A storm at night, its lightning lighting it from within.
  * @returns The example
  */
 export const WeatherLightning: FC = () => {
-  const [sun_deg, set_sun_deg] = useState(-10);
+  const [sun_deg, set_sun_deg] = useState(NIGHT_DEG);
   const [distance_km, set_distance_km] = useState(20);
   const weather = useMemo(() => new Weather(), []);
 
@@ -39,13 +49,14 @@ export const WeatherLightning: FC = () => {
       camera={[0, 30, 0]}
       target={[200, 95, 0]}
       fov={60}
+      lowestEv100={LOWEST_EV100}
       overlay={
         <div className="example-controls">
           <label>
             sun {sun_deg}°
             <input
               type="range"
-              min={-14}
+              min={-20}
               max={10}
               step={0.5}
               value={sun_deg}

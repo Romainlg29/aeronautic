@@ -64,7 +64,9 @@ change, and disposed of after.
 | `scene`   | the canvas's | The scene whose effects are drawn in the cloud round the camera. Null for none. |
 
 Composite it with `clouds.over(color, depth)`: the scene's colour, and its
-depth texture.
+depth texture. A sky that draws stars or a sun gives a third, its light
+without them, which the air shows in front of a far cloud: see
+[takram's atmosphere](/docs/weather/integrations/takram-atmosphere#the-stars).
 
 ## `useWeather()`
 

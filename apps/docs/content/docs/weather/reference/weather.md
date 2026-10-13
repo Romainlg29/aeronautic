@@ -64,11 +64,11 @@ new CloudsNode(weather, camera, { quality?, scene? })
 clouds(weather, camera, options?) // the same
 ```
 
-| member               | what it is                                                                   |
-| -------------------- | ---------------------------------------------------------------------------- |
-| `over(color, depth)` | The colour with the clouds composited in front of it, stopping at the depth. |
-| `medium`             | The cloud round the camera as a `SceneMedium`, worked out each frame.        |
-| `dispose()`          | Frees its targets and textures.                                              |
+| member                          | what it is                                                                                                                                                         |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `over(color, depth, airlight?)` | The colour with the clouds composited in front of it, stopping at the depth. The air in front of a far cloud shows `airlight` in its place, by default the colour. |
+| `medium`                        | The cloud round the camera as a `SceneMedium`, worked out each frame.                                                                                              |
+| `dispose()`                     | Frees its targets and textures.                                                                                                                                    |
 
 ## `RainStreaks` and `Bolts`
 

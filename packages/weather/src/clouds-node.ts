@@ -450,9 +450,13 @@ export class CloudsNode extends TempNode {
    * them, stopped by its depth.
    * @param color What is behind
    * @param depth Its depth
+   * @param airlight The light the air shows in front of a far cloud in its
+   * place: by default what lies behind it, which has the air in it already.
+   * A sky that draws its stars or its sun gives its own light without them,
+   * or they would show through the cloud
    * @returns The two, composited
    */
-  over(color: Node<"vec4">, depth: TextureNode): V4 {
+  over(color: Node<"vec4">, depth: TextureNode, airlight?: Node<"vec3">): V4 {
     this.depthNode = depth;
 
     const clouds = this.#texture_node;
@@ -504,11 +508,15 @@ export class CloudsNode extends TempNode {
       const cloud = sum.div(total.max(1e-6));
 
       // Behind the cloud as much as it hides, and in the air before it what
-      // that air takes of it: a cloud the air has all taken is what lies
-      // behind it
-      const hidden = cloud.a.mul(air.div(total.max(1e-6)));
+      // that air takes of it: a cloud the air has all taken is the air's own
+      // light, by default what lies behind it
+      const taken = cloud.a.mul(air.div(total.max(1e-6)).oneMinus());
+      const shown = airlight ? vec3(airlight) : behind.rgb;
 
-      return vec4(behind.rgb.mul(hidden.oneMinus()).add(cloud.rgb), behind.a);
+      return vec4(
+        behind.rgb.mul(cloud.a.oneMinus()).add(cloud.rgb).add(shown.mul(taken)),
+        behind.a,
+      );
     })() as unknown as V4;
   }
 

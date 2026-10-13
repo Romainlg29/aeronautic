@@ -69,8 +69,29 @@ weather.set({
 The sun's light reaches the clouds already reddened by the air between them
 and space. The air between the camera and the clouds is takram's own, as
 `visibilityM`: Koschmieder's 3.912 over its extinction at 550 nm. A far
-cloud fades into takram's sky behind it, so it fades into the bright
-horizon by day and into the dark at night.
+cloud fades into takram's sky, so it fades into the bright horizon by day
+and into the dark at night.
+
+## The stars
+
+Takram's sky has its sun and its stars in it, and a far cloud would let them
+through with the air in front of it. So the backdrop gives `over` the sky's
+light without them, its inscattering, as the light the air shows in place of
+the cloud:
+
+```ts
+const airlight = getIndirectLuminance(
+  atmosphere.cameraPositionUnit.add(atmosphere.altitudeCorrectionUnit),
+  ray,
+  vec2(0),
+  atmosphere.sunDirectionECEF,
+).get("luminance");
+
+return clouds.over(aired, depth, select(sky, airlight, aired.rgb));
+```
+
+`ray` is the pixel's direction in ECEF, as the ground's below. At night the
+storm then hides the stars behind it, and only its lightning shows.
 
 Takram's sky stops at the air in front of the ground, so from a few hundred
 metres up everything under the horizon is near black. The example lights

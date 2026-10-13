@@ -10,6 +10,7 @@ import {
   AtmosphereLight,
   AtmosphereLightNode,
   AtmosphereParameters,
+  getIndirectLuminance,
   getIndirectLuminanceToPoint,
   getSplitIlluminance,
   getSplitScalarIlluminance,
@@ -332,6 +333,13 @@ type AtmosphereProps = {
   meteredCdM2?: number;
 
   /**
+   * The lowest exposure value, at ISO 100, the camera can reach: its widest
+   * aperture, longest shutter and highest ISO. At night the meter asks for
+   * more than it has, and the sky stays as dark as it is. By default none
+   */
+  lowestEv100?: number;
+
+  /**
    * The weather whose clouds are drawn in the sky, lit by the atmosphere's
    * sun and sky, under the plumes and the vapour
    */
@@ -361,6 +369,7 @@ export const Atmosphere: FC<AtmosphereProps> = ({
   altitudeM: altitude_prop = 0,
   groundAlbedo: ground_albedo = GROUND_ALBEDO,
   meteredCdM2: metered_cd_m2 = 0,
+  lowestEv100: lowest_ev100 = -Infinity,
   weather,
   cloudQuality: cloud_quality,
   children,
@@ -482,7 +491,8 @@ export const Atmosphere: FC<AtmosphereProps> = ({
           // The far plane's depth gives no distance in a float: it is sky,
           // and the ground under the horizon, lit, behind its air
           const sky = depth.r.greaterThanEqual(1);
-          const aired = Fn(() => {
+
+          return Fn(() => {
             const result = mix(
               color,
               graded,
@@ -492,6 +502,10 @@ export const Atmosphere: FC<AtmosphereProps> = ({
                 smoothstep(AIR_VISIBLE_M, 2 * AIR_VISIBLE_M, distance),
               ),
             ).toVar();
+
+            // What the air shows in front of a far cloud: the sky without its
+            // stars and its sun, which the cloud hides, and the rest as it is
+            const airlight = result.rgb.toVar();
 
             If(sky, () => {
               // The pixel's ray through the scene's camera, not the pass's,
@@ -506,14 +520,26 @@ export const Atmosphere: FC<AtmosphereProps> = ({
                 )
                 .xyz.normalize();
 
-              result.addAssign(vec4(lit_ground(atmosphere, ray), 0));
+              const ground = lit_ground(atmosphere, ray).toConst();
+
+              result.addAssign(vec4(ground, 0));
+              airlight.assign(
+                getIndirectLuminance(
+                  atmosphere.cameraPositionUnit.add(
+                    atmosphere.altitudeCorrectionUnit,
+                  ),
+                  ray,
+                  vec2(0),
+                  atmosphere.sunDirectionECEF,
+                )
+                  .get("luminance")
+                  .add(ground),
+              );
             });
 
-            return result;
+            // The clouds in front of it, the plumes and the vapour over both
+            return clouds ? clouds.over(result, depth, airlight) : result;
           })();
-
-          // The clouds in front of it, the plumes and the vapour over both
-          return clouds ? clouds.over(aired, depth) : aired;
         },
       }),
     [scene, camera, clouds, atmosphere],
@@ -579,7 +605,7 @@ export const Atmosphere: FC<AtmosphereProps> = ({
       .transformDirection(atmosphere.matrixWorldToECEF.value);
 
     // Measured again only when the light at the aircraft can have changed
-    const key = `${metered_cd_m2},${sun_elevation_deg},${sun_azimuth_deg},${Math.round(altitude_m)},${weather ? weather.seed : ""}`;
+    const key = `${metered_cd_m2},${lowest_ev100},${sun_elevation_deg},${sun_azimuth_deg},${Math.round(altitude_m)},${weather ? weather.seed : ""}`;
     const state = measured.current;
 
     if (state.busy || state.key === key) return;
@@ -626,9 +652,12 @@ export const Atmosphere: FC<AtmosphereProps> = ({
         // EV = log2(E S / C), at ISO 100: as the luminance that reads the
         // same off a reflected meter, L = E K / C, so what else is in the
         // frame adds to it. EV = log2(L S / K)
-        const ev100 = Math.log2(
-          ((lux * REFLECTED_METER_K) / INCIDENT_METER_C + metered_cd_m2) *
-            (ISO / REFLECTED_METER_K),
+        const ev100 = Math.max(
+          Math.log2(
+            ((lux * REFLECTED_METER_K) / INCIDENT_METER_C + metered_cd_m2) *
+              (ISO / REFLECTED_METER_K),
+          ),
+          lowest_ev100,
         );
 
         renderer.toneMappingExposure = exposure_at(ev100);
