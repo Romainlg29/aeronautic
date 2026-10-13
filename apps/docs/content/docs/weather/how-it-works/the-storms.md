@@ -34,6 +34,27 @@ A storm rains about 0.3 of what it condenses, the rest evaporated or carried
 into the anvil (Market et al. 2003 find 0.2 to 0.5), over its core, about a
 quarter of its area.
 
+## Its base
+
+A storm's base is flat, at the condensation level of the air it draws in:
+that air rises from the same mixed layer and saturates at the same height.
+Two things break it:
+
+- **The forward flank.** The rain does not fall where the updraft rises.
+  The wind past the storm grows with height, s z / H for a shear s over its
+  depth H, so a drop falling at v from h drifts s h² / 2Hv; from halfway
+  up, where the rain is taken to grow (an estimate), s H / 8v. A 14 km
+  storm in 19 m/s of shear, its 80 mm/h's median drop falling at 7 m/s,
+  rains some 5 km downshear of its tower. It falls from the cloud spread
+  there, a dome on the same base as high as the rain grows, and the base
+  under the updraft is left rain-free.
+- **The wall cloud.** Under the updraft's core, the storm draws in air its
+  rain has cooled, evaporating into it to its wet bulb and saturating it
+  (Fujita 1959). Half its inflow taken to be such air, an estimate, it
+  saturates lower: an 830 m base hangs a wall cloud at about 400 m, a few
+  hundred metres down, as wall clouds are seen. It stays as long as it
+  rains.
+
 ## The lightning
 
 A mature storm flashes at random, a Poisson process at the rate Price and

@@ -6,11 +6,12 @@ import {
   parcel_top,
   PRECIPITATION_EFFICIENCY,
   UPDRAFT_SHARE,
+  wall_base,
   type CloudColumn,
   type Prepared,
 } from "./diagnose";
 import { pcg3d, unit } from "./noise";
-import { flash_rate } from "./physics";
+import { fall_speed, flash_rate, median_drop } from "./physics";
 
 // Thunderstorms, each a cell with a life (Byers and Braham 1949)
 //
@@ -18,7 +19,10 @@ import { flash_rate } from "./physics";
 //   its updraft, √(2 CAPE) halved, until it reaches its equilibrium level.
 // - Mature stage, 15 to 30 minutes: it rains, it flashes as often as Price
 //   and Rind (1992) find a storm of its height does, and its anvil spreads
-//   under the tropopause, drifting downwind with the wind's shear.
+//   under the tropopause, drifting downwind with the wind's shear. Its rain
+//   falls downshear of its tower, from the cloud it has spread there, the
+//   forward flank, and under its updraft, its base rain-free, a wall cloud
+//   hangs where it draws in the air its rain has cooled.
 // - Dissipating stage, about half an hour: the downdraft takes over, the
 //   tower and the rain fade, and the anvil, spreading still, outlives it.
 //
@@ -82,6 +86,13 @@ export type Cell = {
 
   /** Its core's rain, mm/h */
   rainMmPerH: number;
+
+  /** Where its rain falls hardest, carried downshear, in the air's frame */
+  rainX: number;
+  rainZ: number;
+
+  /** Its base under its updraft's core: its wall cloud's, metres */
+  wallM: number;
 
   /** Its flashes a minute */
   flashesPerMin: number;
@@ -228,6 +239,24 @@ export const evolve_cell = (
     flash_rate((cell.topM - climate.groundM) / 1000, climate.airMass) *
     rain_share;
 
+  const shear_x = climate.upperWind[0] - climate.wind[0];
+  const shear_z = climate.upperWind[1] - climate.wind[1];
+  const shear = Math.hypot(shear_x, shear_z) || 1;
+
+  // The rain, carried downshear as it falls: the wind past the storm grows
+  // with height as s z / H, so a drop falling at v from h drifts s h² / 2Hv,
+  // s H / 8v from halfway up, where the storm's rain grows (an estimate),
+  // its median drop's speed: some 5 km in a deep storm's 80 mm/h
+  const carried =
+    rain > 0 ? (shear * depth) / (8 * fall_speed(median_drop(rain))) : 0;
+
+  cell.rainX = spec.x + (shear_x / shear) * carried;
+  cell.rainZ = spec.z + (shear_z / shear) * carried;
+
+  // Its wall cloud, lowered as long as it rains
+  cell.wallM =
+    spec.baseM - (spec.baseM - wall_base(climate, spec.baseM)) * rain_share;
+
   // The anvil: spreading from when the tower reached the top, drifting with
   // the shear, thinning after the storm is gone
   const spreading = Math.max(
@@ -236,9 +265,6 @@ export const evolve_cell = (
   );
   const most = spec.anvilRadiusM ?? Infinity;
   const radius = Math.min(spec.radiusM + ANVIL_SPREAD_M_S * spreading, most);
-  const shear_x = climate.upperWind[0] - climate.wind[0];
-  const shear_z = climate.upperWind[1] - climate.wind[1];
-  const shear = Math.hypot(shear_x, shear_z) || 1;
 
   // Blown downwind as far as the shear carries it, but never off its
   // tower while the storm feeds it: half its radius at most
@@ -300,19 +326,42 @@ export const apply_cell = (
         (cell.topM - spec.baseM) * Math.pow(q, 0.25) +
         (core > 0 ? overshoot(cell) * Math.sqrt(core) : 0);
 
+      // Its base, lowered under the core to the wall cloud's
+      const base =
+        core > 0
+          ? spec.baseM - (spec.baseM - cell.wallM) * Math.sqrt(core)
+          : spec.baseM;
+
       column.cumulus = Math.max(column.cumulus, cell.strength);
       column.cumulusTopM = Math.max(column.cumulusTopM, top);
-      column.baseM =
-        column.cumulus > 0 ? Math.min(column.baseM, spec.baseM) : spec.baseM;
+      column.baseM = Math.min(column.baseM, base);
       column.updraftMPerS = Math.max(column.updraftMPerS, cell.updraftMPerS);
     }
 
-    // The rain under it, heaviest at the core
-    if (cell.rainMmPerH > 0 && r2 < 4) {
-      column.rainMmPerH = Math.max(
-        column.rainMmPerH,
-        cell.rainMmPerH * Math.exp(-r2 * 2),
-      );
+    if (cell.rainMmPerH > 0) {
+      const rx = x - cell.rainX;
+      const rz = z - cell.rainZ;
+      const rain2 = (rx * rx + rz * rz) / (spec.radiusM * spec.radiusM);
+
+      // The forward flank its rain falls from: a dome on the storm's base,
+      // as high as the rain grows, halfway up
+      if (rain2 < 1) {
+        const flank =
+          spec.baseM +
+          ((cell.topM - spec.baseM) / 2) * Math.pow(1 - rain2, 0.25);
+
+        column.cumulus = Math.max(column.cumulus, cell.strength);
+        column.cumulusTopM = Math.max(column.cumulusTopM, flank);
+        column.baseM = Math.min(column.baseM, spec.baseM);
+      }
+
+      // The rain under it, heaviest at its middle
+      if (rain2 < 4) {
+        column.rainMmPerH = Math.max(
+          column.rainMmPerH,
+          cell.rainMmPerH * Math.exp(-rain2 * 2),
+        );
+      }
     }
   }
 
@@ -336,7 +385,8 @@ export const apply_cell = (
  */
 export const cell_reach = (cell: Cell): number =>
   Math.max(
-    cell.spec.radiusM * 2,
+    cell.spec.radiusM * 2 +
+      Math.hypot(cell.rainX - cell.spec.x, cell.rainZ - cell.spec.z),
     Math.hypot(cell.anvilX - cell.spec.x, cell.anvilZ - cell.spec.z) +
       cell.anvilRadiusM,
   );

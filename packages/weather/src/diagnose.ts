@@ -1,5 +1,8 @@
 import {
+  AIR_CP,
   dew_point,
+  LATENT_HEAT,
+  mixing_ratio,
   saturation_pressure,
   standard_atmosphere,
 } from "@aeronautic/core";
@@ -218,6 +221,53 @@ export const condensation_level = (
   );
 
   return climate.groundM + ESPY_M_PER_K * Math.max(air_k + warmth_k - dew_k, 0);
+};
+
+// The share of a storm's inflow that has come under its rain, cooled to its
+// wet bulb and saturated: half, an estimate. Its wall cloud's base then
+// falls by about half the height of the storm's own, a few hundred metres,
+// as wall clouds are seen to
+const WALL_SHARE = 0.5;
+
+/**
+ * A storm's wall cloud's base: where its updraft draws in air its rain has
+ * cooled, evaporating into it to its wet bulb, cp (T − Tw) = L (rs(Tw) − r),
+ * and saturated it. Mixed with the rest of its inflow, that air reaches its
+ * condensation level lower (Fujita 1959).
+ * @param climate The climate
+ * @param base_m The storm's base, from its inflow's dew-point spread
+ * @returns Metres above sea level
+ */
+export const wall_base = (climate: Climate, base_m: number): number => {
+  const ground = climate.groundM;
+  const air_k =
+    air_temperature(ground, climate.temperatureOffsetK) +
+    climate.fields.warmthK.mean;
+  const dew_k = air_k - Math.max(base_m - ground, 0) / ESPY_M_PER_K;
+  const pressure = standard_atmosphere(ground).pressurePa;
+  const vapour = saturation_pressure(dew_k);
+  const mixing = mixing_ratio(vapour, pressure);
+
+  // The wet bulb, between the dew point and the air, by halving
+  let low = dew_k;
+  let high = air_k;
+
+  for (let i = 0; i < 24; i++) {
+    const wet = (low + high) / 2;
+    const left =
+      AIR_CP * (air_k - wet) -
+      LATENT_HEAT * (mixing_ratio(saturation_pressure(wet), pressure) - mixing);
+
+    if (left > 0) low = wet;
+    else high = wet;
+  }
+
+  const wet_k = (low + high) / 2;
+  const mixed_k = air_k - WALL_SHARE * (air_k - wet_k);
+  const mixed_vapour =
+    vapour + WALL_SHARE * (saturation_pressure(wet_k) - vapour);
+
+  return ground + ESPY_M_PER_K * Math.max(mixed_k - dew_point(mixed_vapour), 0);
 };
 
 /**

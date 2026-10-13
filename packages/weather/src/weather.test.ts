@@ -210,6 +210,35 @@ describe("the weather", () => {
     expect(column.cumulusTopM).toBeGreaterThan(8000);
     expect(flashes.length).toBeGreaterThan(0);
   });
+
+  it("rains downshear of a storm's tower, its wall cloud under it", () => {
+    const weather = new Weather({ climate: "unsettled", seed: 4 });
+
+    weather.use(storm({ at: [0, 0] }));
+
+    for (let i = 0; i < 100; i++) weather.advance(0.1);
+
+    const [cell] = weather.cells;
+    const { upperWind, wind } = weather.climate;
+    const [tx, tz] = weather.to_scene(0, 0, 0);
+    const [rx, rz] = weather.to_scene(cell.rainX, 0, cell.rainZ);
+    const tower = { ...weather.column(tx, tz) };
+    const rain = weather.column(rx, rz);
+
+    // Carried some kilometres the way the wind grows with height
+    const along =
+      cell.rainX * (upperWind[0] - wind[0]) +
+      cell.rainZ * (upperWind[1] - wind[1]);
+
+    expect(along).toBeGreaterThan(0);
+    expect(Math.hypot(cell.rainX, cell.rainZ)).toBeGreaterThan(2000);
+    expect(Math.hypot(cell.rainX, cell.rainZ)).toBeLessThan(10_000);
+    expect(rain.rainMmPerH).toBeGreaterThan(tower.rainMmPerH * 5);
+
+    // A wall cloud a few hundred metres under the rest of the base
+    expect(rain.baseM - tower.baseM).toBeGreaterThan(150);
+    expect(rain.baseM - tower.baseM).toBeLessThan(700);
+  });
 });
 
 describe("each climate", () => {
