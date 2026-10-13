@@ -58,7 +58,9 @@ import {
 import {
   KOSCHMIEDER,
   set_scene_medium,
+  set_scene_path,
   type SceneMedium,
+  type ScenePath,
 } from "@aeronautic/core";
 import {
   EARTH_RADIUS_M,
@@ -67,6 +69,7 @@ import {
   TABLE_SIZE,
   table_at,
 } from "./density";
+import { overshoot } from "./convection";
 import { LIGHTNING_EFFICACY } from "./lightning";
 import {
   ALBEDO,
@@ -74,6 +77,7 @@ import {
   LIGHT_FIRST_M,
   LIGHT_STEPS,
   weather_medium,
+  weather_path,
 } from "./medium";
 import {
   droplet_coefficient,
@@ -320,6 +324,9 @@ export class CloudsNode extends TempNode {
   /** The cloud round the camera, as a medium, as of the last frame */
   readonly medium: SceneMedium = { extinction: 0, color: new Color() };
 
+  // The clouds between the camera and each effect, for it to fade by
+  #path: ScenePath;
+
   /** The scene's depth, to stop the rays at: set by `over` */
   depthNode: TextureNode | null = null;
 
@@ -381,7 +388,6 @@ export class CloudsNode extends TempNode {
   #sky = vec3_uniform();
   #ground_light = vec3_uniform();
   #exposure = float_uniform(1);
-  #haze = vec3_uniform();
   #haze_extinction = float_uniform(0);
   #ground = float_uniform(0);
 
@@ -412,6 +418,7 @@ export class CloudsNode extends TempNode {
     super("vec4");
 
     this.weather = weather;
+    this.#path = weather_path(weather);
     this.camera = camera;
     this.quality = resolve_weather_quality(options.quality);
     this.scene = options.scene ?? null;
@@ -466,6 +473,7 @@ export class CloudsNode extends TempNode {
       const base = floor(at);
       const between = fract(at);
       const sum = vec4(0).toVar();
+      const air = float(0).toVar();
       const total = float(0).toVar();
 
       for (const [i, j] of [
@@ -489,12 +497,18 @@ export class CloudsNode extends TempNode {
         const weight = bilinear.mul(exp2(apart.mul(apart).negate()).add(1e-4));
 
         sum.addAssign(clouds.sample(uv).mul(weight));
+        air.addAssign(this.#march_info.sample(uv).w.mul(weight));
         total.addAssign(weight);
       }
 
       const cloud = sum.div(total.max(1e-6));
 
-      return vec4(behind.rgb.mul(cloud.a.oneMinus()).add(cloud.rgb), behind.a);
+      // Behind the cloud as much as it hides, and in the air before it what
+      // that air takes of it: a cloud the air has all taken is what lies
+      // behind it
+      const hidden = cloud.a.mul(air.div(total.max(1e-6)));
+
+      return vec4(behind.rgb.mul(hidden.oneMinus()).add(cloud.rgb), behind.a);
     })() as unknown as V4;
   }
 
@@ -807,7 +821,11 @@ export class CloudsNode extends TempNode {
       // still seen past the visibility, where a black one is not, and the
       // march's range would cut it off there, a line along the far cloud.
       // So the air lets nothing through by the range: less what it lets
-      // through there, made up to one again
+      // through there, made up to one again. There along the level, the
+      // longest path through the haze the range holds: a ray climbing out
+      // of the haze is through nearly all of its own within a few
+      // kilometres, and measured against its own it would turn every cloud
+      // past them to haze
       const at_eye = this.#haze_extinction.mul(
         exp(eye_altitude.sub(this.#ground).max(0).div(-AEROSOL_SCALE_M)),
       );
@@ -821,7 +839,7 @@ export class CloudsNode extends TempNode {
 
         return at_eye.mul(d).mul(spread) as F;
       };
-      const to_range = optical_depth(this.#range).toVar();
+      const to_range = at_eye.mul(this.#range).toVar();
       const to_cloud = optical_depth(distance.min(this.#range) as F);
       const at_range = exp(to_range.negate());
       const air = select(
@@ -830,17 +848,17 @@ export class CloudsNode extends TempNode {
           to_range.lessThan(1e-3),
           to_cloud.div(to_range.max(1e-12)).oneMinus(),
           exp(to_cloud.negate()).sub(at_range).div(at_range.oneMinus()),
-        ),
+        ).max(0),
         float(1),
       );
-      const color = light
-        .mul(air)
-        .add(this.#haze.mul(air.oneMinus()).mul(alpha))
-        .mul(this.#exposure);
+      // What the air takes it fades to what lies behind it along the ray,
+      // when it is composited: the air's own light, its whole path's, as
+      // far as it goes, the sky behind or the scene in its own air
+      const color = light.mul(air).mul(this.#exposure);
 
       return MARCHED(
         vec4(color, alpha),
-        vec4(distance, scene.min(this.#range), through, 0),
+        vec4(distance, scene.min(this.#range), through, air),
       );
     })() as unknown as { toConst: () => { get: (name: string) => V4 } };
 
@@ -933,16 +951,22 @@ export class CloudsNode extends TempNode {
     );
 
     // The shell the clouds fill: down to the ground under any rain, up to
-    // the cirrus or the tropopause over any ice
+    // the cirrus or the tropopause over any ice, or a storm's top over it
     const { bounds } = map;
     const { climate } = weather;
 
     this.#empty = !Number.isFinite(bounds.lowM) || !map.frame;
 
     const low = bounds.rain ? climate.groundM : bounds.lowM;
+    let overshot = 0;
+
+    for (const cell of weather.cells) {
+      overshot = Math.max(overshot, overshoot(cell));
+    }
+
     const ceiling = Math.max(
       climate.cirrusBaseM + climate.cirrusDepthM,
-      climate.tropopauseM,
+      climate.tropopauseM + overshot,
     );
 
     this.#low.value = Number.isFinite(low) ? Math.floor(low) : 0;
@@ -1011,7 +1035,6 @@ export class CloudsNode extends TempNode {
     this.#sky.value.fromArray(look.sky);
     this.#ground_light.value.fromArray(look.ground);
     this.#exposure.value = look.exposure;
-    this.#haze.value.fromArray(look.haze);
     this.#haze_extinction.value =
       look.visibilityM > 0 ? KOSCHMIEDER / look.visibilityM : 0;
 
@@ -1060,6 +1083,7 @@ export class CloudsNode extends TempNode {
         this.scene,
         this.medium.extinction > 0 ? this.medium : null,
       );
+      set_scene_path(this.scene, this.#path);
     }
 
     const read = this.#history[this.#current];
@@ -1106,7 +1130,10 @@ export class CloudsNode extends TempNode {
   }
 
   dispose(): void {
-    if (this.scene) set_scene_medium(this.scene, null);
+    if (this.scene) {
+      set_scene_medium(this.scene, null);
+      set_scene_path(this.scene, null);
+    }
 
     this.#march.dispose();
 

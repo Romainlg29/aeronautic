@@ -21,12 +21,11 @@ export type WeatherLook = {
 
   /**
    * The air between the camera and the clouds: its meteorological range at
-   * the ground, metres, thinning with height as the aerosols do, and the
-   * colour it fades a distant cloud to. Zero range for none:
+   * the ground, metres, thinning with height as the aerosols do: it fades a
+   * distant cloud to what lies behind it. Zero range for none:
    * an atmosphere's aerial perspective does it instead
    */
   visibilityM: number;
-  haze: readonly [number, number, number];
 
   /**
    * The scene's light units in a lux, for the lightning, whose light is
@@ -144,7 +143,6 @@ export const default_weather_look = (): WeatherLook => ({
   ground: [0.12, 0.12, 0.1],
   exposure: 1,
   visibilityM: 60_000,
-  haze: [0.6, 0.7, 0.85],
 });
 
 /**

@@ -53,8 +53,9 @@ has, and the sea reflects 6 % of what falls on it (Payne 1972).
 ## The lightning
 
 The four brightest flashes alight light the cloud from within. Each gives
-out its stroke's power, 2.3 GW for a first stroke (Guo and Krider 1982),
-over 4π r², and it reaches a point through the cloud between as a diffuse
+out its stroke's light as it is seen, its energy over the 25 ms it is seen
+for: 0.36 MJ, 2.3 GW for 158 µs, for a first stroke (Guo and Krider 1982),
+about 15 MW, over 4π r², and it reaches a point through the cloud between as a diffuse
 light. Half the way is taken to be cloud as thick as the point's own, an
 estimate, since the light comes through gaps as well. It is turned into the
 scene's units at 80 lumens a watt, an estimate for a hot channel's spectrum,
@@ -69,8 +70,10 @@ so far, so a long step loses no energy and a fine one gains none.
 ## The air
 
 Between the eye and the cloud, the air keeps e<sup>−τ</sup> of the
-cloud's light and adds the haze in its place, over the ray's mean distance
-to what it saw. Its extinction is 3.912 / V at the ground, Koschmieder's
+cloud's light, over the ray's mean distance to what it saw, and lets as
+much of what is behind the cloud through in its place: the sky drawn there
+has the air in it already, so the far cloud fades into the sky beside it,
+by day or by night. Its extinction is 3.912 / V at the ground, Koschmieder's
 range V, and falls with height as the aerosols thin out above the boundary
 layer, e<sup>−h / H</sup> with H about 1.2 km (Bruneton and Neyret 2008,
 Hillaire 2020). Along a ray from h<sub>0</sub> above the ground, μ up, over

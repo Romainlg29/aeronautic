@@ -1,5 +1,10 @@
 {
   "title": "Examples",
   "icon": "Play",
-  "pages": ["the-climates", "a-storm", "through-the-cloud"]
+  "pages": [
+    "the-climates",
+    "a-storm",
+    "lightning-at-night",
+    "through-the-cloud"
+  ]
 }

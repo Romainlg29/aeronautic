@@ -21,7 +21,11 @@ Each storm is a cell with a life, as Byers and Braham (1949) found it:
   unmixed (Weisman and Klemp 1982).
 - **Mature**, 15 to 30 minutes. It rains, its anvil spreads under the
   tropopause at about 10 m/s, a gravity current, and drifts downwind with
-  the wind's shear.
+  the wind's shear. The anvil's top is flat, the tropopause's stable air
+  over it a lid; only over the updraft's core does the tower overshoot it,
+  carried into the stratosphere until its buoyancy frequency N, about
+  0.02 s<sup>−1</sup>, turns it back: w / N, 1.4 km for a 27 m/s updraft,
+  as overshooting tops stand a kilometre or two over their anvils.
 - **Dissipating**, about half an hour. The downdraft takes over, the tower
   and the rain fade, and the anvil, spreading still, outlives it by an hour
   or so.
@@ -41,8 +45,21 @@ equator (Prentice and Mackerras 1977); the rest stay in the cloud.
 
 A ground flash is about four strokes 60 ms apart, each as bright at its peak
 as Guo and Krider (1982) measured: 2.3 GW of light for the first, 0.48 GW
-for those after. An intracloud flash is one dimmer, longer glow. Its channel
+for those after. That peak lasts some 158 µs, their strokes' characteristic
+width, so a first stroke gives out about 0.36 MJ of light; the eye sees it
+for some 25 ms, its persistence and the continuing current's glow, so that
+energy is spread over those 25 ms, not the peak held for them. An
+intracloud flash is one dimmer, longer glow, a tenth of a first stroke's
+light over 0.3 s, an estimate. Its channel
 is a fractal path, made by displacing midpoints, its branches dimmer.
+
+Seen from afar by day, little of it shows, as little does. A ground stroke's
+channel, a pixel wide at 30 km, is seen near 400 cd/m², a twentieth of
+sunlit cloud, for some 25 ms; but it strikes in the storm's rain,
+whose 80 mm/h leaves 650 m of visibility, behind the showers on the way.
+An intracloud flash lights its cloud by some tens of cd/m², nothing against
+the sun's 10<sup>4</sup>. At dusk and at night, the same flashes light the
+storm from within.
 
 ## The thunder
 

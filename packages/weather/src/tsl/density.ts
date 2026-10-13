@@ -27,6 +27,7 @@ import {
   TOWER_SHAPE,
   TOWER_UPDRAFT_M_S,
   type ShapeFrame,
+  type SheetLid,
 } from "../density";
 import type { MapFrame } from "../map";
 import {
@@ -469,12 +470,19 @@ export const cloud_at = (
     return s2.mul(s2).oneMinus() as F;
   };
 
-  const sheet =
-    (n: F, h: F, cover: F) =>
-    (shift: F | number): F =>
-      saturate(
-        n.add(shift).sub(threshold(nodes, cover)).div(EDGE_SOFTNESS),
-      ).mul(sheet_profile(h)) as F;
+  // density.ts's sheet_density: the cut rising to the noise's peak away from
+  // where the sheet saturates first
+  const sheet = (n: F, h: F, cover: F, lid: SheetLid) => {
+    const t = threshold(nodes, cover);
+    const away =
+      lid === "top" ? saturate(h).oneMinus() : saturate(h).mul(2).sub(1).abs();
+    const edge = t.add(float(SHAPE_PEAK).sub(t).mul(away));
+
+    return (shift: F | number): F =>
+      saturate(n.add(shift).sub(edge).div(EDGE_SOFTNESS)).mul(
+        sheet_profile(h),
+      ) as F;
+  };
 
   // Cumulus
   const base = heights.x;
@@ -533,6 +541,7 @@ export const cloud_at = (
           n,
           a.sub(deck_base).div(deck_top.sub(deck_base).max(1)) as F,
           covers.y as F,
+          "top",
         ),
         "y",
       );
@@ -563,6 +572,7 @@ export const cloud_at = (
           n,
           a.sub(alto_base).div(alto_top.sub(alto_base).max(1)) as F,
           covers.z as F,
+          "none",
         ),
         "z",
       );
@@ -593,6 +603,7 @@ export const cloud_at = (
           shape_noise(nodes, nodes.cirrusOrigin, at),
           a.sub(nodes.cirrusBase).div(nodes.cirrusDepth) as F,
           covers.w as F,
+          "none",
         ),
         null,
       );
@@ -619,7 +630,7 @@ export const cloud_at = (
         TABLE_ROWS.anvil,
         anvil_base as F,
         nodes.tropopause,
-        sheet(n, a.sub(anvil_base).div(anvil) as F, float(0.95)),
+        sheet(n, a.sub(anvil_base).div(anvil) as F, float(0.95), "top"),
         null,
       );
     },

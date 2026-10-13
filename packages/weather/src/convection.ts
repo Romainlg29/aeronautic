@@ -120,6 +120,10 @@ const TOWER_ASPECT = 0.25;
 const TOWER_LEAST_M = 1500;
 const TOWER_MOST_M = 6000;
 
+// The lower stratosphere's buoyancy frequency, about 0.02 s⁻¹: its air is
+// stable, so a parcel carried into it at w rises w / N before it turns back
+const STRATOSPHERE_N = 0.02;
+
 // What a storm needs to fire: buoyancy for a deep tower, and a depth the
 // storm can electrify in. Estimates
 const FIRE_CAPE = 300;
@@ -253,6 +257,20 @@ export const evolve_cell = (
 };
 
 /**
+ * How far a storm's overshooting top stands over its anvil: its updraft
+ * carries its core past the equilibrium level into the stable air above, w /
+ * N: 1.4 km for a strong storm's 27 m/s, as overshooting tops stand a
+ * kilometre or two over their anvils. Only once the tower has reached the
+ * level, while it is fed.
+ * @param cell The storm
+ * @returns Metres
+ */
+export const overshoot = (cell: Cell): number =>
+  cell.topM >= cell.spec.equilibriumM - 1
+    ? cell.updraftMPerS / STRATOSPHERE_N
+    : 0;
+
+/**
  * A storm's cloud, over a point of its column.
  * @param cell The storm
  * @param x The point, in the air's frame
@@ -273,9 +291,14 @@ export const apply_cell = (
     const r2 = (dx * dx + dz * dz) / (spec.radiusM * spec.radiusM);
 
     if (r2 < 1) {
-      // A dome, flat-topped as a tower is: (1 − r²)^¼
+      // A dome, flat-topped as a tower is: (1 − r²)^¼; over its updraft's
+      // core, CORE_AREA of it, the overshooting top, a dome of its own
       const q = 1 - r2;
-      const top = spec.baseM + (cell.topM - spec.baseM) * Math.pow(q, 0.25);
+      const core = 1 - r2 / CORE_AREA;
+      const top =
+        spec.baseM +
+        (cell.topM - spec.baseM) * Math.pow(q, 0.25) +
+        (core > 0 ? overshoot(cell) * Math.sqrt(core) : 0);
 
       column.cumulus = Math.max(column.cumulus, cell.strength);
       column.cumulusTopM = Math.max(column.cumulusTopM, top);

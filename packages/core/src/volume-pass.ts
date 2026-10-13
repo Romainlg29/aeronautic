@@ -19,7 +19,12 @@ import {
   vec4,
 } from "three/tsl";
 import type { Node, PassNode, TextureNode } from "three/webgpu";
-import { scene_medium, set_scene_medium } from "./scene";
+import {
+  scene_medium,
+  scene_path,
+  set_scene_medium,
+  set_scene_path,
+} from "./scene";
 
 type F = Node<"float">;
 type V2 = Node<"vec2">;
@@ -152,6 +157,7 @@ export const volume_pass = (
     // in its medium
     volume_scene.fog = (scene as Partial<Scene>).fog ?? null;
     set_scene_medium(volume_scene, scene_medium(scene));
+    set_scene_path(volume_scene, scene_path(scene));
 
     renderer.getClearColor(kept_color);
     kept_alpha = renderer.getClearAlpha();

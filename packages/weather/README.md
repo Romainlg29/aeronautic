@@ -113,7 +113,7 @@ Each is a physical quantity in SI units:
 - **The plugins**: a storm's place, size, top, rain, anvil and life; a
   front's kind, place, heading and speed; a patch's change to the air.
 - **`look`**: the sun's illuminance and direction, the sky's and the
-  ground's radiance, the exposure, the air's visibility and haze, and the
+  ground's radiance, the exposure, the air's visibility, and the
   scene's units in a lux for the lightning.
 - **`quality`**: the resolution, the steps, the range, the detail and the
   weather map.

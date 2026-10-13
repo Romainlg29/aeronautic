@@ -146,6 +146,42 @@ export const scene_medium = (
 ): SceneMedium | null => (scene ? (mediums.get(scene) ?? null) : null);
 
 /**
+ * The optical depth of a scene's air between two of its points, where it is
+ * not the same everywhere: the clouds between the camera and an effect, which
+ * hide it as surely as one round the camera does. It counts the medium round
+ * the camera too, so an effect that has it fogs itself by it alone
+ */
+export type ScenePath = (
+  ax: number,
+  ay: number,
+  az: number,
+  bx: number,
+  by: number,
+  bz: number,
+) => number;
+
+const paths = new WeakMap<object, ScenePath>();
+
+/**
+ * Set how a scene's effects find the air between them and the camera.
+ * @param scene The scene
+ * @param path Its optical depth between two points, or null for none
+ */
+export const set_scene_path = (scene: object, path: ScenePath | null): void => {
+  if (path) paths.set(scene, path);
+  else paths.delete(scene);
+};
+
+/**
+ * How a scene's effects find the air between them and the camera.
+ * @param scene The scene
+ * @returns Its optical depth between two points, or null
+ */
+export const scene_path = (
+  scene: object | null | undefined,
+): ScenePath | null => (scene ? (paths.get(scene) ?? null) : null);
+
+/**
  * A scene's fog as uniforms, so a volume can fog each of its samples at its
  * own depth rather than the whole of it at its hull's.
  */

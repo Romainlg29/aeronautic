@@ -46,7 +46,7 @@ lightning, raymarched in TSL for three's `WebGPURenderer`.
 - **The seed**: the same seed, the same sky, on any machine.
 - **The plugins**: what the weather is made of past its climate.
 - **The look** (`WeatherLook`): the sun, the sky and the ground that light
-  the clouds, in the scene's own light units, and the haze in front of them.
+  the clouds, in the scene's own light units, and the air in front of them.
 - **The quality**: how finely they are drawn, against how fast.
 
 Every number is worked out or measured, and the comments in the source say

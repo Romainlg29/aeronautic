@@ -14,7 +14,6 @@ light units:
 | `ground`       | `[0.12, 0.12, 0.1]` | The ground's radiance, seen from above.                  |
 | `exposure`     | `1`                 | What one unit of the scene's light is drawn as.          |
 | `visibilityM`  | `60000`             | The air's meteorological range at the ground.            |
-| `haze`         | `[0.6, 0.7, 0.85]`  | What that air fades a distant cloud to.                  |
 | `lux`          | the sun's           | The scene's light units in a lux, for the lightning.     |
 
 The defaults are a clear day in the docs' plain stage, whose sky is drawn at
@@ -46,9 +45,10 @@ units are its own.
 
 ## The air
 
-`visibilityM` and `haze` are the air between the camera and the clouds: a
-cloud d away along the ground keeps e<sup>−3.912 d / V</sup> of its light,
-Koschmieder's range V, and the rest is the haze. The haze thins with height,
+`visibilityM` is the air between the camera and the clouds: a cloud d away
+along the ground keeps e<sup>−3.912 d / V</sup> of its light, Koschmieder's
+range V, and the rest is what is drawn behind it, the sky carrying its own
+air already. The haze thins with height,
 over 1.2 km, so above it the clouds are seen clearly. Under an atmosphere that applies its own
 aerial perspective to the clouds, set `visibilityM` to 0 for none.
 

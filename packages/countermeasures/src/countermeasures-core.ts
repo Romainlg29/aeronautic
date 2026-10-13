@@ -6,6 +6,7 @@ import {
   PointLight,
   Vector3,
   type BufferGeometry,
+  type Camera,
   type PerspectiveCamera,
   type Vector2,
 } from "three";
@@ -28,6 +29,7 @@ import {
   lay_glare,
   planckian,
   scene_medium,
+  scene_path,
   standard_atmosphere,
   transmission,
   type Extinction,
@@ -122,6 +124,68 @@ import {
 const scene_fog = (scene: object): Parameters<typeof fog_factor>[0] =>
   scene_medium(scene) ??
   (scene as { fog?: Parameters<typeof fog_factor>[0] }).fog;
+
+const scratch_eye = new Vector3();
+
+const scratch_middle = new Vector3();
+
+/**
+ * The clouds' optical depth from the camera to a point, where the scene can
+ * tell.
+ * @param scene The scene
+ * @param camera The camera
+ * @param world The point, in the world
+ * @returns Its optical depth, or undefined
+ */
+const through_clouds = (
+  scene: object,
+  camera: Camera,
+  world: Vector3,
+): number | undefined => {
+  const path = scene_path(scene);
+
+  if (!path) return undefined;
+
+  scratch_eye.setFromMatrixPosition(camera.matrixWorld);
+
+  return path(
+    scratch_eye.x,
+    scratch_eye.y,
+    scratch_eye.z,
+    world.x,
+    world.y,
+    world.z,
+  );
+};
+
+/**
+ * What of an effect's light at a point reaches the camera through the scene's
+ * air: by the clouds between them where the scene can tell, under its fog,
+ * else by its medium or its fog at the point's depth.
+ * @param scene The scene
+ * @param camera The camera
+ * @param world The point, in the world
+ * @param depth Its depth in the view, metres
+ * @param through The clouds' optical depth to it, if known already
+ * @returns 0 to 1
+ */
+const kept_through = (
+  scene: object,
+  camera: Camera,
+  world: Vector3,
+  depth: number,
+  through?: number,
+): number => {
+  const tau = through ?? through_clouds(scene, camera, world);
+
+  if (tau === undefined) return 1 - fog_factor(scene_fog(scene) ?? null, depth);
+
+  // The path counts the cloud round the camera, so only the scene's own fog
+  // is left over it
+  const fog = (scene as { fog?: Parameters<typeof fog_factor>[0] }).fog;
+
+  return Math.exp(-tau) * (1 - fog_factor(fog ?? null, depth));
+};
 
 /**
  * The sky's light on one channel, as an effect is lit by it: the medium's
@@ -1591,7 +1655,6 @@ export class Countermeasures {
     const positions = geometry.getAttribute("position").array as Float32Array;
     const colors = geometry.getAttribute("color").array as Float32Array;
     const exposure = this._look.exposure;
-    const fog = scene_fog(scene);
     const pixel = glare_pixel(renderer, camera);
     const glow_s = this._flare.glowTimeS;
 
@@ -1620,7 +1683,12 @@ export class Countermeasures {
       transmission(this._extinction, distance, scratch_transmission);
       scratch_view.copy(head).applyMatrix4(camera.matrixWorldInverse);
 
-      const kept = 1 - fog_factor(fog ?? null, Math.max(-scratch_view.z, 0));
+      const kept = kept_through(
+        scene,
+        camera,
+        head,
+        Math.max(-scratch_view.z, 0),
+      );
 
       // Back along its path, and how much of that is across the view: seen
       // end on, all the trail's light is in one width
@@ -1731,7 +1799,6 @@ export class Countermeasures {
     const look = this._look;
     const lit = this._lit;
     const exposure = look.exposure;
-    const fog = scene_fog(scene);
     const medium = scene_medium(scene);
     const sun_through = medium?.sunTransmittance ?? 1;
     const pixel = glare_pixel(renderer, camera);
@@ -1755,6 +1822,16 @@ export class Countermeasures {
       const points = trail.count + (head ? 1 : 0);
 
       if (points < 2) continue;
+
+      // The clouds in front of a trail, through its middle: a trail is short
+      // beside a cloud, and a path a point would cost the frame
+      const through = through_clouds(
+        scene,
+        camera,
+        this.smokePoint(trail, (points - 1) >> 1, scratch_middle).add(
+          scratch_origin,
+        ),
+      );
 
       this.smokePoint(trail, 0, scratch_next);
 
@@ -1851,7 +1928,13 @@ export class Countermeasures {
           .add(scratch_origin)
           .applyMatrix4(camera.matrixWorldInverse);
 
-        const kept = 1 - fog_factor(fog ?? null, Math.max(-scratch_view.z, 0));
+        const kept = kept_through(
+          scene,
+          camera,
+          scratch_view,
+          Math.max(-scratch_view.z, 0),
+          through,
+        );
         const albedo = lit.smokeAlbedo * kept;
 
         for (let channel = 0; channel < 3; channel++) {
@@ -1948,7 +2031,6 @@ export class Countermeasures {
     const sparks = geometry.getAttribute("glint").array as Float32Array;
     const depths = geometry.getAttribute("chaff").array as Float32Array;
     const look = this._look;
-    const fog = scene_fog(scene);
     const medium = scene_medium(scene);
     const sun_through = medium?.sunTransmittance ?? 1;
     const pixel = glare_pixel(renderer, camera);
@@ -2008,7 +2090,12 @@ export class Countermeasures {
         .add(scratch_origin)
         .applyMatrix4(camera.matrixWorldInverse);
 
-      const kept = 1 - fog_factor(fog ?? null, Math.max(-scratch_view.z, 0));
+      const kept = kept_through(
+        scene,
+        camera,
+        scratch_middle.copy(at).add(scratch_origin),
+        Math.max(-scratch_view.z, 0),
+      );
 
       // Its fibres level out once the airstream lets them go: a level fibre
       // shows more of itself from above than edge on
@@ -2209,7 +2296,6 @@ export class Countermeasures {
     const view = camera.matrixWorldInverse;
     const exposure = this._look.exposure;
     const observer = this.observer();
-    const fog = scene_fog(scene);
     const pixel = glare_pixel(renderer, camera);
     const smallest = Math.max((0.1 * Math.PI) / 180, pixel);
 
@@ -2223,7 +2309,12 @@ export class Countermeasures {
 
       scratch_view.copy(world).applyMatrix4(view);
 
-      const kept = 1 - fog_factor(fog ?? null, Math.max(-scratch_view.z, 0));
+      const kept = kept_through(
+        scene,
+        camera,
+        world,
+        Math.max(-scratch_view.z, 0),
+      );
 
       transmission(this._extinction, distance, scratch_transmission);
 

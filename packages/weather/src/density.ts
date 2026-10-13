@@ -275,24 +275,38 @@ export const cumulus_density = (
   return saturate((noise - edge) / EDGE_SOFTNESS);
 };
 
+// A sheet is as deep as its air is moist: its water grows from where the
+// air saturates, so where the air is moister it saturates farther from where
+// it saturates first, and the cloud there is deeper. A deck saturates first
+// under its inversion, its top flat there and its base rising and falling
+// with the moisture under it (Wood 2012), an anvil under the tropopause; an
+// altostratus or a cirrus, held by no lid, from its middle. So the cut rises
+// from the sheet's cover there to the noise's peak away from it: the cloud's
+// depth in proportion to how far the noise stands over the cut, as the
+// water grows in proportion to the height. The linear rise is an estimate
+export type SheetLid = "top" | "none";
+
 /**
  * A sheet's density: stratocumulus, altostratus, cirrus, an anvil.
  * @param noise The shape noise there
  * @param height Its height through the sheet, 0 to 1
  * @param cover Its cover
+ * @param lid Where it saturates first: under its top, or in its middle
  * @returns 0 to 1
  */
 export const sheet_density = (
   noise: number,
   height: number,
   cover: number,
+  lid: SheetLid,
 ): number => {
   const h = 2 * saturate(height) - 1;
   const profile = 1 - h * h * h * h;
+  const threshold = coverage_threshold(cover);
+  const away = lid === "top" ? 1 - saturate(height) : Math.abs(h);
+  const edge = threshold + (SHAPE_PEAK - threshold) * away;
 
-  return (
-    saturate((noise - coverage_threshold(cover)) / EDGE_SOFTNESS) * profile
-  );
+  return saturate((noise - edge) / EDGE_SOFTNESS) * profile;
 };
 
 /**
@@ -482,6 +496,7 @@ export const cloud_extinction = (
         n + shift,
         (a - deck_base) / (deck_top - deck_base),
         column.stratus,
+        "top",
       ),
     );
   }
@@ -495,6 +510,7 @@ export const cloud_extinction = (
         n + shift,
         (a - column.altoBaseM) / (column.altoTopM - column.altoBaseM),
         column.alto,
+        "none",
       ),
     );
   }
@@ -522,6 +538,7 @@ export const cloud_extinction = (
         n + shift,
         (a - climate.cirrusBaseM) / climate.cirrusDepthM,
         column.cirrus,
+        "none",
       ),
     );
   }
@@ -533,7 +550,7 @@ export const cloud_extinction = (
     const n = shape_at(x, a, z, scales.stratus, scales.flatten, frame);
 
     add(TABLE_ROWS.anvil, anvil_base, climate.tropopauseM, (shift) =>
-      sheet_density(n + shift, (a - anvil_base) / column.anvilM, 0.95),
+      sheet_density(n + shift, (a - anvil_base) / column.anvilM, 0.95, "top"),
     );
   }
 

@@ -9,12 +9,12 @@ import { air_temperature, ground_share } from "./physics";
 // Mackerras 1977); the rest stay in the cloud. A ground flash is about four
 // strokes 60 ms apart (Rakov and Uman 2003), each as bright at its peak as
 // Guo and Krider (1982) measured: 2.3 GW of light for the first, 0.48 GW for
-// those after. An intracloud flash is one dimmer, longer glow. A flash's
+// those after, its energy seen over the eye's tens of milliseconds. An intracloud flash is one dimmer, longer glow. A flash's
 // channel is a fractal path, made by displacing midpoints, its branches
 // dimmer. Its thunder reaches a listener at the speed of sound, from the
 // nearest part of the channel first and the farthest last
 
-/** A stroke of a flash: when, and its peak light, watts */
+/** A stroke of a flash: when, and its light as it is first seen, watts */
 export type Stroke = { atS: number; peakW: number };
 
 /**
@@ -70,20 +70,38 @@ export type Thunder = {
 export const FIRST_STROKE_W = 2.3e9;
 export const SUBSEQUENT_STROKE_W = 4.8e8;
 
-// An intracloud flash's light: a tenth of a ground flash's first stroke, an
-// estimate, its channel inside the cloud and its current weaker
-const CLOUD_FLASH_W = 2.3e8;
+// The stroke's light lasts its characteristic width, 158 µs in Guo and
+// Krider's (1982) subsequent strokes, the first's taken the same, an
+// estimate: so a first stroke radiates 2.3 GW × 158 µs, about 0.36 MJ
+const STROKE_WIDTH_S = 158e-6;
 
-// How fast a stroke's light falls: its continuing current and the eye's
-// persistence leave it seen for some tens of milliseconds. An estimate
+// How fast a stroke's light falls as it is seen: its continuing current and
+// the eye's persistence leave it seen for some tens of milliseconds. An
+// estimate. Its energy is spread over that, not its peak held for it: the
+// peak lasts microseconds
 export const STROKE_DECAY_S = 0.025;
+
+/**
+ * The light a stroke is seen with at its start, watts: its energy, peak
+ * times width, over how long it is seen.
+ * @param peak_w Its peak optical power
+ * @returns Watts
+ */
+export const seen_stroke_w = (peak_w: number): number =>
+  (peak_w * STROKE_WIDTH_S) / STROKE_DECAY_S;
+
+// An intracloud flash's light: a tenth of a ground flash's first stroke's
+// energy, an estimate, its channel inside the cloud and its current weaker,
+// spread over its glow, whose shape below averages 0.5 × 0.6 of its start
+const CLOUD_FLASH_S = 0.3;
+const CLOUD_FLASH_W =
+  (0.1 * FIRST_STROKE_W * STROKE_WIDTH_S) / (CLOUD_FLASH_S * 0.5 * 0.6);
 
 // Rakov and Uman (2003): about four strokes a ground flash, 60 ms apart
 const STROKES_MEAN = 4;
 const STROKE_INTERVAL_S = 0.06;
 
-// An intracloud flash's glow lasts a few tenths of a second
-const CLOUD_FLASH_S = 0.3;
+// An intracloud flash's glow lasts a few tenths of a second, as above
 
 // How long a flash is kept after its last stroke, for its light to fade
 const KEEP_S = 0.5;
@@ -370,7 +388,7 @@ export class Lightning {
       for (let i = 0; i < count; i++) {
         strokes.push({
           atS: time_s + i * STROKE_INTERVAL_S * (0.5 + rng()),
-          peakW: i === 0 ? FIRST_STROKE_W : SUBSEQUENT_STROKE_W,
+          peakW: seen_stroke_w(i === 0 ? FIRST_STROKE_W : SUBSEQUENT_STROKE_W),
         });
       }
     } else {

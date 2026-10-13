@@ -35,6 +35,14 @@ density falling to their base and top as 1 − (2h − 1)<sup>4</sup>. The
 cirrus are drawn out along the wind four times their width, as its streaks
 are. These scales are estimates, from how such cloud looks.
 
+A sheet is as deep as its air is moist. A deck saturates first under its
+inversion, an anvil under the tropopause: their tops are flat, and their
+bases rise and fall with the moisture under them (Wood 2012). An
+altostratus or a cirrus, held by no lid, saturates first in its middle. So
+the cut rises from the cover's threshold where the sheet saturates first to
+the noise's peak away from it, and the sheet is deep where the noise stands
+high, thin where it barely clears the cut. The linear rise is an estimate.
+
 ## The billows
 
 The noise is cellular, inverted: its level sets are spheres about its

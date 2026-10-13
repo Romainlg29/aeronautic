@@ -62,7 +62,9 @@
         "../../packages/countermeasures/src/physics.ts"
       ],
       "@aeronautic/weather": ["../../packages/weather/src/index.ts"],
-      "@aeronautic/weather/react": ["../../packages/weather/src/react/index.tsx"],
+      "@aeronautic/weather/react": [
+        "../../packages/weather/src/react/index.tsx"
+      ],
       "@aeronautic/weather/physics": ["../../packages/weather/src/physics.ts"]
     },
     "plugins": [{ "name": "next" }]

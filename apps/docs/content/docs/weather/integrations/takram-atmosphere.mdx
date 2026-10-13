@@ -62,18 +62,15 @@ weather.set({
     ),
     exposure: 1,
     visibilityM: AIR_VISIBILITY_M,
-    // The sky along the horizon, averaged all the way round
-    haze: horizon,
   },
 });
 ```
 
 The sun's light reaches the clouds already reddened by the air between them
 and space. The air between the camera and the clouds is takram's own, as
-`visibilityM`: Koschmieder's 3.912 over its extinction at 550 nm. The haze
-it fades to is the horizon's radiance, read with takram's
-`getIndirectLuminance` along eight bearings round it, so far clouds fade
-into the bright horizon sky, not into a darker dome.
+`visibilityM`: Koschmieder's 3.912 over its extinction at 550 nm. A far
+cloud fades into takram's sky behind it, so it fades into the bright
+horizon by day and into the dark at night.
 
 Takram's sky stops at the air in front of the ground, so from a few hundred
 metres up everything under the horizon is near black. The example lights

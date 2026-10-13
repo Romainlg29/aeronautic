@@ -10,7 +10,6 @@ import {
   AtmosphereLight,
   AtmosphereLightNode,
   AtmosphereParameters,
-  getIndirectLuminance,
   getIndirectLuminanceToPoint,
   getSplitIlluminance,
   getSplitScalarIlluminance,
@@ -94,25 +93,23 @@ const SATURATION = 1.2;
 const GROUND_ALBEDO = PARAMETERS.groundAlbedo.x;
 
 // How far the air at sea level takes one display step, 1/256, off what is
-// behind it, in its bluest channel (takram's extinction is per kilometre):
+// behind it, in its bluest channel (takram's WebGPU extinction is per metre):
 // about 104 m. Nearer, the aerial perspective changes nothing visible, but
 // takram works it out in ECEF, some 6.4e6 m from the earth's centre, where a
 // float resolves half a metre, as a difference of two sky-sized lookups:
 // what it adds there is that rounding, faceted by the triangles' depths
-const BLUEST_EXTINCTION_PER_KM = Math.max(
+const BLUEST_EXTINCTION_PER_M = Math.max(
   ...PARAMETERS.rayleighScattering
     .clone()
     .add(PARAMETERS.mieExtinction)
     .toArray(),
 );
-const AIR_VISIBLE_M =
-  (-Math.log(1 - 1 / 256) / BLUEST_EXTINCTION_PER_KM) * 1000;
+const AIR_VISIBLE_M = -Math.log(1 - 1 / 256) / BLUEST_EXTINCTION_PER_M;
 
 // The air's meteorological range at sea level, as takram's air has it:
 // Koschmieder's 3.912 over its extinction at 550 nm, the green channel
 const AIR_VISIBILITY_M =
-  (3.912 / (PARAMETERS.rayleighScattering.y + PARAMETERS.mieExtinction.y)) *
-  1000;
+  3.912 / (PARAMETERS.rayleighScattering.y + PARAMETERS.mieExtinction.y);
 
 // The camera's exposure, in EV at ISO 100, before the meter has read the sky:
 // sunny sixteen
@@ -177,15 +174,11 @@ export const useAtmosphereLighting = (): AtmosphereLighting | null =>
  * @param renderer The renderer, its context holding the atmosphere
  * @returns Where to ask, and how
  */
-// How many bearings the horizon's radiance is averaged over: the sky round
-// it changes over tens of degrees, towards the sun and away
-const HORIZON_SAMPLES = 8;
-
 const make_light_probe = (renderer: WebGPURenderer) => {
   // In the atmosphere's internal units: kilometres from the earth's centre
   const point = uniform(new Vector3());
   const toward_sun = uniform(new Vector3());
-  const result = instancedArray(3, "vec4");
+  const result = instancedArray(2, "vec4");
 
   const kernel = Fn(() => {
     const split = getSplitScalarIlluminance(point, toward_sun).toConst() as {
@@ -194,25 +187,6 @@ const make_light_probe = (renderer: WebGPURenderer) => {
 
     result.element(0).assign(vec4(split.get("direct"), 0));
     result.element(1).assign(vec4(split.get("indirect"), 0));
-
-    // The sky along the horizon, all the way round: what the air in front
-    // of anything far off turns to
-    const up = point.normalize().toConst();
-    const east = vec3(0, 0, 1).cross(up).normalize().toConst();
-    const north = up.cross(east).toConst();
-    let horizon: Node<"vec3"> = vec3(0);
-
-    for (let i = 0; i < HORIZON_SAMPLES; i++) {
-      const azimuth = (2 * Math.PI * i) / HORIZON_SAMPLES;
-      const ray = north.mul(Math.cos(azimuth)).add(east.mul(Math.sin(azimuth)));
-      const seen = getIndirectLuminance(point, ray, vec2(0), toward_sun) as {
-        get: (name: string) => Node<"vec3">;
-      };
-
-      horizon = horizon.add(seen.get("luminance"));
-    }
-
-    result.element(2).assign(vec4(horizon.div(HORIZON_SAMPLES), 0));
   })().compute(1);
 
   return {
@@ -222,8 +196,7 @@ const make_light_probe = (renderer: WebGPURenderer) => {
     /**
      * Run it.
      * @returns The direct illuminance, the indirect as takram's split
-     *   illuminance gives it, the horizontal irradiance times 2π, and the
-     *   horizon's mean radiance
+     *   illuminance gives it, the horizontal irradiance times 2π
      */
     read: async () => {
       renderer.compute(kernel);
@@ -235,7 +208,6 @@ const make_light_probe = (renderer: WebGPURenderer) => {
       return {
         direct: [data[0], data[1], data[2]] as Vector3Tuple,
         indirect: [data[4], data[5], data[6]] as Vector3Tuple,
-        horizon: [data[8], data[9], data[10]] as Vector3Tuple,
       };
     },
     dispose: () => {
@@ -618,7 +590,7 @@ export const Atmosphere: FC<AtmosphereProps> = ({
 
     void probe
       .read()
-      .then(({ direct, indirect, horizon }) => {
+      .then(({ direct, indirect }) => {
         // Before the tables are built it reads nothing: try again
         if (!(indirect[1] > 0)) return;
 
@@ -678,8 +650,9 @@ export const Atmosphere: FC<AtmosphereProps> = ({
             ) as Vector3Tuple,
             exposure: 1,
             visibilityM: AIR_VISIBILITY_M,
-            // The air's own light far off: the horizon's, all the way round
-            haze: horizon,
+            // Takram's units in a lux, as the meter reads them above: the
+            // lightning's own, not the sun's, which is none at night
+            lux: PARAMETERS.luminanceScale,
           },
         });
 

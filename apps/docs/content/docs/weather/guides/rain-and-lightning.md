@@ -39,8 +39,10 @@ a storm the rain is grey; under a thin shower it is bright.
 The flashes' channels under the cloud. A storm flashes as often as Price and
 Rind (1992) find a storm of its height does. A share of the flashes strikes
 the ground, more towards the equator (Prentice and Mackerras 1977). A ground
-flash is about four strokes 60 ms apart, and its first stroke gives out
-2.3 GW of light (Guo and Krider 1982).
+flash is about four strokes 60 ms apart, and its first stroke peaks at
+2.3 GW of light for some 158 µs (Guo and Krider 1982), seen as that energy
+spread over 25 ms. A scene not lit in takram's units or the sun's sets the
+look's `lux`: the sun's is none at night.
 
 Inside the cloud, the flash is the cloud's light: the clouds' shader lights
 the cloud round each of the four brightest flashes. Under the base the

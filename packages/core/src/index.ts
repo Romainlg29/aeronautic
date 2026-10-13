@@ -61,11 +61,14 @@ export {
   scene_depth,
   scene_fog_factor,
   scene_medium,
+  scene_path,
   scene_view_z,
   set_scene_medium,
+  set_scene_path,
   write_scene_fog,
   type SceneFogUniforms,
   type SceneMedium,
+  type ScenePath,
 } from "./scene";
 export {
   volume_pass,

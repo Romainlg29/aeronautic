@@ -1,4 +1,4 @@
-import type { SceneMedium } from "@aeronautic/core";
+import type { SceneMedium, ScenePath } from "@aeronautic/core";
 import { Color } from "three";
 import type { Weather } from "./weather";
 
@@ -140,3 +140,38 @@ export const weather_medium = (
 
   return out;
 };
+
+// A path's samples: as far apart as a cloud's finest lobes the detail draws,
+// tens of metres (an estimate), and no more than sixteen however long it is,
+// a few microseconds each
+const PATH_STEP_M = 25;
+const PATH_MOST = 16;
+
+/**
+ * The clouds between two points of the scene, for the effects drawn in it:
+ * their optical depth, the extinction at the midpoints of even steps along
+ * the way.
+ * @param weather The weather
+ * @returns The path's optical depth, between two points
+ */
+export const weather_path =
+  (weather: Weather): ScenePath =>
+  (ax, ay, az, bx, by, bz) => {
+    const dx = bx - ax;
+    const dy = by - ay;
+    const dz = bz - az;
+    const length = Math.hypot(dx, dy, dz);
+    const steps = Math.min(
+      Math.max(Math.ceil(length / PATH_STEP_M), 1),
+      PATH_MOST,
+    );
+    let depth = 0;
+
+    for (let i = 0; i < steps; i++) {
+      const t = (i + 0.5) / steps;
+
+      depth += weather.sample(ax + dx * t, ay + dy * t, az + dz * t).extinction;
+    }
+
+    return (depth * length) / steps;
+  };
