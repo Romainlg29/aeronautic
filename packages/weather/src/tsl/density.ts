@@ -19,6 +19,7 @@ import {
   EDGE_SOFTNESS,
   RAIN_COEFFICIENT,
   RAIN_EXPONENT,
+  RAIN_SHAFTS_MEAN,
   SHALLOW_SHAPE,
   TABLE_RANGE_M,
   TABLE_ROW_COUNT,
@@ -371,6 +372,9 @@ export type CloudNodes = {
   ice: F;
   rain: F;
 
+  /** The rain's without its shafts: their mean, for a long path through it */
+  rainMean: F;
+
   /** The optical depth over it to its cloud's top, and under it to its base */
   up: F;
   down: F;
@@ -399,6 +403,7 @@ export const cloud_at = (
   const water = vec3(0).toVar();
   const ice = float(0).toVar();
   const rain = float(0).toVar();
+  const rain_mean = float(0).toVar();
   const up = float(0).toVar();
   const down = float(0).toVar();
   const a = altitude;
@@ -670,14 +675,15 @@ export const cloud_at = (
         vec3(q.x, q.y.div(6), q.z).mul(nodes.rainTile) as unknown as V3,
       );
 
-      rain.assign(
-        pow(rate, RAIN_EXPONENT)
-          .mul(RAIN_COEFFICIENT)
-          .mul(under)
-          .mul(saturate(shafts.mul(1.6).sub(0.2))),
-      );
+      const unshafted = pow(rate, RAIN_EXPONENT)
+        .mul(RAIN_COEFFICIENT)
+        .mul(under)
+        .toVar();
+
+      rain.assign(unshafted.mul(saturate(shafts.mul(1.6).sub(0.2))));
+      rain_mean.assign(unshafted.mul(RAIN_SHAFTS_MEAN));
     });
   });
 
-  return { water, ice, rain, up, down };
+  return { water, ice, rain, rainMean: rain_mean, up, down };
 };

@@ -67,7 +67,7 @@ export const WeatherLightning: FC = () => {
             {distance_km} km off
             <input
               type="range"
-              min={8}
+              min={4}
               max={40}
               step={1}
               value={distance_km}

@@ -46,7 +46,11 @@ look's `lux`: the sun's is none at night.
 
 Inside the cloud, the flash is the cloud's light: the clouds' shader lights
 the cloud round each of the four brightest flashes. Under the base the
-channel is drawn, a pixel wide, as bright as its light over that width.
+channel is drawn, a pixel wide, as bright as its light over that width,
+dimmed by the rain between it and the camera: e<sup>−τ</sup> of it gets
+through, τ the rain's and the cloud's depth on the way to the middle of the
+channel. Seen from 4 km, through 7 of it, a stroke keeps 0.06 % of its light,
+and at night that is still more than the camera can show.
 
 | prop        | what it is                                                                           |
 | ----------- | ------------------------------------------------------------------------------------ |

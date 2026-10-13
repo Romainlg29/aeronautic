@@ -162,7 +162,9 @@ const DETAIL_FADE = 0.3;
 export const LIGHTS = 4;
 
 // The share of a flash's distance to a point of cloud that is cloud as thick
-// as the point's own: the light comes through gaps as well. An estimate
+// as the point's own: the light comes through gaps as well. An estimate. The
+// rain on the way is its mean, not the shaft the point is in: a path
+// kilometres long crosses many
 const LIGHTNING_PATH_SHARE = 0.5;
 
 // What a ray hands back: its light and its alpha, and where it saw cloud,
@@ -784,7 +786,11 @@ export class CloudsNode extends TempNode {
             If(flash.w.greaterThan(0), () => {
               const apart = flash.xyz.sub(p);
               const r2 = dot(apart, apart).max(1e4);
-              const between = sigma.mul(sqrt(r2)).mul(LIGHTNING_PATH_SHARE);
+              const between = sigma
+                .sub(cloud.rain)
+                .add(cloud.rainMean)
+                .mul(sqrt(r2))
+                .mul(LIGHTNING_PATH_SHARE);
 
               flashes.addAssign(
                 flash.w

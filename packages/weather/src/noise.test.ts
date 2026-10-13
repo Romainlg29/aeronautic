@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { RAIN_SHAFTS_MEAN } from "./density";
+import { random } from "./lightning";
 import {
   detail_channels,
   detail_noise,
@@ -11,6 +13,8 @@ import {
   shape_channels,
   shape_noise,
   SHAPE_PEAK,
+  SHAPE_SALT,
+  shape_union,
   unit,
   worley,
   worley_fbm,
@@ -118,5 +122,23 @@ describe("the air's field noise", () => {
 
     expect(Math.sqrt(squares / count)).toBeGreaterThan(0.4);
     expect(Math.sqrt(squares / count)).toBeLessThan(0.6);
+  });
+});
+
+describe("the rain's shafts", () => {
+  it("are the share of the rain their mean says", () => {
+    const rng = random(7);
+    let sum = 0;
+    const count = 50_000;
+
+    for (let i = 0; i < count; i++) {
+      const n = shape_noise(
+        shape_union(rng() * 8, rng() * 8, rng() * 8, SHAPE_SALT),
+      );
+
+      sum += Math.min(Math.max(n * 1.6 - 0.2, 0), 1);
+    }
+
+    expect(sum / count).toBeCloseTo(RAIN_SHAFTS_MEAN, 1);
   });
 });

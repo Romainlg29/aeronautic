@@ -8,7 +8,7 @@ import {
   Vector3,
 } from "three";
 import { attribute, vec4 } from "three/tsl";
-import { chromaticity_rgb, planckian } from "@aeronautic/core";
+import { chromaticity_rgb, planckian, type ScenePath } from "@aeronautic/core";
 import {
   CustomBlending,
   DoubleSide,
@@ -19,6 +19,7 @@ import {
 } from "three/webgpu";
 import { empty_column } from "./diagnose";
 import { flash_power, LIGHTNING_EFFICACY } from "./lightning";
+import { weather_path } from "./medium";
 import { look_lux } from "./types";
 import type { Weather } from "./weather";
 
@@ -33,6 +34,12 @@ import type { Weather } from "./weather";
 // its light is the cloud's, the clouds' shader lighting it from within; only
 // the channel under the base, in clear air, is drawn. Each is a ribbon
 // facing the camera, laid on the CPU each frame a flash is alight
+//
+// What it gives is added over the scene, so the rain and cloud between it
+// and the eye are counted here: e^(−τ) of it gets through, τ along the way
+// to the middle of its channel under the base. Its branches are a few
+// hundred metres from it, the rain's shafts kilometres across, so the one
+// path stands for them all, a single path a flash each frame
 
 /** The most segments drawn at once */
 export const BOLT_SEGMENTS = 2048;
@@ -55,6 +62,7 @@ const eye = new Vector3();
 const along = new Vector3();
 const across = new Vector3();
 const view = new Vector3();
+const middle = new Vector3();
 
 /**
  * The flashes' channels, as a mesh: add it where the effects are drawn, and
@@ -63,6 +71,7 @@ const view = new Vector3();
 export class Bolts extends Mesh<BufferGeometry, MeshBasicNodeMaterial> {
   readonly weather: Weather;
   #column = empty_column();
+  #path: ScenePath;
 
   /**
    * @param weather The weather whose lightning it draws
@@ -105,6 +114,7 @@ export class Bolts extends Mesh<BufferGeometry, MeshBasicNodeMaterial> {
     super(geometry, material);
 
     this.weather = weather;
+    this.#path = weather_path(weather);
     this.name = "weather.bolts";
     this.frustumCulled = false;
     this.matrixAutoUpdate = false;
@@ -156,6 +166,31 @@ export class Bolts extends Mesh<BufferGeometry, MeshBasicNodeMaterial> {
 
       const per_metre = power / Math.max(weighted, 1);
 
+      // What gets through to the eye: the path to the middle of the
+      // channel under the base
+      middle.set(0, 0, 0);
+
+      let under = 0;
+
+      for (let k = 0; k < points.length; k += 3) {
+        a.fromArray(weather.to_scene(points[k], points[k + 1], points[k + 2]));
+
+        const column = weather.column(a.x, a.z, this.#column);
+
+        if (column.cumulus > 0.05 && points[k + 1] > column.baseM) continue;
+
+        middle.add(a);
+        under++;
+      }
+
+      if (under === 0) continue;
+
+      middle.divideScalar(under);
+
+      const kept = Math.exp(
+        -this.#path(eye.x, eye.y, eye.z, middle.x, middle.y, middle.z),
+      );
+
       for (let s = 0; s < weights.length && count < BOLT_SEGMENTS; s++) {
         const i = segments[2 * s] * 3;
         const j = segments[2 * s + 1] * 3;
@@ -183,7 +218,7 @@ export class Bolts extends Mesh<BufferGeometry, MeshBasicNodeMaterial> {
           .multiplyScalar(width / 2);
 
         const radiance =
-          (per_metre * weights[s] * scale) / (4 * Math.PI * width);
+          (per_metre * weights[s] * scale * kept) / (4 * Math.PI * width);
         const at = count * VERTICES * 3;
         const corners = [
           [a, -1],

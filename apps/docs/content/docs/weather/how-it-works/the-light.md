@@ -57,7 +57,10 @@ out its stroke's light as it is seen, its energy over the 25 ms it is seen
 for: 0.36 MJ, 2.3 GW for 158 µs, for a first stroke (Guo and Krider 1982),
 about 15 MW, over 4π r², and it reaches a point through the cloud between as a diffuse
 light. Half the way is taken to be cloud as thick as the point's own, an
-estimate, since the light comes through gaps as well. It is turned into the
+estimate, since the light comes through gaps as well. The rain on the way
+is its mean, 0.56 of the rain where it falls hardest, measured over the
+shafts' noise, not the shaft the point is in: a path kilometres long crosses
+many, and the point's own would light the rain in stripes. It is turned into the
 scene's units at 80 lumens a watt, an estimate for a hot channel's spectrum,
 and the look's `lux`.
 
