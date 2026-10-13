@@ -395,14 +395,46 @@ const scratch_transmission: [number, number, number] = [0, 0, 0];
 const scratch_rgb: [number, number, number] = [0, 0, 0];
 
 /**
+ * How much of a point's light gets to the eye: what the clouds and the fog
+ * keep, through the haze in `scratch_transmission`, its mean over the
+ * channels.
+ * @param kept What the clouds and the fog keep
+ * @returns The share that gets to the eye
+ */
+const seen_through = (kept: number): number =>
+  (kept *
+    (scratch_transmission[0] +
+      scratch_transmission[1] +
+      scratch_transmission[2])) /
+  3;
+
+/**
+ * The haze's tint on one channel, `scratch_transmission` over its mean: what
+ * it does to a colour beside the share of it `seen_through` keeps.
+ * @param channel The channel
+ * @returns The tint
+ */
+const tint_through = (channel: number): number => {
+  const mean =
+    (scratch_transmission[0] +
+      scratch_transmission[1] +
+      scratch_transmission[2]) /
+    3;
+
+  return mean > 0 ? scratch_transmission[channel] / mean : 0;
+};
+
+/**
  * Write one corner of a ribbon at `section_rgb`.
  * @param positions The positions
  * @param colors The colours
  * @param vertex Which vertex
  * @param side Where
  * @param smoke The smoke's attribute, if a smoke's: where across, the depth
+ * and how much of its light gets to the eye
  * @param across Which side, 1 left and -1 right
  * @param tau The smoke's depth through its middle there
+ * @param kept How much of its light gets to the eye
  */
 const lay_corner = (
   positions: Float32Array,
@@ -412,6 +444,7 @@ const lay_corner = (
   smoke: Float32Array | null,
   across: number,
   tau: number,
+  kept: number,
 ) => {
   const at = vertex * 3;
 
@@ -423,8 +456,9 @@ const lay_corner = (
   colors[at + 2] = section_rgb[2];
 
   if (smoke) {
-    smoke[vertex * 2] = across;
-    smoke[vertex * 2 + 1] = tau;
+    smoke[vertex * 3] = across;
+    smoke[vertex * 3 + 1] = tau;
+    smoke[vertex * 3 + 2] = kept;
   }
 };
 
@@ -437,8 +471,10 @@ const lay_corner = (
  * @param colors The colours
  * @param first The segment's first vertex
  * @param start Whether this is its start, or its end
- * @param smoke The smoke's attribute, across and depth, if a smoke's
+ * @param smoke The smoke's attribute, across, depth and what is kept of it,
+ * if a smoke's
  * @param tau The smoke's depth through its middle there
+ * @param kept How much of its light gets to the eye
  */
 const lay_section = (
   positions: Float32Array,
@@ -447,15 +483,43 @@ const lay_section = (
   start: boolean,
   smoke: Float32Array | null = null,
   tau = 0,
+  kept = 1,
 ) => {
   if (start) {
-    lay_corner(positions, colors, first, scratch_left, smoke, 1, tau);
-    lay_corner(positions, colors, first + 3, scratch_left, smoke, 1, tau);
-    lay_corner(positions, colors, first + 5, scratch_right, smoke, -1, tau);
+    lay_corner(positions, colors, first, scratch_left, smoke, 1, tau, kept);
+    lay_corner(positions, colors, first + 3, scratch_left, smoke, 1, tau, kept);
+    lay_corner(
+      positions,
+      colors,
+      first + 5,
+      scratch_right,
+      smoke,
+      -1,
+      tau,
+      kept,
+    );
   } else {
-    lay_corner(positions, colors, first + 1, scratch_left, smoke, 1, tau);
-    lay_corner(positions, colors, first + 2, scratch_right, smoke, -1, tau);
-    lay_corner(positions, colors, first + 4, scratch_right, smoke, -1, tau);
+    lay_corner(positions, colors, first + 1, scratch_left, smoke, 1, tau, kept);
+    lay_corner(
+      positions,
+      colors,
+      first + 2,
+      scratch_right,
+      smoke,
+      -1,
+      tau,
+      kept,
+    );
+    lay_corner(
+      positions,
+      colors,
+      first + 4,
+      scratch_right,
+      smoke,
+      -1,
+      tau,
+      kept,
+    );
   }
 };
 
@@ -1935,23 +1999,19 @@ export class Countermeasures {
           Math.max(-scratch_view.z, 0),
           through,
         );
-        const albedo = lit.smokeAlbedo * kept;
+        // What gets to the eye dims its light and what it hides alike, so
+        // it is drawn once, on its alpha: the colour is the smoke's own,
+        // tinted by the haze
+        const seen = seen_through(kept);
 
         for (let channel = 0; channel < 3; channel++) {
           section_rgb[channel] =
-            albedo *
-            scratch_transmission[channel] *
+            lit.smokeAlbedo *
+            tint_through(channel) *
             (look.sunColor[channel] * sun * sun_through +
               sky_light(look, channel, medium) +
               this._color[channel] * flares);
         }
-
-        tau *=
-          (kept *
-            (scratch_transmission[0] +
-              scratch_transmission[1] +
-              scratch_transmission[2])) /
-          3;
 
         // Across the trail, square to it and to the view
         scratch_side
@@ -1979,11 +2039,11 @@ export class Countermeasures {
         const first = laid * SMOKE_VERTICES + index * 6;
 
         if (index > 0) {
-          lay_section(positions, colors, first - 6, false, depths, tau);
+          lay_section(positions, colors, first - 6, false, depths, tau, seen);
         }
 
         if (index < points - 1) {
-          lay_section(positions, colors, first, true, depths, tau);
+          lay_section(positions, colors, first, true, depths, tau, seen);
         }
       }
 
@@ -2030,6 +2090,7 @@ export class Countermeasures {
     const colors = geometry.getAttribute("color").array as Float32Array;
     const sparks = geometry.getAttribute("glint").array as Float32Array;
     const depths = geometry.getAttribute("chaff").array as Float32Array;
+    const seens = geometry.getAttribute("kept").array as Float32Array;
     const look = this._look;
     const medium = scene_medium(scene);
     const sun_through = medium?.sunTransmittance ?? 1;
@@ -2102,13 +2163,8 @@ export class Countermeasures {
       const level = chaff_bloom(this._chaff, age_s);
       const section =
         this._chaff_section_m2 * level_shadow(level, scratch_toward.y);
-      const tau =
-        ((section / (2 * Math.PI * across * along)) *
-          kept *
-          (scratch_transmission[0] +
-            scratch_transmission[1] +
-            scratch_transmission[2])) /
-        3;
+      const tau = section / (2 * Math.PI * across * along);
+      const seen = seen_through(kept);
 
       // How far its fibres turn against the half way over the frame: their
       // own tumbling, and the view turning, which turns h half as much
@@ -2201,22 +2257,19 @@ export class Countermeasures {
         spread += (lit * lit) / k;
       }
 
-      const albedo = this._chaff.reflectance * kept;
+      const albedo = this._chaff.reflectance;
 
       for (let channel = 0; channel < 3; channel++) {
         section_rgb[channel] =
-          albedo *
-          scratch_transmission[channel] *
-          sky_light(look, channel, medium);
+          albedo * tint_through(channel) * sky_light(look, channel, medium);
         glint_rgb[channel] =
           albedo *
-          scratch_transmission[channel] *
+          tint_through(channel) *
           (look.sunColor[channel] * sun_light * sun_through +
             this._color[channel] * flares);
       }
 
-      // The glints each unit of drawn depth holds: the drawn depth is the
-      // true one dimmed by the haze and the fog
+      // The glints each unit of its depth holds
       const glints =
         light > 0 && tau > 0
           ? (((light * light) / spread) * section) /
@@ -2256,6 +2309,7 @@ export class Countermeasures {
         depths[vertex * 4 + 1] = v;
         depths[vertex * 4 + 2] = tau;
         depths[vertex * 4 + 3] = glints;
+        seens[vertex] = seen;
       }
 
       laid++;
@@ -2265,6 +2319,7 @@ export class Countermeasures {
     geometry.getAttribute("color").needsUpdate = true;
     geometry.getAttribute("glint").needsUpdate = true;
     geometry.getAttribute("chaff").needsUpdate = true;
+    geometry.getAttribute("kept").needsUpdate = true;
     geometry.setDrawRange(0, laid * CHAFF_VERTICES);
   }
 
