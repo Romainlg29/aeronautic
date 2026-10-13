@@ -29,6 +29,8 @@ shows up in the examples straight away, with no build.
 | `packages/contrails/src`         | Contrails: the Schmidt–Appleman criterion, the plume, the ice and the wake |
 | `packages/lights/src`            | Lights: the rule's arcs and intensities, flashes, the air, glare, beams    |
 | `packages/countermeasures/src`   | Countermeasures: the flare's grain, its flame, its flight, the programs    |
+| `packages/weather/src`           | Weather: the condensation level, the droplets, the field, the march        |
+| `packages/weather/src/tsl`       | Its noise and field, in TSL: the CPU's functions, line for line            |
 | `packages/controls/src`          | Control surfaces, gear and engines: finding parts, mixing, the rig         |
 | `packages/core/src`              | The shared flight, the atmosphere and the depth capture                    |
 | `apps/docs`                      | The docs site (Fumadocs on Next.js, exported static)                       |
@@ -38,6 +40,7 @@ shows up in the examples straight away, with no build.
 The docs hold one section per library, `content/docs/afterburner`,
 `content/docs/wing-vapor`, `content/docs/contrails`, `content/docs/lights`,
 `content/docs/countermeasures`,
+`content/docs/weather`,
 `content/docs/controls`
 and `content/docs/core`,
 each with its own sidebar. Afterburner's params,

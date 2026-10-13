@@ -34,6 +34,10 @@ const EXAMPLES = {
   "atmosphere-vapor": load(() => import("@/examples/atmosphere-vapor")),
   "atmosphere-contrails": load(() => import("@/examples/atmosphere-contrails")),
   "atmosphere-lights": load(() => import("@/examples/atmosphere-lights")),
+  weather: load(() => import("@/examples/weather")),
+  "weather-storm": load(() => import("@/examples/weather-storm")),
+  "weather-lightning": load(() => import("@/examples/weather-lightning")),
+  "weather-flight": load(() => import("@/examples/weather-flight")),
   "atmosphere-countermeasures": load(
     () => import("@/examples/atmosphere-countermeasures"),
   ),

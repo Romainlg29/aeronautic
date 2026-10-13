@@ -10,7 +10,10 @@ import {
   scene_color,
   scene_depth,
   scene_fog_factor,
+  scene_path,
   scene_view_z,
+  set_scene_medium,
+  set_scene_path,
   volume_pass,
   write_scene_fog,
 } from "@aeronautic/core";
@@ -55,3 +58,16 @@ its ray, so it fogs each sample itself, from uniforms holding the scene's fog.
 | `scene_fog_factor(uniforms, depth)`    | TSL: how much of the light from a view depth the fog replaces, 0 to 1, as three's own. |
 | `fog_factor(fog, depth)`               | The same on the CPU.                                                                   |
 | `SCENE_FOG_NONE`, `_RANGE`, `_DENSITY` | The values of `kind`.                                                                  |
+
+## The air between
+
+Three's fogs are the same everywhere. A cloud is not: the one the camera is
+in hides everything round it, and one between the camera and an effect hides
+the effect. Weather sets both on the scene, and the effects read them.
+
+| export                        | what it is                                                                                                                               |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `set_scene_medium(scene, m)`  | The medium round the camera, a `SceneMedium`: `{ extinction, color, sunTransmittance?, light? }`. Over the fog while it is thick at all. |
+| `scene_medium(scene)`         | It, or null.                                                                                                                             |
+| `set_scene_path(scene, path)` | A `ScenePath`, `(ax, ay, az, bx, by, bz) => τ`: the optical depth between two points, the medium round the camera counted in.            |
+| `scene_path(scene)`           | It, or null. An effect at a point keeps e<sup>−τ</sup> of its light from the camera to it, then the scene's fog over that.               |

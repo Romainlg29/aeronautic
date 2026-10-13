@@ -22,7 +22,7 @@ import { airframe_only, Exhaust, Slider, useFighter } from "./fighter";
  * plumes and its vapour in the atmosphere's light.
  * @returns The model and its effects
  */
-const Fighter: FC = () => {
+export const Fighter: FC = () => {
   const { scene, animations } = useFighter();
   const body = useRef<Group>(null);
   const lighting = useAtmosphereLighting();

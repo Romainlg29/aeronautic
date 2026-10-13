@@ -58,6 +58,9 @@ const config: NextConfig = {
         "../../packages/countermeasures/src/physics.ts",
       "@aeronautic/countermeasures":
         "../../packages/countermeasures/src/index.ts",
+      "@aeronautic/weather/react": "../../packages/weather/src/react/index.tsx",
+      "@aeronautic/weather/physics": "../../packages/weather/src/physics.ts",
+      "@aeronautic/weather": "../../packages/weather/src/index.ts",
     },
   },
 };

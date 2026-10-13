@@ -6,6 +6,7 @@ import {
   PointLight,
   Vector3,
   type BufferGeometry,
+  type Camera,
   type PerspectiveCamera,
   type Vector2,
 } from "three";
@@ -27,6 +28,8 @@ import {
   hide_glare,
   lay_glare,
   planckian,
+  scene_medium,
+  scene_path,
   standard_atmosphere,
   transmission,
   type Extinction,
@@ -34,6 +37,7 @@ import {
   type GlareUniforms,
   type Observer,
   type SceneBackdrop,
+  type SceneMedium,
 } from "@aeronautic/core";
 import {
   burn_time,
@@ -110,6 +114,99 @@ import {
   type CountermeasuresQualityName,
   type DispenserMount,
 } from "./types";
+
+/**
+ * What a scene fogs its effects with: its medium while it has one, a cloud
+ * the camera is in, or else its fog.
+ * @param scene The scene
+ * @returns Its medium or its fog
+ */
+const scene_fog = (scene: object): Parameters<typeof fog_factor>[0] =>
+  scene_medium(scene) ??
+  (scene as { fog?: Parameters<typeof fog_factor>[0] }).fog;
+
+const scratch_eye = new Vector3();
+
+const scratch_middle = new Vector3();
+
+/**
+ * The clouds' optical depth from the camera to a point, where the scene can
+ * tell.
+ * @param scene The scene
+ * @param camera The camera
+ * @param world The point, in the world
+ * @returns Its optical depth, or undefined
+ */
+const through_clouds = (
+  scene: object,
+  camera: Camera,
+  world: Vector3,
+): number | undefined => {
+  const path = scene_path(scene);
+
+  if (!path) return undefined;
+
+  scratch_eye.setFromMatrixPosition(camera.matrixWorld);
+
+  return path(
+    scratch_eye.x,
+    scratch_eye.y,
+    scratch_eye.z,
+    world.x,
+    world.y,
+    world.z,
+  );
+};
+
+/**
+ * What of an effect's light at a point reaches the camera through the scene's
+ * air: by the clouds between them where the scene can tell, under its fog,
+ * else by its medium or its fog at the point's depth.
+ * @param scene The scene
+ * @param camera The camera
+ * @param world The point, in the world
+ * @param depth Its depth in the view, metres
+ * @param through The clouds' optical depth to it, if known already
+ * @returns 0 to 1
+ */
+const kept_through = (
+  scene: object,
+  camera: Camera,
+  world: Vector3,
+  depth: number,
+  through?: number,
+): number => {
+  const tau = through ?? through_clouds(scene, camera, world);
+
+  if (tau === undefined) return 1 - fog_factor(scene_fog(scene) ?? null, depth);
+
+  // The path counts the cloud round the camera, so only the scene's own fog
+  // is left over it
+  const fog = (scene as { fog?: Parameters<typeof fog_factor>[0] }).fog;
+
+  return Math.exp(-tau) * (1 - fog_factor(fog ?? null, depth));
+};
+
+/**
+ * The sky's light on one channel, as an effect is lit by it: the medium's
+ * own light inside one.
+ * @param look The look, for its sky
+ * @param channel The channel
+ * @param medium The scene's medium, if any
+ * @returns The light
+ */
+const sky_light = (
+  look: CountermeasuresLook,
+  channel: number,
+  medium: SceneMedium | null,
+): number =>
+  medium?.light
+    ? channel === 0
+      ? medium.light.r
+      : channel === 1
+        ? medium.light.g
+        : medium.light.b
+    : look.skyColor[channel] * look.skyIntensity;
 
 // One aircraft's countermeasures
 //
@@ -298,14 +395,46 @@ const scratch_transmission: [number, number, number] = [0, 0, 0];
 const scratch_rgb: [number, number, number] = [0, 0, 0];
 
 /**
+ * How much of a point's light gets to the eye: what the clouds and the fog
+ * keep, through the haze in `scratch_transmission`, its mean over the
+ * channels.
+ * @param kept What the clouds and the fog keep
+ * @returns The share that gets to the eye
+ */
+const seen_through = (kept: number): number =>
+  (kept *
+    (scratch_transmission[0] +
+      scratch_transmission[1] +
+      scratch_transmission[2])) /
+  3;
+
+/**
+ * The haze's tint on one channel, `scratch_transmission` over its mean: what
+ * it does to a colour beside the share of it `seen_through` keeps.
+ * @param channel The channel
+ * @returns The tint
+ */
+const tint_through = (channel: number): number => {
+  const mean =
+    (scratch_transmission[0] +
+      scratch_transmission[1] +
+      scratch_transmission[2]) /
+    3;
+
+  return mean > 0 ? scratch_transmission[channel] / mean : 0;
+};
+
+/**
  * Write one corner of a ribbon at `section_rgb`.
  * @param positions The positions
  * @param colors The colours
  * @param vertex Which vertex
  * @param side Where
  * @param smoke The smoke's attribute, if a smoke's: where across, the depth
+ * and how much of its light gets to the eye
  * @param across Which side, 1 left and -1 right
  * @param tau The smoke's depth through its middle there
+ * @param kept How much of its light gets to the eye
  */
 const lay_corner = (
   positions: Float32Array,
@@ -315,6 +444,7 @@ const lay_corner = (
   smoke: Float32Array | null,
   across: number,
   tau: number,
+  kept: number,
 ) => {
   const at = vertex * 3;
 
@@ -326,8 +456,9 @@ const lay_corner = (
   colors[at + 2] = section_rgb[2];
 
   if (smoke) {
-    smoke[vertex * 2] = across;
-    smoke[vertex * 2 + 1] = tau;
+    smoke[vertex * 3] = across;
+    smoke[vertex * 3 + 1] = tau;
+    smoke[vertex * 3 + 2] = kept;
   }
 };
 
@@ -340,8 +471,10 @@ const lay_corner = (
  * @param colors The colours
  * @param first The segment's first vertex
  * @param start Whether this is its start, or its end
- * @param smoke The smoke's attribute, across and depth, if a smoke's
+ * @param smoke The smoke's attribute, across, depth and what is kept of it,
+ * if a smoke's
  * @param tau The smoke's depth through its middle there
+ * @param kept How much of its light gets to the eye
  */
 const lay_section = (
   positions: Float32Array,
@@ -350,15 +483,43 @@ const lay_section = (
   start: boolean,
   smoke: Float32Array | null = null,
   tau = 0,
+  kept = 1,
 ) => {
   if (start) {
-    lay_corner(positions, colors, first, scratch_left, smoke, 1, tau);
-    lay_corner(positions, colors, first + 3, scratch_left, smoke, 1, tau);
-    lay_corner(positions, colors, first + 5, scratch_right, smoke, -1, tau);
+    lay_corner(positions, colors, first, scratch_left, smoke, 1, tau, kept);
+    lay_corner(positions, colors, first + 3, scratch_left, smoke, 1, tau, kept);
+    lay_corner(
+      positions,
+      colors,
+      first + 5,
+      scratch_right,
+      smoke,
+      -1,
+      tau,
+      kept,
+    );
   } else {
-    lay_corner(positions, colors, first + 1, scratch_left, smoke, 1, tau);
-    lay_corner(positions, colors, first + 2, scratch_right, smoke, -1, tau);
-    lay_corner(positions, colors, first + 4, scratch_right, smoke, -1, tau);
+    lay_corner(positions, colors, first + 1, scratch_left, smoke, 1, tau, kept);
+    lay_corner(
+      positions,
+      colors,
+      first + 2,
+      scratch_right,
+      smoke,
+      -1,
+      tau,
+      kept,
+    );
+    lay_corner(
+      positions,
+      colors,
+      first + 4,
+      scratch_right,
+      smoke,
+      -1,
+      tau,
+      kept,
+    );
   }
 };
 
@@ -1558,7 +1719,6 @@ export class Countermeasures {
     const positions = geometry.getAttribute("position").array as Float32Array;
     const colors = geometry.getAttribute("color").array as Float32Array;
     const exposure = this._look.exposure;
-    const fog = (scene as { fog?: Parameters<typeof fog_factor>[0] }).fog;
     const pixel = glare_pixel(renderer, camera);
     const glow_s = this._flare.glowTimeS;
 
@@ -1587,7 +1747,12 @@ export class Countermeasures {
       transmission(this._extinction, distance, scratch_transmission);
       scratch_view.copy(head).applyMatrix4(camera.matrixWorldInverse);
 
-      const kept = 1 - fog_factor(fog ?? null, Math.max(-scratch_view.z, 0));
+      const kept = kept_through(
+        scene,
+        camera,
+        head,
+        Math.max(-scratch_view.z, 0),
+      );
 
       // Back along its path, and how much of that is across the view: seen
       // end on, all the trail's light is in one width
@@ -1698,7 +1863,8 @@ export class Countermeasures {
     const look = this._look;
     const lit = this._lit;
     const exposure = look.exposure;
-    const fog = (scene as { fog?: Parameters<typeof fog_factor>[0] }).fog;
+    const medium = scene_medium(scene);
+    const sun_through = medium?.sunTransmittance ?? 1;
     const pixel = glare_pixel(renderer, camera);
     const turbulence = this._air.turbulenceM2PerS3;
     const g = lit.smokeAsymmetry;
@@ -1720,6 +1886,16 @@ export class Countermeasures {
       const points = trail.count + (head ? 1 : 0);
 
       if (points < 2) continue;
+
+      // The clouds in front of a trail, through its middle: a trail is short
+      // beside a cloud, and a path a point would cost the frame
+      const through = through_clouds(
+        scene,
+        camera,
+        this.smokePoint(trail, (points - 1) >> 1, scratch_middle).add(
+          scratch_origin,
+        ),
+      );
 
       this.smokePoint(trail, 0, scratch_next);
 
@@ -1816,24 +1992,26 @@ export class Countermeasures {
           .add(scratch_origin)
           .applyMatrix4(camera.matrixWorldInverse);
 
-        const kept = 1 - fog_factor(fog ?? null, Math.max(-scratch_view.z, 0));
-        const albedo = lit.smokeAlbedo * kept;
+        const kept = kept_through(
+          scene,
+          camera,
+          scratch_view,
+          Math.max(-scratch_view.z, 0),
+          through,
+        );
+        // What gets to the eye dims its light and what it hides alike, so
+        // it is drawn once, on its alpha: the colour is the smoke's own,
+        // tinted by the haze
+        const seen = seen_through(kept);
 
         for (let channel = 0; channel < 3; channel++) {
           section_rgb[channel] =
-            albedo *
-            scratch_transmission[channel] *
-            (look.sunColor[channel] * sun +
-              look.skyColor[channel] * look.skyIntensity +
+            lit.smokeAlbedo *
+            tint_through(channel) *
+            (look.sunColor[channel] * sun * sun_through +
+              sky_light(look, channel, medium) +
               this._color[channel] * flares);
         }
-
-        tau *=
-          (kept *
-            (scratch_transmission[0] +
-              scratch_transmission[1] +
-              scratch_transmission[2])) /
-          3;
 
         // Across the trail, square to it and to the view
         scratch_side
@@ -1861,11 +2039,11 @@ export class Countermeasures {
         const first = laid * SMOKE_VERTICES + index * 6;
 
         if (index > 0) {
-          lay_section(positions, colors, first - 6, false, depths, tau);
+          lay_section(positions, colors, first - 6, false, depths, tau, seen);
         }
 
         if (index < points - 1) {
-          lay_section(positions, colors, first, true, depths, tau);
+          lay_section(positions, colors, first, true, depths, tau, seen);
         }
       }
 
@@ -1912,8 +2090,10 @@ export class Countermeasures {
     const colors = geometry.getAttribute("color").array as Float32Array;
     const sparks = geometry.getAttribute("glint").array as Float32Array;
     const depths = geometry.getAttribute("chaff").array as Float32Array;
+    const seens = geometry.getAttribute("kept").array as Float32Array;
     const look = this._look;
-    const fog = (scene as { fog?: Parameters<typeof fog_factor>[0] }).fog;
+    const medium = scene_medium(scene);
+    const sun_through = medium?.sunTransmittance ?? 1;
     const pixel = glare_pixel(renderer, camera);
 
     // A mirror turned every way sends the light every way alike
@@ -1971,20 +2151,20 @@ export class Countermeasures {
         .add(scratch_origin)
         .applyMatrix4(camera.matrixWorldInverse);
 
-      const kept = 1 - fog_factor(fog ?? null, Math.max(-scratch_view.z, 0));
+      const kept = kept_through(
+        scene,
+        camera,
+        scratch_middle.copy(at).add(scratch_origin),
+        Math.max(-scratch_view.z, 0),
+      );
 
       // Its fibres level out once the airstream lets them go: a level fibre
       // shows more of itself from above than edge on
       const level = chaff_bloom(this._chaff, age_s);
       const section =
         this._chaff_section_m2 * level_shadow(level, scratch_toward.y);
-      const tau =
-        ((section / (2 * Math.PI * across * along)) *
-          kept *
-          (scratch_transmission[0] +
-            scratch_transmission[1] +
-            scratch_transmission[2])) /
-        3;
+      const tau = section / (2 * Math.PI * across * along);
+      const seen = seen_through(kept);
 
       // How far its fibres turn against the half way over the frame: their
       // own tumbling, and the view turning, which turns h half as much
@@ -2077,22 +2257,19 @@ export class Countermeasures {
         spread += (lit * lit) / k;
       }
 
-      const albedo = this._chaff.reflectance * kept;
+      const albedo = this._chaff.reflectance;
 
       for (let channel = 0; channel < 3; channel++) {
         section_rgb[channel] =
-          albedo *
-          scratch_transmission[channel] *
-          look.skyColor[channel] *
-          look.skyIntensity;
+          albedo * tint_through(channel) * sky_light(look, channel, medium);
         glint_rgb[channel] =
           albedo *
-          scratch_transmission[channel] *
-          (look.sunColor[channel] * sun_light + this._color[channel] * flares);
+          tint_through(channel) *
+          (look.sunColor[channel] * sun_light * sun_through +
+            this._color[channel] * flares);
       }
 
-      // The glints each unit of drawn depth holds: the drawn depth is the
-      // true one dimmed by the haze and the fog
+      // The glints each unit of its depth holds
       const glints =
         light > 0 && tau > 0
           ? (((light * light) / spread) * section) /
@@ -2132,6 +2309,7 @@ export class Countermeasures {
         depths[vertex * 4 + 1] = v;
         depths[vertex * 4 + 2] = tau;
         depths[vertex * 4 + 3] = glints;
+        seens[vertex] = seen;
       }
 
       laid++;
@@ -2141,6 +2319,7 @@ export class Countermeasures {
     geometry.getAttribute("color").needsUpdate = true;
     geometry.getAttribute("glint").needsUpdate = true;
     geometry.getAttribute("chaff").needsUpdate = true;
+    geometry.getAttribute("kept").needsUpdate = true;
     geometry.setDrawRange(0, laid * CHAFF_VERTICES);
   }
 
@@ -2172,7 +2351,6 @@ export class Countermeasures {
     const view = camera.matrixWorldInverse;
     const exposure = this._look.exposure;
     const observer = this.observer();
-    const fog = (scene as { fog?: Parameters<typeof fog_factor>[0] }).fog;
     const pixel = glare_pixel(renderer, camera);
     const smallest = Math.max((0.1 * Math.PI) / 180, pixel);
 
@@ -2186,7 +2364,12 @@ export class Countermeasures {
 
       scratch_view.copy(world).applyMatrix4(view);
 
-      const kept = 1 - fog_factor(fog ?? null, Math.max(-scratch_view.z, 0));
+      const kept = kept_through(
+        scene,
+        camera,
+        world,
+        Math.max(-scratch_view.z, 0),
+      );
 
       transmission(this._extinction, distance, scratch_transmission);
 

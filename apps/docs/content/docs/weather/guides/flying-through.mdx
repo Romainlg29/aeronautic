@@ -1,0 +1,61 @@
+---
+title: Flying through
+description: "The scene moving through the weather, and the aircraft flying in its air."
+---
+
+The weather's frame is metres, x and z along the ground and y up. The
+scene's origin sits in it at `origin`: x, an altitude, and z. The clouds are
+drawn and sampled round it.
+
+## Moving through it
+
+Give the weather a velocity and its clock moves the scene through it, as an
+aircraft flies through the sky while the scene stays round it:
+
+```tsx
+const weather = useWeather();
+
+useFrame(() => {
+  if (weather) weather.velocity = [vx, vz]; // metres a second
+});
+```
+
+Or set `<Weather origin={[x, z]}>` where the scene is. Its altitude is the
+`<FlightProvider>`'s flight's, or `altitudeM` outside one. The clouds drift
+with the climate's winds and grow and die as the clock runs;
+`timeScale={0}` holds them still.
+
+## In the flight's air
+
+Inside a `<FlightProvider>`, `<Weather>` makes the flight's air its own each
+frame: its temperature the climate's, and its relative humidity 1 while the
+aircraft is in cloud, where the air is saturated, and its own again outside.
+The vapour and the contrails, which read the flight's air, form as they
+would in the cloud. `aircraft` is a ref to the aircraft when it is not at
+the scene's origin; `couple={false}` leaves the flight alone.
+
+<Example name="weather-flight" />
+
+## The effects inside the cloud
+
+Drawn alone, the clouds would go behind every effect in front of the camera,
+whole however much cloud lies between. So inside a cloud `useClouds` sets
+the cloud round the camera as the scene's medium, and the plumes, the
+vapour, the contrails and the countermeasures fade into it with how far they
+are, lit by the light that gets into the cloud. `scene: null` turns it off.
+
+## Sampling it
+
+`weather.sample(x, y, z)` is the air at a point of the scene, on the CPU,
+from the same seed and the same functions the GPU draws:
+
+```ts
+const air = weather.sample(0, 0, 0);
+
+air.inCloud; // droplets or ice
+air.extinction; // per metre: water, ice and rain together
+air.visibilityM; // Koschmieder's range in it
+air.rain; // the rain's share of the extinction, per metre
+```
+
+What an aircraft flies into is what is drawn.

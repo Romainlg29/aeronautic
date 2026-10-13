@@ -9,15 +9,16 @@ the day: the look comes out of them.
 
 **[Docs and live examples](https://romainlg29.github.io/aeronautic/)**
 
-| Package                                                          | npm                                                                                                                           | What it draws                                                        |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| [`@aeronautic/afterburner`](packages/afterburner#readme)         | [![npm](https://img.shields.io/npm/v/@aeronautic/afterburner)](https://www.npmjs.com/package/@aeronautic/afterburner)         | Jet afterburners and rocket exhaust plumes                           |
-| [`@aeronautic/wing-vapor`](packages/wing-vapor#readme)           | [![npm](https://img.shields.io/npm/v/@aeronautic/wing-vapor)](https://www.npmjs.com/package/@aeronautic/wing-vapor)           | Vortex trails, shock vapor and the vapor cone a wing pulls in air    |
-| [`@aeronautic/contrails`](packages/contrails#readme)             | [![npm](https://img.shields.io/npm/v/@aeronautic/contrails)](https://www.npmjs.com/package/@aeronautic/contrails)             | Engine contrails that form, sink, spread and persist as the day says |
-| [`@aeronautic/lights`](packages/lights#readme)                   | [![npm](https://img.shields.io/npm/v/@aeronautic/lights)](https://www.npmjs.com/package/@aeronautic/lights)                   | Navigation, anti-collision, landing and taxi lights, to the rule     |
-| [`@aeronautic/countermeasures`](packages/countermeasures#readme) | [![npm](https://img.shields.io/npm/v/@aeronautic/countermeasures)](https://www.npmjs.com/package/@aeronautic/countermeasures) | Decoy flares that burn and fall as their grain and drag say          |
-| [`@aeronautic/controls`](packages/controls#readme)               | [![npm](https://img.shields.io/npm/v/@aeronautic/controls)](https://www.npmjs.com/package/@aeronautic/controls)               | Control surfaces, gear, nozzles and thrust vectoring on a model      |
-| [`@aeronautic/core`](packages/core#readme)                       | [![npm](https://img.shields.io/npm/v/@aeronautic/core)](https://www.npmjs.com/package/@aeronautic/core)                       | The shared flight, the atmosphere and the depth capture              |
+| Package                                                          | npm                                                                                                                           | What it draws                                                          |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| [`@aeronautic/afterburner`](packages/afterburner#readme)         | [![npm](https://img.shields.io/npm/v/@aeronautic/afterburner)](https://www.npmjs.com/package/@aeronautic/afterburner)         | Jet afterburners and rocket exhaust plumes                             |
+| [`@aeronautic/wing-vapor`](packages/wing-vapor#readme)           | [![npm](https://img.shields.io/npm/v/@aeronautic/wing-vapor)](https://www.npmjs.com/package/@aeronautic/wing-vapor)           | Vortex trails, shock vapor and the vapor cone a wing pulls in air      |
+| [`@aeronautic/contrails`](packages/contrails#readme)             | [![npm](https://img.shields.io/npm/v/@aeronautic/contrails)](https://www.npmjs.com/package/@aeronautic/contrails)             | Engine contrails that form, sink, spread and persist as the day says   |
+| [`@aeronautic/lights`](packages/lights#readme)                   | [![npm](https://img.shields.io/npm/v/@aeronautic/lights)](https://www.npmjs.com/package/@aeronautic/lights)                   | Navigation, anti-collision, landing and taxi lights, to the rule       |
+| [`@aeronautic/countermeasures`](packages/countermeasures#readme) | [![npm](https://img.shields.io/npm/v/@aeronautic/countermeasures)](https://www.npmjs.com/package/@aeronautic/countermeasures) | Decoy flares that burn and fall as their grain and drag say            |
+| [`@aeronautic/weather`](packages/weather#readme)                 | [![npm](https://img.shields.io/npm/v/@aeronautic/weather)](https://www.npmjs.com/package/@aeronautic/weather)                 | Volumetric clouds and storms from a seed, formed as the air makes them |
+| [`@aeronautic/controls`](packages/controls#readme)               | [![npm](https://img.shields.io/npm/v/@aeronautic/controls)](https://www.npmjs.com/package/@aeronautic/controls)               | Control surfaces, gear, nozzles and thrust vectoring on a model        |
+| [`@aeronautic/core`](packages/core#readme)                       | [![npm](https://img.shields.io/npm/v/@aeronautic/core)](https://www.npmjs.com/package/@aeronautic/core)                       | The shared flight, the atmosphere and the depth capture                |
 
 Each installs on its own, with the same peers: `@aeronautic/core`, `three`
 0.186, plus `react` 19 and `@react-three/fiber` 9 (or 10) for the components
@@ -229,6 +230,47 @@ export const Jet = ({ fired }: { fired: number }) => (
 · [README](packages/countermeasures/README.md)
 · [How it works](https://romainlg29.github.io/aeronautic/docs/countermeasures/how-it-works/the-grain/)
 
+## Weather
+
+**Weather that is different everywhere**: a **climate** is the air over the
+ground, its humidity, its warmth, its inversion, its middle and high air,
+each a field that changes over the ground and the hours, and every cloud
+follows from it. Fair-weather cumulus thicken into a deck, a line of showers
+builds, a **storm** fires where the air is unstable, grows, rains, spreads
+its anvil and dies, its **lightning** lighting the cloud from within and its
+**thunder** reaching you at the speed of sound. **Plugins** add storms,
+fronts, patches of air or anything of your own. The same **seed** makes the
+same sky on any machine. Fly into it and the flight's air is saturated, so
+the vapour forms; the plumes, the vapour, the contrails and the lights fade
+into the cloud.
+
+```bash
+pnpm add @aeronautic/weather @aeronautic/core three@~0.186 @react-three/fiber
+```
+
+Give `<Weather>` a climate, and composite `useClouds()` over the scene:
+
+```tsx
+import {
+  Lightning,
+  Rain,
+  Storm,
+  useClouds,
+  Weather,
+} from "@aeronautic/weather/react";
+
+<Weather seed={7} climate="unsettled">
+  <Storm at={[25_000, 5000]} />
+  <Rain />
+  <Lightning />
+  <Sky /> {/* clouds.over(color, depth) in its pipeline */}
+</Weather>;
+```
+
+[Weather docs](https://romainlg29.github.io/aeronautic/docs/weather/start/introduction/)
+· [README](packages/weather/README.md)
+· [How it works](https://romainlg29.github.io/aeronautic/docs/weather/how-it-works/the-air/)
+
 ## The repository
 
 - [`packages/afterburner`](packages/afterburner): `@aeronautic/afterburner`.
@@ -236,6 +278,7 @@ export const Jet = ({ fired }: { fired: number }) => (
 - [`packages/contrails`](packages/contrails): `@aeronautic/contrails`.
 - [`packages/lights`](packages/lights): `@aeronautic/lights`.
 - [`packages/countermeasures`](packages/countermeasures): `@aeronautic/countermeasures`.
+- [`packages/weather`](packages/weather): `@aeronautic/weather`.
 - [`packages/controls`](packages/controls): `@aeronautic/controls`.
 - [`packages/core`](packages/core): `@aeronautic/core`, which the others
   depend on.
@@ -307,7 +350,7 @@ as [SECURITY.md](SECURITY.md) describes.
 
 The docs deploy on every push to `main`. Releases to npm are
 the maintainer's, each package from a tag naming it, `core-v*`, `afterburner-v*`,
-`wing-vapor-v*`, `contrails-v*`, `lights-v*`, `countermeasures-v*` or `controls-v*` (see [RELEASING.md](RELEASING.md)).
+`wing-vapor-v*`, `contrails-v*`, `lights-v*`, `countermeasures-v*`, `weather-v*` or `controls-v*` (see [RELEASING.md](RELEASING.md)).
 
 What's planned next is in [ROADMAP.md](ROADMAP.md).
 

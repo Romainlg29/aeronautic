@@ -7,7 +7,6 @@ import {
 import type { Flight } from "@aeronautic/core";
 import { FlightProvider, useFlightStore } from "@aeronautic/core/react";
 import { Contrails, type ContrailsHandle } from "@aeronautic/contrails/react";
-import { humidity_over_water } from "@aeronautic/contrails/physics";
 import { ControlSurfaces } from "@aeronautic/controls/react";
 import {
   Countermeasures,
@@ -15,35 +14,46 @@ import {
 } from "@aeronautic/countermeasures/react";
 import { Lights, type LightsHandle } from "@aeronautic/lights/react";
 import { WingVapor, type WingVaporHandle } from "@aeronautic/wing-vapor/react";
+import { make_climate } from "@aeronautic/weather";
+import { useWeather, Weather } from "@aeronautic/weather/react";
 import { angle_of_attack_for_load } from "@aeronautic/wing-vapor/physics";
 import {
   type FC,
+  type ReactNode,
   type RefObject,
   Suspense,
   useEffect,
   useMemo,
   useRef,
+  useState,
 } from "react";
-import {
-  Color,
-  type DirectionalLight,
-  Euler,
-  type Group,
-  type HemisphereLight,
-  type Object3D,
-  Quaternion,
-} from "three";
+import { Euler, type Group, type Object3D, Quaternion, Vector3 } from "three";
 import { WebGPURenderer } from "three/webgpu";
-import { airframe_only, Exhaust, useFighter } from "@/examples/fighter";
 import {
-  BLACKBODY_2000K_CD_M2,
-  DAY_EXPOSURE,
-  Grade,
-  Reflections,
-} from "@/examples/stage";
+  Atmosphere,
+  type AtmosphereLighting,
+  LUMINANCE_SCALE,
+  PLUME_EXPOSURE,
+  useAtmosphereLighting,
+} from "@/examples/atmosphere";
+import {
+  airframe_only,
+  Exhaust,
+  useFighter,
+  useLensesUnlit,
+} from "@/examples/fighter";
+import { BLACKBODY_2000K_CD_M2 } from "@/examples/stage";
 import { CAMERA_FAR_M } from "@/lib/camera";
 import { NO_SHADOWS } from "@/lib/no-shadows";
-import { AIR, cruise_mach, START_THROTTLE } from "./flight-plan";
+import {
+  AIR,
+  air_at,
+  CEILING_M,
+  cruise_mach,
+  FLOOR_M,
+  HIGH_AIR,
+  START_THROTTLE,
+} from "./flight-plan";
 import type { Keys, Levers } from "./pilot";
 
 // The docs' fighter on a humid summer day, flown from the keyboard. It turns
@@ -57,21 +67,11 @@ const SUN: [number, number, number] = [5, 10, 5];
 
 export type Sky = "day" | "night";
 
-// Where it flies: low over the sea, or at the tropopause
+// Where it is sent: low over the sea, or at the tropopause. A new one each
+// time the button is pressed, so pressing it sends it there again however it
+// has been flown since
 export type Level = "low" | "high";
-
-// The ISA tropopause, -56.5 °C, in air 112 % saturated over ice: cold enough
-// for the engines' exhaust to make a contrail, humid enough for it to stay.
-// Down low, on the summer day, the exhaust is far too warm to make one
-const TROPOPAUSE_M = 11_000;
-const TROPOPAUSE_K = 216.65;
-const ICE_HUMIDITY = 1.12;
-
-const HIGH_AIR = {
-  altitudeM: TROPOPAUSE_M,
-  temperatureOffsetK: 0,
-  relativeHumidity: humidity_over_water(ICE_HUMIDITY, TROPOPAUSE_K),
-};
+export type Jump = { level: Level };
 
 // Where the camera goes when it climbs or descends: astern and to the right
 // for the plumes down low, ahead and to the right up high, the trails
@@ -81,149 +81,76 @@ const VIEWS: Record<Level, [number, number, number]> = {
   high: [30, 8, -45],
 };
 
-const SKIES = {
-  day: {
-    background: "#6f9fd8",
-    hemisphere: 1.6,
-    sun: 3,
-    sunColor: "#ffffff",
-    reflections: 0.35,
-    look: {
-      sunDirection: SUN,
-      sunColor: [1, 0.96, 0.9],
-      sunIntensity: 3,
-      skyColor: [0.55, 0.68, 0.9],
-      skyIntensity: 1,
-    },
-    // What the daylit sky leaves the camera, as in every example
-    exposure: DAY_EXPOSURE,
-  },
-  night: {
-    background: "#05070b",
-    hemisphere: 0.25,
-    sun: 0.5,
-    sunColor: "#b8c8ff",
-    reflections: 0.12,
-    look: {
-      sunDirection: SUN,
-      sunColor: [0.7, 0.78, 1],
-      sunIntensity: 0.6,
-      skyColor: [0.08, 0.1, 0.18],
-      skyIntensity: 0.15,
-    },
-    exposure: 8,
-  },
-} as const;
+// The sun where the skin's light came from before, `SUN`: its height over
+// the horizon, and its bearing round it from north, +X, towards east, +Z, as
+// takram's frame has them
+const DAY_SUN_DEG =
+  (Math.atan2(SUN[1], Math.hypot(SUN[0], SUN[2])) * 180) / Math.PI;
+const SUN_AZIMUTH_DEG = (Math.atan2(SUN[2], SUN[0]) * 180) / Math.PI;
+
+// By night, the sun in the middle of nautical twilight, 6° to 12° under the
+// horizon: takram's sky has no moon and no stars, so this is as dark as it
+// draws by the sun alone with the horizon still to be seen
+const NIGHT_SUN_DEG = -9;
 
 // How long the sky takes to go from day to night, in seconds
 const FADE_S = 0.6;
 
+// The clouds form over a fair day at sea, as warm as the fighter's air. The
+// mixed layer's humidity is the oceans' at the surface, 0.75 to 0.8 (Dai
+// 2006), at its lower end: Sundqvist's cover is then 30 % of the sky, the
+// most fair-weather cumulus cover (Neggers et al. 2003), and too dry for a
+// deck. The fighter's own 0.88 is a moist patch, there for its vapour; as
+// the mean of the whole sky it would cover half of it. Their base is that
+// air's condensation level, half a kilometre over the sea. Here dense,
+// there thin, as the air is from place to place
+const LANDING_HUMIDITY = 0.75;
+
+const WEATHER_CLIMATE = make_climate("fair", {
+  temperatureOffsetK: AIR.temperatureOffsetK,
+  airMass: "maritime",
+  fields: { humidity: { mean: LANDING_HUMIDITY } },
+});
+
+// The sea under it all, seen from above: water's albedo with the sun high,
+// about 6 % (Payne 1972)
+const SEA_ALBEDO = 0.06;
+
+// What the camera's meter reads off the flames: about half a percent of the
+// frame, the two plumes as the landing frames them (an estimate), at a 2000 K
+// blackbody's radiance, the plumes' unit. By day it hardly moves the camera;
+// by night it holds it where the flames leave it, the sky going dark round
+// them instead of the camera opening up until their glare fills the frame
+const FLAME_SHARE = 0.005;
+const METERED_FLAME_CD_M2 = FLAME_SHARE * BLACKBODY_2000K_CD_M2;
+
+// The plumes, in units of a 2000 K blackbody's radiance, and the lights, in
+// cd/m², each at the atmosphere's exposure
+const PLUME_PROFILE = { exposure: PLUME_EXPOSURE };
+const LIGHTS_LOOK = { exposure: LUMINANCE_SCALE };
+
 /**
- * How far the sky is from day to night, shared by everything that fades with
- * it. Written each frame by `SkyFade`, read by whatever draws from it.
+ * The light the vapour, the trails and the flares' smoke are lit by: the
+ * atmosphere's sun as an irradiance and its sky as a radiance, both already
+ * in its units.
+ * @param lighting The light at the aircraft
+ * @returns Their looks
  */
-type Dusk = {
-  // Where it is headed, 0 for day and 1 for night
-  target: number;
+const effect_looks = (lighting: AtmosphereLighting) => {
+  const light = {
+    sunDirection: lighting.sunDirection,
+    sunColor: lighting.sun,
+    sunIntensity: 1,
+    skyColor: lighting.sky,
+    skyIntensity: 1,
+  };
 
-  // Where it is, eased, and whether that moved this frame
-  night: number;
-  moved: boolean;
-
-  // How far along the fade, before easing
-  linear: number;
-};
-
-const mix = (from: number, to: number, share: number) =>
-  from + (to - from) * share;
-
-const mix_rgb = (
-  from: readonly number[],
-  to: readonly number[],
-  share: number,
-): [number, number, number] => [
-  mix(from[0], to[0], share),
-  mix(from[1], to[1], share),
-  mix(from[2], to[2], share),
-];
-
-const DAY_BACKGROUND = new Color(SKIES.day.background);
-const NIGHT_BACKGROUND = new Color(SKIES.night.background);
-const DAY_SUN = new Color(SKIES.day.sunColor);
-const NIGHT_SUN = new Color(SKIES.night.sunColor);
-
-/**
- * Fades the canvas's own sky: its background, its lights and what the metal
- * reflects. Nothing rebuilds, so the switch is as cheap as any other frame.
- * @param props The shared fade, and the lights it dims
- * @returns Nothing
- */
-const SkyFade: FC<{
-  dusk: Dusk;
-  hemisphere: RefObject<HemisphereLight | null>;
-  sun: RefObject<DirectionalLight | null>;
-}> = ({ dusk, hemisphere, sun }) => {
-  const scene = useThree((three) => three.scene);
-  const background = useMemo(() => new Color(), []);
-  const first = useRef(true);
-
-  // Ahead of everything that reads it
-  useFrame((_, delta) => {
-    const step = Math.min(delta, 0.1) / FADE_S;
-    const linear =
-      dusk.target > dusk.linear
-        ? Math.min(dusk.linear + step, dusk.target)
-        : Math.max(dusk.linear - step, dusk.target);
-
-    dusk.moved = first.current || linear !== dusk.linear;
-    dusk.linear = linear;
-    dusk.night = linear * linear * (3 - 2 * linear);
-    first.current = false;
-
-    if (!dusk.moved) return;
-
-    const night = dusk.night;
-
-    scene.background = background.lerpColors(
-      DAY_BACKGROUND,
-      NIGHT_BACKGROUND,
-      night,
-    );
-    scene.environmentIntensity = mix(
-      SKIES.day.reflections,
-      SKIES.night.reflections,
-      night,
-    );
-
-    if (hemisphere.current) {
-      hemisphere.current.intensity = mix(
-        SKIES.day.hemisphere,
-        SKIES.night.hemisphere,
-        night,
-      );
-    }
-
-    if (sun.current) {
-      sun.current.intensity = mix(SKIES.day.sun, SKIES.night.sun, night);
-      sun.current.color.lerpColors(DAY_SUN, NIGHT_SUN, night);
-    }
-  }, -1);
-
-  return null;
+  return { light, flares: { ...light, ...LIGHTS_LOOK } };
 };
 
 const DEG = Math.PI / 180;
 
-// Where the plumes and the vapor start; `SkyFade` takes them on from there
-const DAY_PROFILE = { exposure: SKIES.day.exposure };
-
-// The plumes' exposure is per 2000 K blackbody's radiance, the lights' per
-// cd/m²: the same camera, in the lights' units
-const lights_exposure = (plume_exposure: number) =>
-  plume_exposure / BLACKBODY_2000K_CD_M2;
-const DAY_LIGHTS_LOOK = { exposure: lights_exposure(SKIES.day.exposure) };
-// The flares' smoke lit by the sun and the sky the trails are
-const DAY_FLARES_LOOK = { ...DAY_LIGHTS_LOOK, ...SKIES.day.look };
+const forward = new Vector3();
 
 // How the fake flies: what the gear, the flaps and the air brake cost off the
 // Mach number its throttle settles at, from `flight-plan`
@@ -265,16 +192,11 @@ type Pilot = {
 /**
  * The fighter, turning in place at the keyboard's rates and pitched up by its
  * angle of attack, with the keyboard's flight written to it each frame.
- * @param props The sky, and the pilot's keys and levers
- * @returns The model, its moving parts, its plumes and its vapor
+ * @param props The pilot's keys and levers
+ * @returns The model, its moving parts, its plumes and its vapor, in the
+ *   atmosphere's light
  */
-const Fighter: FC<{ dusk: Dusk } & Pilot> = ({
-  dusk,
-  keys,
-  levers,
-  flares,
-  chaff,
-}) => {
+const Fighter: FC<Pilot> = ({ keys, levers, flares, chaff }) => {
   const { scene, nodes, animations } = useFighter();
   const flight = useFlightStore();
   const attitude = useRef<Group>(null);
@@ -284,6 +206,14 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({
   const trails = useRef<ContrailsHandle>(null);
   const lights = useRef<LightsHandle>(null);
   const countermeasures = useRef<CountermeasuresHandle>(null);
+  const weather = useWeather();
+
+  // Rendered only once the atmosphere has measured its light, by `Lit`
+  const lighting = useAtmosphereLighting() as AtmosphereLighting;
+  const looks = useMemo(() => effect_looks(lighting), [lighting]);
+
+  // `<Lights>` draws the lenses' glow itself
+  useLensesUnlit(scene);
 
   // Each press of V lets the program go as chaff; its first count, nothing
   const chaffed = useRef(chaff);
@@ -341,31 +271,6 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({
   useFrame((_, frame_delta) => {
     const delta = Math.min(frame_delta, 0.1);
     const input = keys.current;
-
-    // The plumes' exposure, and the vapor's, the trails' and the smoke's
-    // light, follow the sky as it fades
-    if (dusk.moved) {
-      const night = dusk.night;
-      const day = SKIES.day.look;
-      const dark = SKIES.night.look;
-      const look = {
-        sunColor: mix_rgb(day.sunColor, dark.sunColor, night),
-        sunIntensity: mix(day.sunIntensity, dark.sunIntensity, night),
-        skyColor: mix_rgb(day.skyColor, dark.skyColor, night),
-        skyIntensity: mix(day.skyIntensity, dark.skyIntensity, night),
-      };
-
-      const exposure = mix(SKIES.day.exposure, SKIES.night.exposure, night);
-
-      batch.current?.updateProfile({ exposure });
-      lights.current?.updateLook({ exposure: lights_exposure(exposure) });
-      countermeasures.current?.updateLook({
-        ...look,
-        exposure: lights_exposure(exposure),
-      });
-      vapor.current?.updateLook(look);
-      trails.current?.updateLook(look);
-    }
 
     if (!flight || !attitude.current || !body.current) return;
 
@@ -442,10 +347,29 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({
 
     // The nose is up off the flight path by the angle of attack
     body.current.rotation.x = state.alpha;
+
+    // It goes nowhere, so the air goes by it instead. Its flight path is the
+    // attitude's nose, the body pitched up off it by the angle of attack, so
+    // it climbs at the airspeed's share along the vertical, the sine of the
+    // path's angle, and the weather goes by along its heading at the rest
+    attitude.current.getWorldDirection(forward).negate();
+
+    const altitude_m = clamp(
+      flight.values.altitudeM + forward.y * airspeed_m_s * delta,
+      FLOOR_M,
+      CEILING_M,
+    );
+
+    if (altitude_m !== flight.values.altitudeM) flight.set(air_at(altitude_m));
+
+    if (weather) {
+      weather.velocity[0] = forward.x * airspeed_m_s;
+      weather.velocity[1] = forward.z * airspeed_m_s;
+    }
   });
 
   return (
-    <AfterburnerBatch ref={batch} preset="afterburner" profile={DAY_PROFILE}>
+    <AfterburnerBatch ref={batch} preset="afterburner" profile={PLUME_PROFILE}>
       <group ref={attitude}>
         <group ref={body}>
           <primitive object={scene} />
@@ -458,17 +382,17 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({
             ref={vapor}
             capture={scene}
             captureFilter={airframe_only}
-            look={SKIES.day.look}
+            look={looks.light}
             forward={[0, 0, -1]}
           />
           {/* Its flight and its air are the shared flight's */}
-          <Contrails ref={trails} airframe={airframe} look={SKIES.day.look} />
+          <Contrails ref={trails} airframe={airframe} look={looks.light} />
           {/* Its gear and its altitude are the shared flight's too */}
-          <Lights ref={lights} airframe={lamps} look={DAY_LIGHTS_LOOK} />
+          <Lights ref={lights} airframe={lamps} look={LIGHTS_LOOK} />
           {/* Its dispensers are the defaults, measured off this model */}
           <Countermeasures
             ref={countermeasures}
-            look={DAY_FLARES_LOOK}
+            look={looks.flares}
             fire={flares}
           />
         </group>
@@ -478,58 +402,104 @@ const Fighter: FC<{ dusk: Dusk } & Pilot> = ({
 };
 
 /**
- * Moves the camera to the level's view when the level changes, not before.
- * @param props Low or high
+ * Moves the camera to the level's view when the button sends it there, not
+ * before.
+ * @param props Where it was last sent
  * @returns Nothing
  */
-const Viewpoint: FC<{ level: Level }> = ({ level }) => {
+const Viewpoint: FC<{ jump: Jump }> = ({ jump }) => {
   const camera = useThree((three) => three.camera);
   const controls = useThree((three) => three.controls) as {
     update: () => void;
   } | null;
-  const shown = useRef(level);
+  const shown = useRef(jump);
 
   useEffect(() => {
-    if (shown.current === level) return;
+    if (shown.current === jump) return;
 
-    shown.current = level;
-    camera.position.set(...VIEWS[level]);
+    shown.current = jump;
+    camera.position.set(...VIEWS[jump.level]);
     controls?.update();
-  }, [camera, controls, level]);
+  }, [camera, controls, jump]);
 
   return null;
 };
 
 /**
+ * Takram's atmosphere round the fighter, its clouds the weather's, the sun
+ * going down under the horizon for the night and up again for the day.
+ * @param props Day or night, and what flies in it
+ * @returns It; it takes over rendering
+ */
+const LandingSky: FC<{ sky: Sky; children: ReactNode }> = ({
+  sky,
+  children,
+}) => {
+  const weather = useWeather();
+  const night = sky === "night" ? 1 : 0;
+  const fade = useRef(night);
+  const [elevation_deg, set_elevation_deg] = useState(() =>
+    night ? NIGHT_SUN_DEG : DAY_SUN_DEG,
+  );
+
+  // Eased over the fade, the sky measured again as the sun goes
+  useFrame((_, delta) => {
+    if (fade.current === night) return;
+
+    const step = Math.min(delta, 0.1) / FADE_S;
+    const linear =
+      night > fade.current
+        ? Math.min(fade.current + step, night)
+        : Math.max(fade.current - step, night);
+    const eased = linear * linear * (3 - 2 * linear);
+
+    fade.current = linear;
+    set_elevation_deg(DAY_SUN_DEG + (NIGHT_SUN_DEG - DAY_SUN_DEG) * eased);
+  });
+
+  return (
+    <Atmosphere
+      sunElevationDeg={elevation_deg}
+      sunAzimuthDeg={SUN_AZIMUTH_DEG}
+      groundAlbedo={SEA_ALBEDO}
+      meteredCdM2={METERED_FLAME_CD_M2}
+      weather={weather ?? undefined}
+      cloudQuality="low"
+    >
+      {children}
+    </Atmosphere>
+  );
+};
+
+/**
+ * What is lit by the atmosphere, once it has measured its light.
+ * @param props What it lights
+ * @returns It, or nothing before
+ */
+const Lit: FC<{ children: ReactNode }> = ({ children }) =>
+  useAtmosphereLighting() ? children : null;
+
+/**
  * The landing page's sky: the fighter, fullscreen, flown from the keyboard
  * and looked round with the mouse.
- * @param props Day or night, low or high, the flight, and the pilot's keys
+ * @param props Day or night, where it was sent, the flight, and the pilot's keys
  *   and levers
  * @returns The canvas
  */
-const FlightScene: FC<{ sky: Sky; level: Level; flight: Flight } & Pilot> = ({
+const FlightScene: FC<{ sky: Sky; jump: Jump; flight: Flight } & Pilot> = ({
   sky,
-  level,
+  jump,
   flight,
   keys,
   levers,
   flares,
   chaff,
 }) => {
-  const dusk = useMemo<Dusk>(
-    () => ({ target: 0, night: 0, moved: true, linear: 0 }),
-    [],
-  );
-  const hemisphere = useRef<HemisphereLight>(null);
-  const sun = useRef<DirectionalLight>(null);
-
-  // Read by the fade on its next frame
-  dusk.target = sky === "night" ? 1 : 0;
-
-  // The air it flies in, read by everything on it from the flight
+  // The air it is sent to, read by everything on it from the flight; flown
+  // up or down from there, the air at each altitude on the way
   useEffect(() => {
-    flight.set(level === "high" ? HIGH_AIR : AIR);
-  }, [flight, level]);
+    flight.set(jump.level === "high" ? HIGH_AIR : AIR);
+  }, [flight, jump]);
 
   return (
     <Canvas
@@ -548,29 +518,23 @@ const FlightScene: FC<{ sky: Sky; level: Level; flight: Flight } & Pilot> = ({
         return renderer;
       }}
     >
-      <SkyFade dusk={dusk} hemisphere={hemisphere} sun={sun} />
-      <hemisphereLight
-        ref={hemisphere}
-        args={["#8090b0", "#101010", SKIES.day.hemisphere]}
-      />
-      <directionalLight
-        ref={sun}
-        position={SUN}
-        intensity={SKIES.day.sun}
-        color={SKIES.day.sunColor}
-      />
-      <Reflections intensity={SKIES.day.reflections} />
-      {/* Context doesn't cross into the canvas: the same flight again */}
+      {/* Context doesn't cross into the canvas: the same flight again. The
+          weather takes its altitude from it, but leaves its air alone */}
       <FlightProvider flight={flight}>
-        <Suspense fallback={null}>
-          <Fighter
-            dusk={dusk}
-            keys={keys}
-            levers={levers}
-            flares={flares}
-            chaff={chaff}
-          />
-        </Suspense>
+        <Weather climate={WEATHER_CLIMATE} couple={false}>
+          <LandingSky sky={sky}>
+            <Lit>
+              <Suspense fallback={null}>
+                <Fighter
+                  keys={keys}
+                  levers={levers}
+                  flares={flares}
+                  chaff={chaff}
+                />
+              </Suspense>
+            </Lit>
+          </LandingSky>
+        </Weather>
       </FlightProvider>
       <OrbitControls
         // Looking a little below it, so it sits above the page's title
@@ -581,8 +545,7 @@ const FlightScene: FC<{ sky: Sky; level: Level; flight: Flight } & Pilot> = ({
         maxDistance={90}
         makeDefault
       />
-      <Viewpoint level={level} />
-      <Grade />
+      <Viewpoint jump={jump} />
     </Canvas>
   );
 };

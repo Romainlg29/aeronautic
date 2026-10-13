@@ -398,6 +398,7 @@ export const create_chaff_geometry = (count: number): BufferGeometry => {
     ["color", 3],
     ["glint", 4],
     ["chaff", 4],
+    ["kept", 1],
   ] as const) {
     const attribute = new Float32BufferAttribute(
       new Float32Array(vertices * size),
@@ -465,7 +466,10 @@ export const create_chaff_material = (
   const u = chaff.x.mul(CHAFF_SIGMAS);
   const v = chaff.y.mul(CHAFF_SIGMAS);
   const tau = chaff.z.mul(exp(u.mul(u).add(v.mul(v)).mul(-0.5)));
-  const alpha = float(1).sub(exp(tau.negate()));
+  // What it hides and what it gives, both dimmed by what is in front of it
+  const alpha = (attribute("kept", "float") as unknown as Node<"float">).mul(
+    float(1).sub(exp(tau.negate())),
+  );
 
   // A seed for each pixel, cloud and step of the clock
   const seed = screenCoordinate.x

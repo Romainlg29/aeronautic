@@ -1,0 +1,20 @@
+{
+  "title": "Weather",
+  "description": "Volumetric clouds, rain and lightning from a climate, different everywhere, formed and lit as the air makes them",
+  "icon": "Cloud",
+  "root": true,
+  "pages": [
+    "---[Rocket]Start here---",
+    "...start",
+    "---[BookOpen]Guides---",
+    "...guides",
+    "---[Play]Examples---",
+    "...examples",
+    "---[Plug]Integrations---",
+    "...integrations",
+    "---[Braces]Reference---",
+    "...reference",
+    "---[Atom]How it works---",
+    "...how-it-works"
+  ]
+}

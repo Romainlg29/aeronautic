@@ -1,0 +1,103 @@
+---
+title: Takram's atmosphere
+description: "Clouds under @takram/three-atmosphere's sky: composited in the volume pass's backdrop, lit by its sun and sky."
+---
+
+<Example name="weather" />
+
+The climates under
+[`@takram/three-atmosphere`](https://www.npmjs.com/package/@takram/three-atmosphere)'s
+sky. Bring the sun down and the clouds redden with the light that reaches
+them through the long air, and their shaded sides darken.
+
+The setup, the volume pass with the aerial perspective as its backdrop and
+the scene's place on the earth, is on [core's page](/docs/core/integrations/takram-atmosphere).
+
+## In the backdrop
+
+The clouds go in front of the atmosphere's aerial perspective, and the
+volume pass's plumes and vapour over both. So they are composited at the end
+of the backdrop:
+
+```tsx
+const clouds = useClouds();
+
+const split = useMemo(
+  () =>
+    volume_pass(scene, camera, {
+      backdropNode: ({ color, depth }) => {
+        const aired = aerialPerspective(color, depth);
+
+        return clouds ? clouds.over(aired, depth) : aired;
+      },
+    }),
+  [scene, camera, clouds],
+);
+```
+
+`over` takes the scene's depth: the clouds stop at the airframe, and the
+terrain hides those behind it.
+
+## The light
+
+The look is the atmosphere's light where the scene is, read with takram's
+`getSplitScalarIlluminance` (see core's page), all of it already in the
+atmosphere's units, so the exposure is 1:
+
+```ts
+const sin_elevation = Math.max(Math.sin(elevation), 0);
+
+weather.set({
+  look: {
+    sunDirection: sun_world.toArray(),
+    // The solar irradiance through the air above
+    sun: direct,
+    // The dome's horizontal irradiance, as a Lambertian radiance
+    sky: indirect.map((e) => e / (2 * Math.PI) / Math.PI),
+    // The sunlit ground under it, of albedo GROUND_ALBEDO
+    ground: direct.map(
+      (e, i) =>
+        (GROUND_ALBEDO * (e * sin_elevation + indirect[i] / (2 * Math.PI))) /
+        Math.PI,
+    ),
+    exposure: 1,
+    visibilityM: AIR_VISIBILITY_M,
+  },
+});
+```
+
+The sun's light reaches the clouds already reddened by the air between them
+and space. The air between the camera and the clouds is takram's own, as
+`visibilityM`: Koschmieder's 3.912 over its extinction at 550 nm. A far
+cloud fades into takram's sky, so it fades into the bright horizon by day
+and into the dark at night.
+
+## The stars
+
+Takram's sky has its sun and its stars in it, and a far cloud would let them
+through with the air in front of it. So the backdrop gives `over` the sky's
+light without them, its inscattering, as the light the air shows in place of
+the cloud:
+
+```ts
+const airlight = getIndirectLuminance(
+  atmosphere.cameraPositionUnit.add(atmosphere.altitudeCorrectionUnit),
+  ray,
+  vec2(0),
+  atmosphere.sunDirectionECEF,
+).get("luminance");
+
+return clouds.over(aired, depth, select(sky, airlight, aired.rgb));
+```
+
+`ray` is the pixel's direction in ECEF, as the ground's below. At night the
+storm then hides the stars behind it, and only its lightning shows.
+
+Takram's sky stops at the air in front of the ground, so from a few hundred
+metres up everything under the horizon is near black. The example lights
+the ground where the backdrop's ray meets it: its albedo under the sun and
+the sky there, over π, through the air between. The ray is the scene
+camera's, with its own matrices: inside a pass, `cameraWorldMatrix` is the
+pass's quad camera.
+
+<Source file="weather.tsx" />

@@ -11,7 +11,14 @@ import {
 } from "./aerodynamics";
 import { Vector3 } from "three";
 import { AIR_GAMMA, moist_air, type MoistAir } from "@aeronautic/core";
-import { CONDENSATION_MIN_RATIO, condensate, moistest } from "./condensation";
+import {
+  CONDENSATION_MIN_RATIO,
+  CONDENSATION_TEXELS,
+  cloud_extinction,
+  condensate,
+  condensation_ratio_at,
+  moistest,
+} from "./condensation";
 import {
   nearest_along,
   straight_trails,
@@ -64,8 +71,17 @@ export const TAIL_LOADING = 0.15;
 const MAX_BIAS = 0.7;
 const SIDE_LOADING: [number, number] = [0.2, 1.8];
 
-// The least deficit the bounds follow the field out to
+// The least deficit a part must reach to be drawn at all
 export const BOUND_FLOOR = 0.003;
+
+// The least optical depth the eye tells from none: Koschmieder's two per cent
+// of contrast. Each part's bound is where the vapour left past it is thinner
+// than this, so cutting it off there cannot be seen
+export const VISIBLE_DEPTH = -Math.log(0.98);
+
+// How far out the bounds look for vapour, metres
+const BOUND_SEARCH_M = 2000;
+const BOUND_SAMPLES = 64;
 
 // The most of the lift a second surface is given
 const MAX_SECOND_SHARE = 0.4;
@@ -440,6 +456,102 @@ const solve_condensing_deficit = (
   }
 
   return 1 - low;
+};
+
+const extinction_memo = {
+  key: "",
+  table: new Float64Array(CONDENSATION_TEXELS),
+};
+
+/**
+ * The moistest parcel's extinction against deficit, per metre, at the
+ * condensation table's entries: the most any of the vapour stops.
+ * @param air The free stream
+ * @param humidity_scale How much moister
+ * @param droplet_m The droplets' effective radius
+ * @returns Extinction at each entry's pressure ratio
+ */
+const extinction_table = (
+  air: MoistAir,
+  humidity_scale: number,
+  droplet_m: number,
+): Float64Array => {
+  const key = `${air.temperatureK},${air.pressurePa},${air.mixingRatio},${humidity_scale},${droplet_m}`;
+
+  if (key !== extinction_memo.key) {
+    for (let texel = 0; texel < CONDENSATION_TEXELS; texel++) {
+      extinction_memo.table[texel] = cloud_extinction(
+        condensate(condensation_ratio_at(texel), air, humidity_scale)
+          .waterKgPerM3,
+        droplet_m,
+      );
+    }
+
+    extinction_memo.key = key;
+  }
+
+  return extinction_memo.table;
+};
+
+/**
+ * Look one deficit up in `extinction_table`, as the shader does.
+ * @param table The table
+ * @param deficit The deficit
+ * @returns The extinction, per metre
+ */
+const extinction_of = (table: Float64Array, deficit: number): number => {
+  const ratio = 1 - Math.min(Math.max(deficit, 0), 1 - CONDENSATION_MIN_RATIO);
+  const at =
+    ((ratio - CONDENSATION_MIN_RATIO) / (1 - CONDENSATION_MIN_RATIO)) *
+    (CONDENSATION_TEXELS - 1);
+  const below = Math.min(Math.floor(at), CONDENSATION_TEXELS - 2);
+  const share = at - below;
+
+  return table[below] * (1 - share) + table[below + 1] * share;
+};
+
+/**
+ * How far out a part's vapour shows: the distance past which what is left of
+ * it, out to where none is, has an optical depth under `VISIBLE_DEPTH`.
+ *
+ * Outside a cloud the air past its dew point's isobar holds none, and this is
+ * that isobar. Inside one the air condenses at any expansion, however slight,
+ * and the vapour fades out instead of ending
+ * @param extinction_at The extinction at a distance, per metre
+ * @param from The nearest it starts
+ * @returns The distance, metres
+ */
+const visible_reach = (
+  extinction_at: (distance: number) => number,
+  from: number,
+): number => {
+  const start = Math.max(from, 1e-3);
+  const growth = Math.pow(BOUND_SEARCH_M / start, 1 / (BOUND_SAMPLES - 1));
+
+  // Past the search, a far field falling as the distance squared: σ r more
+  let outer = BOUND_SEARCH_M;
+  let outer_extinction = extinction_at(outer);
+  let depth = outer_extinction * outer;
+
+  if (depth >= VISIBLE_DEPTH) {
+    return BOUND_SEARCH_M;
+  }
+
+  for (let index = BOUND_SAMPLES - 2; index >= 0; index--) {
+    const inner = start * Math.pow(growth, index);
+    const inner_extinction = extinction_at(inner);
+    const step = ((outer_extinction + inner_extinction) / 2) * (outer - inner);
+
+    if (depth + step >= VISIBLE_DEPTH) {
+      return outer - ((VISIBLE_DEPTH - depth) / step) * (outer - inner);
+    }
+
+    depth += step;
+    outer = inner;
+    outer_extinction = inner_extinction;
+  }
+
+  return start;
 };
 
 /**
@@ -1476,12 +1588,20 @@ export const vapor_state = (
     deepest = Math.max(deepest, chord);
   }
 
-  // Each part's reach, where its deficit falls to what condenses: past that
-  // it is clear air, and the march need not look
-  // Floored for the bounds alone: on a day within a hair of saturation the
-  // last few thousandths only make a haze too thin to see, and following it
-  // out would make the boxes enormous
+  // Whether each part shows at all: its deepest deficit past what condenses,
+  // floored, a day within a hair of saturation making only a haze too thin
+  // to see out of the last few thousandths
   const needed = Math.max(saturation_deficit, BOUND_FLOOR);
+
+  // And how far: until what is left past it is too thin to see, which outside
+  // a cloud is where it stops condensing
+  const extinctions = extinction_table(
+    air,
+    moistest(air, look.humiditySpread),
+    look.dropletRadiusM ?? REFERENCE_DROPLET_M,
+  );
+  const shows = (deficit: number): number =>
+    extinction_of(extinctions, deficit);
 
   const mins: [number, number, number][] = [];
   const maxs: [number, number, number][] = [];
@@ -1502,9 +1622,14 @@ export const vapor_state = (
       continue;
     }
 
-    // Never wider than the whole circulation round the thinnest core
+    // Round the thinnest core, where the whole circulation is felt
     const bound =
-      Math.sqrt(Math.max(well / needed - tip.start2M2, 0)) * 1.15 + 0.1;
+      visible_reach(
+        (r) => shows(well / (r * r + tip.start2M2)),
+        Math.sqrt(tip.start2M2),
+      ) *
+        1.15 +
+      0.1;
     const reach = Math.min(
       widest > 0 ? widest / Math.max(tip.growthM, 1e-9) : tip.rollupM,
       MAX_TRAIL_M,
@@ -1576,11 +1701,13 @@ export const vapor_state = (
       const end_reach = path.reachM[tip];
       const end_core = field.edgeCore * end_reach;
       const circulation = field.edgeGradient * heaviest * edge_length_m;
-      const widest = Math.sqrt(
-        Math.max(
-          (vortex_k * circulation * circulation) / needed - end_core * end_core,
-          0,
-        ),
+      const widest = visible_reach(
+        (r) =>
+          shows(
+            (vortex_k * circulation * circulation) /
+              (r * r + end_core * end_core),
+          ),
+        end_core,
       );
 
       field.edgeBoundM =
@@ -1638,7 +1765,13 @@ export const vapor_state = (
         (WING_FIELD_HEIGHT * Math.min(deepest, field.reachChordM)) /
         Math.max(compressibility_beta(field.normalMach), WING_HEIGHT_MIN_BETA);
 
-      field.wingBoundM = reach * Math.log(strongest / needed) * 1.1 + 0.05;
+      field.wingBoundM =
+        visible_reach(
+          (height) => shows(strongest * Math.exp(-height / reach)),
+          reach * 0.01,
+        ) *
+          1.1 +
+        0.05;
 
       mins.push([wing_front - 0.05 * deepest, wing_low - 0.05, -semispan]);
       maxs.push([
@@ -1691,26 +1824,15 @@ export const vapor_state = (
     }
 
     if (needed < 1 && strongest > needed && field.coneFade > 0) {
-      // Out from the body's widest part until it no longer condenses
+      // Out from the body's widest part until what is left is too thin to see
       const xi = field.coneShock - 0.02;
       const x = xi * field.bodyLengthM - field.noseM;
+      const radius = body_radius(field, xi);
 
-      let low = body_radius(field, xi);
-      let high = 80;
-
-      if (cone_deficit(geometry, x, field.bodyHeightM + high, 0) > needed) {
-        low = high;
-      }
-
-      for (let iteration = 0; iteration < 32 && low < high; iteration++) {
-        const middle = (low + high) / 2;
-
-        if (cone_deficit(geometry, x, field.bodyHeightM + middle, 0) > needed) {
-          low = middle;
-        } else {
-          high = middle;
-        }
-      }
+      const low = visible_reach(
+        (r) => shows(cone_deficit(geometry, x, field.bodyHeightM + r, 0)),
+        radius,
+      );
 
       field.coneBoundM = low * 1.15 + 0.2;
 

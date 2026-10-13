@@ -56,7 +56,7 @@ export const create_smoke_geometry = (count: number): BufferGeometry => {
   for (const [name, size] of [
     ["position", 3],
     ["color", 3],
-    ["smoke", 2],
+    ["smoke", 3],
   ] as const) {
     const attribute = new Float32BufferAttribute(
       new Float32Array(vertices * size),
@@ -87,10 +87,11 @@ export const create_smoke_material = (
     fog: false,
   });
 
-  const smoke = attribute("smoke", "vec2") as unknown as Node<"vec2">;
+  const smoke = attribute("smoke", "vec3") as unknown as Node<"vec3">;
   const across = smoke.x.mul(SMOKE_SIGMAS);
   const tau = smoke.y.mul(exp(across.mul(across).mul(-0.5)));
-  const alpha = float(1).sub(exp(tau.negate()));
+  // What it hides and what it gives, both dimmed by what is in front of it
+  const alpha = smoke.z.mul(float(1).sub(exp(tau.negate())));
 
   material.fragmentNode = unless_hidden(
     vec4(

@@ -223,7 +223,7 @@ export const usePilot = () => {
 
 // The legend's rows: the keys, and what they do
 const LEGEND: [keys: string[], does: string][] = [
-  [["W", "S", "ArrowUp", "ArrowDown"], "Pitch"],
+  [["W", "S", "ArrowUp", "ArrowDown"], "Pitch: climb, dive"],
   [["A", "D", "ArrowLeft", "ArrowRight"], "Roll"],
   [["Q", "E"], "Yaw"],
   [["Shift", "Control"], "Throttle"],

@@ -5,10 +5,12 @@ import {
   create_scene_fog,
   fog_factor,
   SCENE_FOG_DENSITY,
+  SCENE_FOG_MEDIUM,
   SCENE_FOG_NONE,
   SCENE_FOG_RANGE,
   scene_color,
   scene_depth,
+  set_scene_medium,
   write_scene_fog,
 } from "./scene";
 
@@ -88,5 +90,35 @@ describe("fog_factor", () => {
 
   it("is nothing without fog", () => {
     expect(fog_factor(null, 1e6)).toBe(0);
+  });
+});
+
+describe("scene medium", () => {
+  it("is written over the fog while it is thick, and gone with it", () => {
+    const fog = create_scene_fog();
+    const scene = new Scene();
+
+    scene.fog = new FogExp2(0xffffff, 0.002);
+    set_scene_medium(scene, {
+      extinction: 0.05,
+      color: new Color(0.5, 0.5, 0.5),
+    });
+    write_scene_fog(fog, scene);
+
+    expect(fog.kind.value).toBe(SCENE_FOG_MEDIUM);
+    expect(fog.density.value).toBe(0.05);
+    expect(fog.color.value.r).toBeCloseTo(0.5);
+
+    set_scene_medium(scene, null);
+    write_scene_fog(fog, scene);
+
+    expect(fog.kind.value).toBe(SCENE_FOG_DENSITY);
+  });
+
+  it("lets e^(-σd) of the light through, Beer and Lambert's", () => {
+    const medium = { extinction: 0.05, color: new Color() };
+
+    expect(fog_factor(medium, 0)).toBe(0);
+    expect(fog_factor(medium, 20)).toBeCloseTo(1 - Math.exp(-1));
   });
 });

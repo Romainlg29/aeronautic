@@ -1,4 +1,4 @@
-import { Flight } from "@aeronautic/core";
+import { Flight, set_scene_path } from "@aeronautic/core";
 import { PerspectiveCamera, PointLight, Vector3 } from "three";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Countermeasures } from "./countermeasures-core";
@@ -266,6 +266,54 @@ describe("Countermeasures", () => {
 
     countermeasures.clear();
     expect(countermeasures.smoking).toBe(0);
+  });
+
+  it("dims smoke behind a cloud by what it hides, not to black", () => {
+    const countermeasures = new Countermeasures();
+    const camera = new PerspectiveCamera(50, 1, 0.1, 10_000);
+
+    camera.position.set(-200, 0, 300);
+    camera.updateMatrixWorld();
+    render(countermeasures, 0);
+    countermeasures.release(0);
+    fly(countermeasures, 1);
+
+    const draw = (scene: object) =>
+      countermeasures.smoke.onBeforeRender(
+        {
+          info: { frame },
+          getDrawingBufferSize: (target: {
+            set: (x: number, y: number) => void;
+          }) => target.set(800, 800),
+        } as never,
+        scene as never,
+        camera,
+        null as never,
+        null as never,
+        null as never,
+      );
+
+    const geometry = countermeasures.smoke.geometry;
+    const clear = { fog: null };
+
+    draw(clear);
+
+    const color = geometry.getAttribute("color").getX(0);
+    const kept = geometry.getAttribute("smoke").getZ(0);
+
+    // A cloud of optical depth 5 between: e^-5 of it seen, its alpha and so
+    // its light alike, its colour its own. Dimmed twice, by its colour and
+    // its alpha, it would hide the cloud behind it and give back nothing
+    const cloudy = { fog: null };
+
+    set_scene_path(cloudy, () => 5);
+    draw(cloudy);
+
+    expect(geometry.getAttribute("color").getX(0)).toBeCloseTo(color, 6);
+    expect(geometry.getAttribute("smoke").getZ(0) / kept).toBeCloseTo(
+      Math.exp(-5),
+      6,
+    );
   });
 
   it("lays chaff where it left, sinking, until it spreads too thin", () => {

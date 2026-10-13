@@ -19,6 +19,8 @@ import {
 } from "three/webgpu";
 import {
   create_scene_fog,
+  medium_sky,
+  medium_sun,
   scene_fog_factor,
   scene_view_z,
   type SceneBackdrop,
@@ -423,7 +425,8 @@ export const create_contrail_material = (
         .mul(0.5),
     );
 
-  const sun = u.sun as unknown as V3;
+  // In a cloud, its sun and its sky are the cloud's
+  const sun = medium_sun(u.fog, u.sun as unknown as V3);
   const direction = normalize(centre.sub(camera));
   const cosine = dot(direction, sun_ray);
 
@@ -438,7 +441,7 @@ export const create_contrail_material = (
 
   const source = single
     .add(multiple)
-    .add(u.sky as unknown as V3)
+    .add(medium_sky(u.fog, u.sky as unknown as V3))
     .mul(u.exposure as unknown as F);
 
   // Its square, facing the camera, wide enough for the puff seen off axis

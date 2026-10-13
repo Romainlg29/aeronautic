@@ -1,0 +1,13 @@
+{
+  "title": "Guides",
+  "icon": "BookOpen",
+  "pages": [
+    "climates",
+    "plugins",
+    "rain-and-lightning",
+    "the-light",
+    "flying-through",
+    "quality",
+    "without-react"
+  ]
+}
