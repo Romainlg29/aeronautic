@@ -142,12 +142,14 @@ export const random = (seed: number): (() => number) => {
  * @param from Where it starts, x, altitude, z
  * @param to Where it ends
  * @param rng Random numbers
+ * @param floor The ground's altitude: no point of it goes under
  * @returns Its points, segments and their weights
  */
 export const bolt = (
   from: readonly [number, number, number],
   to: readonly [number, number, number],
   rng: () => number,
+  floor = -Infinity,
 ): { points: Float32Array; segments: Uint16Array; weights: Float32Array } => {
   const points: number[] = [];
   const segments: number[] = [];
@@ -179,7 +181,7 @@ export const bolt = (
     const stray = length * DISPLACEMENT;
     const mid = [
       (a[0] + b[0]) / 2 + (rng() - 0.5) * stray,
-      (a[1] + b[1]) / 2 + (rng() - 0.5) * stray * 0.5,
+      Math.max((a[1] + b[1]) / 2 + (rng() - 0.5) * stray * 0.5, floor),
       (a[2] + b[2]) / 2 + (rng() - 0.5) * stray,
     ];
     const im = add(mid);
@@ -193,7 +195,7 @@ export const bolt = (
       const angle = rng() * Math.PI * 2;
       const end = [
         mid[0] + Math.cos(angle) * reach * 0.6,
-        mid[1] - reach * 0.8 * Math.sign(a[1] - b[1] || 1),
+        Math.max(mid[1] - reach * 0.8 * Math.sign(a[1] - b[1] || 1), floor),
         mid[2] + Math.sin(angle) * reach * 0.6,
       ];
 
@@ -404,7 +406,7 @@ export class Lightning {
       strokes.push({ atS: time_s, peakW: CLOUD_FLASH_W });
     }
 
-    const channel = bolt(from, to, rng);
+    const channel = bolt(from, to, rng, context.groundM);
 
     return {
       id: this.#count++,

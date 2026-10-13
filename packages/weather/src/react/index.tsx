@@ -308,6 +308,20 @@ const useEffectMesh = (object: Object3D | null): void => {
 const scratch_size = new Vector2();
 
 /**
+ * The height of the target an effect is drawn into: the volume pass's, at
+ * its reduced resolution, or the canvas's. A line a pixel of the canvas wide
+ * is half a texel in a pass at half of it, and misses every texel's centre.
+ * @returns A function of the renderer, the height in pixels
+ */
+const useTargetHeight = () => {
+  const pass = useVolumePass();
+
+  return (gl: { getDrawingBufferSize: (size: Vector2) => Vector2 }) =>
+    gl.getDrawingBufferSize(scratch_size).y *
+    (pass?.volumePass.getResolutionScale() ?? 1);
+};
+
+/**
  * Props for `<Rain>`.
  */
 export type RainProps = {
@@ -341,8 +355,10 @@ export const Rain: FC<RainProps> = ({ weather: given }) => {
 
   useEffectMesh(rain);
 
+  const target_height = useTargetHeight();
+
   useFrame(({ camera, gl }, delta) => {
-    rain?.update(camera, delta, gl.getDrawingBufferSize(scratch_size).y);
+    rain?.update(camera, delta, target_height(gl));
   });
 
   return null;
@@ -415,8 +431,10 @@ export const Lightning: FC<LightningProps> = ({
 
   useEffectMesh(bolts);
 
+  const target_height = useTargetHeight();
+
   useFrame(({ camera, gl }) => {
-    bolts?.update(camera, gl.getDrawingBufferSize(scratch_size).y);
+    bolts?.update(camera, target_height(gl));
   });
 
   return null;

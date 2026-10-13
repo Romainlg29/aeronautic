@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { air_column, CLIMATES, field_salts, make_climate } from "./climate";
 import { diagnose, prepare } from "./diagnose";
+import { bolt, random } from "./lightning";
 import { patch, storm } from "./plugin";
 import { Weather } from "./weather";
 
@@ -256,5 +257,17 @@ describe("each climate", () => {
 
     expect(rain).toBeGreaterThan(2);
     expect(rain).toBeLessThan(100);
+  });
+});
+
+describe("a lightning channel", () => {
+  it("never goes under the ground, its branches neither", () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const { points } = bolt([0, 5000, 0], [800, 0, 300], random(seed), 0);
+
+      for (let i = 1; i < points.length; i += 3) {
+        expect(points[i]).toBeGreaterThanOrEqual(0);
+      }
+    }
   });
 });

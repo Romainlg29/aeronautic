@@ -11,6 +11,7 @@ import { attribute, vec4 } from "three/tsl";
 import { chromaticity_rgb, planckian } from "@aeronautic/core";
 import {
   CustomBlending,
+  DoubleSide,
   MeshBasicNodeMaterial,
   OneFactor,
   OneMinusSrcAlphaFactor,
@@ -85,6 +86,9 @@ export class Bolts extends Mesh<BufferGeometry, MeshBasicNodeMaterial> {
       transparent: true,
       depthWrite: false,
       fog: false,
+      // Each ribbon is wound by which way its segment runs: a stroke runs
+      // down, and would face away
+      side: DoubleSide,
     });
 
     // Added over what is behind: light, hiding nothing
