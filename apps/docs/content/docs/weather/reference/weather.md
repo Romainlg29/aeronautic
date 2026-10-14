@@ -11,27 +11,27 @@ From `@aeronautic/weather`.
 new Weather({ seed?, climate?, look?, plugins? })
 ```
 
-| member                | what it is                                                                 |
-| --------------------- | -------------------------------------------------------------------------- |
-| `seed`                | Every cloud's seed.                                                        |
-| `climate`             | Its `Climate`.                                                             |
-| `look`                | Its `WeatherLook`.                                                         |
-| `plugins`             | Its `WeatherPlugin`s.                                                      |
-| `time`                | Its clock, seconds.                                                        |
-| `origin`              | Where the scene's origin is: x, altitude above sea level, z, metres.       |
-| `velocity`            | How fast `advance` moves the origin, `[x, z]` metres a second.             |
-| `lightning`           | Its `Lightning`: the flashes alight, and `brightest(time, count)`.         |
-| `cells`               | The storms round the camera now.                                           |
-| `set(options)`        | Changes any of the seed, the climate, the look and the plugins.            |
-| `changed()`           | Says the climate or a plugin was changed in place.                         |
-| `use(plugin)`         | Adds a plugin; returns what takes it away again.                           |
-| `on(event, fn)`       | Listens for `"flash"` or `"thunder"`; returns what stops listening.        |
-| `advance(seconds)`    | Runs the clock, moves the origin, bakes the map and flashes the lightning. |
-| `sample(x, y, z)`     | The air at a point of the scene, a `WeatherSample`.                        |
-| `column(x, z)`        | The clouds over a point of the scene, a `CloudColumn`.                     |
-| `air(x, z)`           | The air over a point of the scene, an `AirColumn`, plugins applied.        |
-| `air_at(x, z)`        | Where a point of the scene is in the air's frame.                          |
-| `to_scene(x, alt, z)` | Where a point of the air's frame is in the scene.                          |
+| member                | what it is                                                                  |
+| --------------------- | --------------------------------------------------------------------------- |
+| `seed`                | Every cloud's seed.                                                         |
+| `climate`             | Its `Climate`.                                                              |
+| `look`                | Its `WeatherLook`.                                                          |
+| `plugins`             | Its `WeatherPlugin`s.                                                       |
+| `time`                | Its clock, seconds.                                                         |
+| `origin`              | Where the scene's origin is: x, altitude above sea level, z, metres.        |
+| `velocity`            | How fast `advance` moves the origin, `[x, z]` metres a second.              |
+| `lightning`           | Its `Lightning`: the flashes alight, and `brightest(time, count)`.          |
+| `cells`               | The storms round the camera now.                                            |
+| `set(options)`        | Changes any of the seed, the climate, the look and the plugins.             |
+| `changed()`           | Says the climate or a plugin was changed in place.                          |
+| `use(plugin)`         | Adds a plugin; returns what takes it away again.                            |
+| `on(event, fn)`       | Listens for `"flash"` or `"thunder"`; returns what stops listening.         |
+| `advance(seconds)`    | Runs the clock, moves the origin, bakes the maps and flashes the lightning. |
+| `sample(x, y, z)`     | The air at a point of the scene, a `WeatherSample`.                         |
+| `column(x, z)`        | The clouds over a point of the scene, a `CloudColumn`.                      |
+| `air(x, z)`           | The air over a point of the scene, an `AirColumn`, plugins applied.         |
+| `air_at(x, z)`        | Where a point of the scene is in the air's frame.                           |
+| `to_scene(x, alt, z)` | Where a point of the air's frame is in the scene.                           |
 
 ## `WeatherSample`
 
@@ -103,7 +103,7 @@ Meshes: add them where the effects are drawn.
 - `weather_medium(weather, x, y, z, out?)`: the cloud at a point as a scene
   medium.
 - `default_weather_look()`, `look_lux(look)`: the light.
-- `WEATHER_QUALITY`, `resolve_weather_quality(quality)`, `steps_to(range, share)`:
+- `WEATHER_QUALITY`, `resolve_weather_quality(quality)`, `steps_to(range, share, start?)`:
   the qualities.
 
 `@aeronautic/weather/physics` holds the physics behind them: the standard

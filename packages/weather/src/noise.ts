@@ -539,20 +539,18 @@ const FIELD_SCALE = 0.5 / 0.2145;
 /** The coverage table's entries, from no cover to all of it */
 export const COVERAGE_SIZE = 64;
 
+let shape_values: Float32Array | null = null;
 let coverage_table: Float32Array | null = null;
 
 /**
- * Where the shape noise must be cut so that a share of the sky is cloud: its
- * quantiles, measured over the tile. A cover of 0.3 cuts it at its 70th
- * percentile, so 30 % of the sky's base is cloud, as a cover means.
- * @returns The threshold at each cover from 0 to 1, `COVERAGE_SIZE` of them
+ * The shape noise's values over the sky, sorted: its distribution, measured
+ * once. Points spread evenly over it: the R3 sequence (Roberts 2018), over
+ * many tiles across, as the union never repeats, and one period of it up.
+ * @returns 8192 values, ascending
  */
-export const coverage_thresholds = (): Float32Array => {
-  if (coverage_table) return coverage_table;
+export const shape_distribution = (): Float32Array => {
+  if (shape_values) return shape_values;
 
-  // Points spread evenly over the sky: the R3 sequence (Roberts 2018), over
-  // many tiles across, as the union never repeats, and one period of it
-  // up
   const count = 8192;
   const across = 16;
   const values = new Float32Array(count);
@@ -569,7 +567,22 @@ export const coverage_thresholds = (): Float32Array => {
   }
 
   values.sort();
+  shape_values = values;
 
+  return values;
+};
+
+/**
+ * Where the shape noise must be cut so that a share of the sky is cloud: its
+ * quantiles, measured over the tile. A cover of 0.3 cuts it at its 70th
+ * percentile, so 30 % of the sky's base is cloud, as a cover means.
+ * @returns The threshold at each cover from 0 to 1, `COVERAGE_SIZE` of them
+ */
+export const coverage_thresholds = (): Float32Array => {
+  if (coverage_table) return coverage_table;
+
+  const values = shape_distribution();
+  const count = values.length;
   const table = new Float32Array(COVERAGE_SIZE);
 
   for (let i = 0; i < COVERAGE_SIZE; i++) {

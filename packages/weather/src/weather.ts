@@ -93,6 +93,10 @@ export type WeatherSample = {
 // for the next
 const BAKE_BUDGET_MS = 1.5;
 
+// One frame in this many bakes the far map instead of the near: its clouds
+// are kilometres a texel, and change slowly there
+const FAR_BAKE_EVERY = 4;
+
 /**
  * The weather: a climate, the seed its sky is drawn with, the plugins that
  * add to it, how it is lit, and where the scene is in it.
@@ -142,6 +146,9 @@ export class Weather {
   /** The map round the camera */
   map: WeatherMap;
 
+  /** The far map round it: coarser, as far as the clouds are seen */
+  farMap: WeatherMap;
+
   #built = -1;
   #prepared!: Prepared;
   #salts!: Uint32Array;
@@ -163,6 +170,7 @@ export class Weather {
   #extinction: CloudExtinction = { water: 0, ice: 0, rain: 0, up: 0, down: 0 };
   #specs: CellSpec[] = [];
   #cells: Cell[] = [];
+  #bakes = 0;
 
   /**
    * @param options Its seed, climate, look and plugins
@@ -176,6 +184,10 @@ export class Weather {
     this.map = new WeatherMap(
       WEATHER_QUALITY.medium.mapSize,
       WEATHER_QUALITY.medium.mapExtentM,
+    );
+    this.farMap = new WeatherMap(
+      WEATHER_QUALITY.medium.farMapSize,
+      WEATHER_QUALITY.medium.farMapExtentM,
     );
 
     this.#source = {
@@ -258,6 +270,18 @@ export class Weather {
 
     this.map.dispose();
     this.map = new WeatherMap(size, extent_m);
+  }
+
+  /**
+   * Size the far map: as large as the farthest cloud seen, and as fine.
+   * @param size Its texels a side
+   * @param extent_m Its side, metres
+   */
+  resize_far_map(size: number, extent_m: number): void {
+    if (this.farMap.size === size && this.farMap.extentM === extent_m) return;
+
+    this.farMap.dispose();
+    this.farMap = new WeatherMap(size, extent_m);
   }
 
   /** The climate's tables, as built for it */
@@ -553,23 +577,38 @@ export class Weather {
    * @param urgent Whether the weather changed
    */
   #bake(urgent: boolean): void {
-    const map = this.map;
     const [ax, az] = this.air_at(this.listener[0], this.listener[2]);
-    const shown = map.frame;
-    const far =
-      !shown ||
-      Math.max(Math.abs(ax - shown.x), Math.abs(az - shown.z)) >
-        map.extentM * 0.3;
+    const source = this.#source;
 
-    if (urgent || far) {
-      map.bake(map.frame_at(ax, az), this.#source);
+    // Either map at once if it is not round the camera
+    const behind = (map: WeatherMap): boolean => {
+      const shown = map.frame;
 
-      return;
+      if (urgent || !shown) return true;
+
+      return (
+        Math.max(Math.abs(ax - shown.x), Math.abs(az - shown.z)) >
+        map.extentM * 0.3
+      );
+    };
+
+    let baked = false;
+
+    for (const map of [this.map, this.farMap]) {
+      if (behind(map)) {
+        map.bake(map.frame_at(ax, az), source);
+        baked = true;
+      }
     }
 
-    if (!map.baking) map.start(map.frame_at(ax, az), this.#source);
+    if (baked) return;
 
-    map.step(this.#source, BAKE_BUDGET_MS);
+    // Else one of them a little, again and again
+    const map = ++this.#bakes % FAR_BAKE_EVERY === 0 ? this.farMap : this.map;
+
+    if (!map.baking) map.start(map.frame_at(ax, az), source);
+
+    map.step(source, BAKE_BUDGET_MS);
   }
 }
 

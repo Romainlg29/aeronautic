@@ -4,6 +4,7 @@ import {
   coverage_threshold,
   coverage_thresholds,
   COVERAGE_SIZE,
+  shape_distribution,
   detail_channels,
   detail_noise,
   DETAIL_REACH,
@@ -65,8 +66,9 @@ export const TABLE_ROWS = {
   cirrus: 3,
   anvil: 4,
   coverage: 5,
+  mean: 6,
 } as const;
-export const TABLE_ROW_COUNT = 6;
+export const TABLE_ROW_COUNT = 7;
 
 // The share of their adiabatic water decks and altostratus keep: 0.8 for
 // stratocumulus (Albrecht et al. 1990), less for the deeper middle cloud,
@@ -85,6 +87,37 @@ const ANVIL_ICE_KG_M3 = 0.05e-3;
  * tens of metres, and not so sharp that it aliases at the march's steps
  */
 export const EDGE_SOFTNESS = 0.12;
+
+/**
+ * The cuts the mean row of the table spans: from below the noise's least
+ * value, where all of it is cloud, to its peak with its detail, where none is
+ */
+export const MEAN_FROM = -0.5;
+export const MEAN_TO = SHAPE_PEAK;
+
+/**
+ * A cloud's density over many of its billows: the mean, over the shape
+ * noise's distribution, of the density a cut at an edge leaves, and of its
+ * ⅔ power, as the droplets' extinction goes. Far off, a step is longer than
+ * the clouds there and a pixel nearly as wide: what it sees of them is their
+ * mean, not any one. The detail is left out: it averages to its median.
+ * @param edge The cut
+ * @returns The mean of d^⅔, and of d
+ */
+export const mean_density = (edge: number): [number, number] => {
+  const values = shape_distribution();
+  let two_thirds = 0;
+  let linear = 0;
+
+  for (const n of values) {
+    const d = saturate((n - edge) / EDGE_SOFTNESS);
+
+    two_thirds += Math.cbrt(d) ** 2;
+    linear += d;
+  }
+
+  return [two_thirds / values.length, linear / values.length];
+};
 
 /**
  * The cumulus's shape exponent: how the threshold rises through it, h^k. A
@@ -213,6 +246,15 @@ export const water_table = (prepared: Prepared): Float32Array => {
 
   for (let i = 0; i < COVERAGE_SIZE && i < TABLE_SIZE; i++) {
     table[(TABLE_ROWS.coverage * TABLE_SIZE + i) * 4] = thresholds[i];
+  }
+
+  for (let i = 0; i < TABLE_SIZE; i++) {
+    const edge = MEAN_FROM + ((MEAN_TO - MEAN_FROM) * i) / (TABLE_SIZE - 1);
+    const [two_thirds, linear] = mean_density(edge);
+    const at = (TABLE_ROWS.mean * TABLE_SIZE + i) * 4;
+
+    table[at] = two_thirds;
+    table[at + 1] = linear;
   }
 
   return table;

@@ -24,6 +24,8 @@ import {
   getViewPosition,
   hash,
   If,
+  int,
+  ivec2,
   Loop,
   max,
   min,
@@ -38,6 +40,7 @@ import {
   sqrt,
   struct,
   texture,
+  textureLoad,
   uniform,
   vec2,
   vec3,
@@ -132,6 +135,16 @@ const AEROSOL_SCALE_M = 1200;
 // many times, as the diffuse light the cloud holds (medium.ts); the sky above and the ground below
 // through the cloud over and under; and the lightning's.
 //
+// Past `shapeM` the clouds are too far for their billows to show, a pixel
+// kilometres across: there the ray takes a few long steps through their mean,
+// read from a coarser map that reaches to the horizon, lit as layers of it.
+//
+// Each frame marches one texel of every four by four, in a Bayer order, and
+// the resolve fills the others from their history, as Takram's clouds do: a
+// sixteenth of the rays, into a history at the clouds' whole resolution. A
+// texel's ray is its own, through its centre, so over sixteen frames every
+// texel is seen sharp, not a coarser march's blur.
+//
 // Then the frames are blended: each texel's last value is found where the
 // cloud it saw was the frame before, and kept unless it strays outside what
 // the texel's neighbours see now
@@ -150,13 +163,51 @@ const OPAQUE = 0.01;
 // The golden ratio, whose fractions of a frame count fill a step evenly
 const GOLDEN_RATIO = (1 + Math.sqrt(5)) / 2;
 
-// How many deviations from its neighbours' mean a texel's history may stray:
-// one, as Salvi (2016) has it
-const CLIP_DEVIATIONS = 1;
+// How many deviations from its neighbours' mean a texel's history may stray.
+// Salvi (2016) has one, for neighbours a texel apart; here they are four, a
+// coarser and noisier neighbourhood, and one would clip the history to its
+// grain. Two, as Takram's upscale has it: a cloud's slow change hides what
+// little more it lags
+const CLIP_DEVIATIONS = 2;
+
+// Where the clip's bounds are read round a pixel, in march texels: it and
+// the four beside it, as Takram's
+const CLIP_TAPS = [
+  [0, 0],
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+] as const;
 
 // How much of the detail's reach it fades out over, towards its end: a share
 // of it, so its edge is not a line
 const DETAIL_FADE = 0.3;
+
+// The share of `shapeM` over which the clouds' shapes hand over to their
+// mean, somewhere different each frame, so the history blends the two
+const HANDOFF = 0.2;
+
+// How far the light march reaches towards the sun: six steps, each twice the
+// last. Past `shapeM` the sun is let in through the layer over the point as
+// far as this, the same reach
+const LIGHT_REACH_M = LIGHT_FIRST_M * (2 ** LIGHT_STEPS - 1);
+
+// The texels a side of each block one ray is marched in a frame
+const UPSCALE = 4;
+
+// The order each block's texels are marched in: Bayer's, each frame's as far
+// from the last ones as can be, so a frame's rays are spread evenly and any
+// four in a row cover the block as a two by two would
+const BAYER = [
+  [0, 8, 2, 10],
+  [12, 4, 14, 6],
+  [3, 11, 1, 9],
+  [15, 7, 13, 5],
+];
+const ORDER = BAYER.flatMap((row, y) => row.map((at, x) => ({ at, x, y })))
+  .sort((a, b) => a.at - b.at)
+  .map(({ x, y }) => [x, y] as const);
 
 /** The most flashes lighting the clouds at once */
 export const LIGHTS = 4;
@@ -170,6 +221,7 @@ const LIGHTNING_PATH_SHARE = 0.5;
 // What a ray hands back: its light and its alpha, and where it saw cloud,
 // where the scene was, and what it saw through
 const MARCHED = struct({ color: "vec4", info: "vec4" }, "CloudsMarched");
+const RESOLVED = struct({ color: "vec4", air: "vec4" }, "CloudsResolved");
 
 // The scene's depth of nothing: the sky
 const NOWHERE = 1e9;
@@ -341,6 +393,7 @@ export class CloudsNode extends TempNode {
   #history = [0, 1].map(
     () =>
       new RenderTarget(1, 1, {
+        count: 2,
         type: HalfFloatType,
         format: RGBAFormat,
         depthBuffer: false,
@@ -357,6 +410,8 @@ export class CloudsNode extends TempNode {
   #table = create_half_texture(TABLE_SIZE, TABLE_ROW_COUNT, "clouds.water");
   #field: FieldNodes | null = null;
   #map_textures: readonly Texture[] | null = null;
+  #far_textures: readonly Texture[] | null = null;
+  #tick = 0;
   #version = -1;
   #empty = true;
   #last_time = 0;
@@ -376,6 +431,14 @@ export class CloudsNode extends TempNode {
   #previous_origin = new Vector3();
 
   #resolution = uniform(new Vector2(1, 1)) as unknown as Uniform<Vector2, V2>;
+
+  // The march's, a texel for every two by two of the resolution's, and which
+  // of the four it marches this frame
+  #march_resolution = uniform(new Vector2(1, 1)) as unknown as Uniform<
+    Vector2,
+    V2
+  >;
+  #offset = uniform(new Vector2()) as unknown as Uniform<Vector2, V2>;
   #pixel_angle = float_uniform(1e-3);
   #frame_index = float_uniform(0);
 
@@ -401,15 +464,21 @@ export class CloudsNode extends TempNode {
 
   // The quality's
   #steps = uniform(96, "int") as unknown as Uniform<number, Node<"int">>;
+  #far_steps = uniform(32, "int") as unknown as Uniform<number, Node<"int">>;
   #min_step = float_uniform(5);
-  #range = float_uniform(80_000);
+  #shape = float_uniform(80_000);
+  #range = float_uniform(500_000);
   #detail = float_uniform(8000);
   #blend = float_uniform(0.1);
 
   #texture_node: TextureNode;
-  #march_color = texture(this.#march.textures[0]) as unknown as TextureNode;
-  #march_info = texture(this.#march.textures[1]) as unknown as TextureNode;
-  #history_node = texture(this.#history[0].texture) as unknown as TextureNode;
+  #history_node = texture(
+    this.#history[0].textures[0],
+  ) as unknown as TextureNode;
+  #history_air = texture(
+    this.#history[0].textures[1],
+  ) as unknown as TextureNode;
+  #air_node = texture(this.#history[0].textures[1]) as unknown as TextureNode;
 
   /**
    * @param weather The weather
@@ -428,15 +497,17 @@ export class CloudsNode extends TempNode {
 
     this.#march.textures[0].name = "clouds.light";
     this.#march.textures[1].name = "clouds.depth";
+    for (const target of this.#history) {
+      target.textures[0].name = "clouds.history";
+      target.textures[1].name = "clouds.air";
+    }
     this.#march_material.name = "clouds.march";
     this.#resolve_material.name = "clouds.resolve";
 
     this.#texture_node = passTexture(
       this as unknown as Parameters<typeof passTexture>[0],
-      this.#history[0].texture,
+      this.#history[0].textures[0],
     ) as unknown as TextureNode;
-
-    this.#resolve_material.fragmentNode = this.#resolve();
   }
 
   /**
@@ -462,6 +533,7 @@ export class CloudsNode extends TempNode {
     this.depthNode = depth;
 
     const clouds = this.#texture_node;
+    const air_node = this.#air_node;
     const near = this.#near;
     const far = this.#far;
     const resolution = this.#resolution;
@@ -481,6 +553,14 @@ export class CloudsNode extends TempNode {
       const sum = vec4(0).toVar();
       const air = float(0).toVar();
       const total = float(0).toVar();
+      const weigh = (uv: V2, bilinear: F): F => {
+        const apart = scene_z(uv)
+          .sub(own)
+          .abs()
+          .div(own.abs().max(1e-3).mul(0.03));
+
+        return bilinear.mul(exp2(apart.mul(apart).negate()).add(1e-4)) as F;
+      };
 
       for (const [i, j] of [
         [0, 0],
@@ -495,18 +575,15 @@ export class CloudsNode extends TempNode {
           .clamp(0, 1) as unknown as V2;
         const bilinear = (i === 1 ? between.x : between.x.oneMinus()).mul(
           j === 1 ? between.y : between.y.oneMinus(),
-        );
-        const apart = scene_z(uv)
-          .sub(own)
-          .abs()
-          .div(own.abs().max(1e-3).mul(0.03));
-        const weight = bilinear.mul(exp2(apart.mul(apart).negate()).add(1e-4));
+        ) as F;
+        const weight = weigh(uv, bilinear);
 
         sum.addAssign(clouds.sample(uv).mul(weight));
-        air.addAssign(this.#march_info.sample(uv).w.mul(weight));
+        air.addAssign(air_node.sample(uv).x.mul(weight));
         total.addAssign(weight);
       }
 
+      // The cloud, and the air before it
       const cloud = sum.div(total.max(1e-6));
 
       // Behind the cloud as much as it hides, and in the air before it what
@@ -539,49 +616,121 @@ export class CloudsNode extends TempNode {
   /**
    * The resolve: this frame's rays over the last frames', where the cloud
    * they saw was.
+   * @param depth_node The scene's depth
    * @returns Its fragment
    */
-  #resolve(): V4 {
-    return Fn(() => {
+  #resolve(depth_node: TextureNode): V4 {
+    const march_color = texture(this.#march.textures[0]);
+    const resolved = Fn(() => {
       const uv = screenUV as unknown as V2;
-      const now = this.#march_color.sample(uv).toVar();
-      const info = this.#march_info.sample(uv);
+      const fresh = floor(screenCoordinate.xy)
+        .add(UPSCALE)
+        .sub(this.#offset)
+        .mod(UPSCALE)
+        .lessThan(vec2(0.5))
+        .all();
+
+      // How far the scene is here, as the march keeps it
+      const depth = depth_node.sample(uv).x;
+      const own = select(
+        depth.lessThan(1),
+        getViewPosition(uv, depth, this.#projection_inverse).length(),
+        float(NOWHERE),
+      )
+        .min(this.#range)
+        .toVar();
+
+      // The march's four texels round this one, as a bilinear filter would
+      // weigh them, each as far as its ray ended where this one's does: one
+      // that stopped at an aircraft says nothing of the cloud beside it, out
+      // to the ground. Of them, this frame's ray here, and how far the cloud
+      // they saw is
+      const march_uv = this.#march_uv(uv).toVar();
+      const at = march_uv.mul(this.#march_resolution).sub(0.5).toVar();
+      const corner = floor(at).toVar();
+      const now = vec4(0).toVar();
+      const air_now = float(0).toVar();
+      const now_total = float(0).toVar();
+      const cloud = float(0).toVar();
+      const cloud_total = float(0).toVar();
+
+      for (let j = 0; j <= 1; j++) {
+        for (let i = 0; i <= 1; i++) {
+          const texel = corner.add(vec2(i, j));
+          const at_texel = ivec2(
+            texel.clamp(vec2(0), this.#march_resolution.sub(1)),
+          );
+          const color = textureLoad(this.#march.textures[0], at_texel).toVar();
+          const info = textureLoad(this.#march.textures[1], at_texel).toVar();
+          const apart = info.y.sub(own).abs().div(own.mul(0.03).max(1));
+          const alike = exp2(apart.mul(apart).negate()).add(1e-4);
+          const tent = texel.sub(at).abs().oneMinus().max(0).toVar();
+          const bilinear = tent.x.mul(tent.y).mul(alike);
+
+          now.addAssign(color.mul(bilinear));
+          air_now.addAssign(info.w.mul(bilinear));
+          now_total.addAssign(bilinear);
+
+          const seen = select(info.z.lessThan(0.999), bilinear, float(0));
+
+          cloud.addAssign(info.x.mul(seen));
+          cloud_total.addAssign(seen);
+        }
+      }
+
+      now.divAssign(now_total.max(1e-6));
+      air_now.divAssign(now_total.max(1e-6));
+
+      // What the history may be: the march round this pixel, read where the
+      // pixel is and a march texel either side, filtered, their mean give or
+      // take their deviations (Salvi 2016), as Takram's upscale clips. Read
+      // where the pixel is, the bounds change smoothly from one to the next;
+      // from the march's texels themselves, they would step every four, and
+      // the history kept inside them would show the march's blocks
+      const march_size = vec2(1).div(this.#march_resolution).toVar();
+      const first = vec4(0).toVar();
+      const second = vec4(0).toVar();
+
+      for (const [x, y] of CLIP_TAPS) {
+        const color = march_color.sample(
+          march_uv.add(march_size.mul(vec2(x, y))),
+        );
+
+        first.addAssign(color);
+        second.addAssign(color.mul(color));
+      }
+
+      const mean = first.div(CLIP_TAPS.length).toVar();
+      const deviation = sqrt(
+        second.div(CLIP_TAPS.length).sub(mean.mul(mean)).max(0),
+      )
+        .mul(CLIP_DEVIATIONS)
+        .add(1e-6)
+        .toVar();
 
       // Where the cloud this texel saw is, and where it was on screen
-      const distance = select(info.z.lessThan(0.999), info.x, this.#range) as F;
+      const distance = select(
+        cloud_total.greaterThan(1e-6),
+        cloud.div(cloud_total.max(1e-6)),
+        this.#range,
+      ) as F;
       const point = this.#camera_position.add(this.#ray(uv).mul(distance));
       const clip = this.#previous_view_projection.mul(
         vec4(point.add(this.#moved), 1),
       );
       const then_uv = clip.xy.div(clip.w).mul(vec2(0.5, -0.5)).add(0.5).toVar();
 
-      // The neighbourhood's spread, to keep a stale history inside: its mean
-      // give or take a deviation (Salvi 2016)
-      const texel = vec2(1).div(this.#resolution);
-      const first = now.toVar();
-      const second = now.mul(now).toVar();
-
-      for (let j = -1; j <= 1; j++) {
-        for (let i = -1; i <= 1; i++) {
-          if (i === 0 && j === 0) continue;
-
-          const near = this.#march_color.sample(uv.add(texel.mul(vec2(i, j))));
-
-          first.addAssign(near);
-          second.addAssign(near.mul(near));
-        }
-      }
-
-      const mean = first.div(9).toVar();
-      const deviation = sqrt(second.div(9).sub(mean.mul(mean)).max(0)).mul(
-        CLIP_DEVIATIONS,
-      );
-
-      const then = catmull_rom(
+      // Clipped towards the mean, to where the line to it leaves the bounds:
+      // its hue kept, where a clamp of each channel would shift it
+      const kept = catmull_rom(
         this.#history_node,
         then_uv as unknown as V2,
         this.#resolution as unknown as V2,
-      ).clamp(mean.sub(deviation), mean.add(deviation));
+      ).toVar();
+      const off = kept.sub(mean).toVar();
+      const ratio = off.abs().div(deviation).toVar();
+      const out = max(max(ratio.x, ratio.y), max(ratio.z, ratio.w)).max(1);
+      const then = mean.add(off.div(out));
       const valid = then_uv
         .greaterThanEqual(vec2(0))
         .all()
@@ -589,8 +738,50 @@ export class CloudsNode extends TempNode {
         .and(clip.w.greaterThan(0))
         .and(this.#had_history.greaterThan(0.5));
 
-      return mix(now, then, select(valid, this.#blend.oneMinus(), float(0)));
-    })() as unknown as V4;
+      // A marched texel's ray over its history; one not marched, its history
+      // alone, kept inside what its neighbours see now, as Takram's: however
+      // fast the cloud goes by, the clip lets go of what is no longer there,
+      // and a single ray is never drawn as it is, grain
+      const share = select(
+        valid,
+        select(fresh, this.#blend, float(0)),
+        float(1),
+      );
+
+      // The air before the cloud as the cloud is kept: from this frame's
+      // texels alone, the march's grid moves under the pixel each frame, and
+      // where the air differs most, at the horizon, it would flicker
+      const air_then = this.#history_air.sample(then_uv as unknown as V2).x;
+
+      return RESOLVED(
+        mix(then, now, share),
+        vec4(mix(air_then, air_now, share), 0, 0, 1),
+      );
+    })() as unknown as { toConst: () => { get: (name: string) => V4 } };
+
+    // The fragment's outputs must be its last node, as the march's
+    const result = resolved.toConst();
+
+    return outputStruct(
+      result.get("color"),
+      result.get("air"),
+    ) as unknown as V4;
+  }
+
+  /**
+   * Where in the march a point of the clouds' texture is: its texels are
+   * one in every four by four of the clouds', this frame's of each block.
+   * @param uv The point
+   * @returns The point in the march
+   */
+  #march_uv(uv: V2): V2 {
+    return uv
+      .mul(this.#resolution)
+      .sub(0.5)
+      .sub(this.#offset)
+      .div(UPSCALE)
+      .add(0.5)
+      .div(this.#march_resolution) as unknown as V2;
   }
 
   /**
@@ -604,7 +795,12 @@ export class CloudsNode extends TempNode {
       this.#altitude.add(p.y).add(dot(p.xz, p.xz).div(2 * EARTH_RADIUS_M)) as F;
 
     const marched = Fn(() => {
-      const uv = screenUV as unknown as V2;
+      // The texel of the clouds' this one marches this frame
+      const pixel = floor(screenCoordinate.xy)
+        .mul(UPSCALE)
+        .add(this.#offset)
+        .toVar();
+      const uv = pixel.add(0.5).div(this.#resolution).toVar() as unknown as V2;
       const direction = this.#ray(uv).toVar();
       const eye = this.#camera_position;
 
@@ -677,147 +873,214 @@ export class CloudsNode extends TempNode {
       const front = float(0).toVar();
       const seen = float(0).toVar();
 
-      // Where in its step each sample is, somewhere different each frame: a
+      // Where in its step each sample is, somewhere different each time: a
       // hash's white noise, not a gradient's, whose lines show where the
-      // history is let go. Each frame on by the golden ratio, so a texel's
-      // samples spread evenly along its steps over the frames
-      const jitter = hash(
-        floor(screenCoordinate.x).add(floor(screenCoordinate.y).mul(4099)),
-      )
-        .add(this.#frame_index.mul(GOLDEN_RATIO - 1))
+      // history is let go. Each time the texel is marched on by the golden
+      // ratio, so its samples spread evenly along its steps over the frames
+      const seed = pixel.x.add(pixel.y.mul(4099)).toVar();
+      const jitter = hash(seed)
+        .add(floor(this.#frame_index.div(ORDER.length)).mul(GOLDEN_RATIO - 1))
         .fract();
 
-      const t = start.toVar();
-      const taken = float(0).toVar();
-      const steps = float(this.#steps);
+      // Where the clouds' shapes hand over to their mean: somewhere over the
+      // last of `shapeM`, different each frame and texel
+      const handoff = this.#shape
+        .mul(
+          hash(seed.add(this.#frame_index.mul(7919)).add(0.5))
+            .mul(HANDOFF)
+            .oneMinus(),
+        )
+        .toVar();
 
-      Loop(this.#steps, () => {
-        If(t.greaterThanEqual(end).or(through.lessThan(OPAQUE)), () => {
-          Break();
+      // The sun through the cloud towards a point, marched:
+      // in steps each twice the last; or, coarse, where the detail does not
+      // wear the cloud for its first metres' shading to show, in half as
+      // many each four times the last, as far
+      const light_march = (p: V3, coarse: Node<"bool">): F => {
+        const sun_depth = float(0).toVar();
+        const along = float(0).toVar();
+        const growth = select(coarse, float(2), float(1));
+        const first = select(
+          coarse,
+          float((LIGHT_REACH_M * 3) / (4 ** (LIGHT_STEPS / 2) - 1)),
+          float(LIGHT_FIRST_M),
+        );
+        const count = select(coarse, int(LIGHT_STEPS / 2), int(LIGHT_STEPS));
+
+        Loop(count, ({ i }: { i: Node<"int"> }) => {
+          const size = exp2(float(i).mul(growth)).mul(first);
+          const q = p
+            .add(this.#sun_direction.mul(along.add(size.mul(0.5))))
+            .toVar();
+          const there = cloud_at(
+            field,
+            q as unknown as V3,
+            altitude_of(q as unknown as V3),
+            map_column(field, q.xz as unknown as V2),
+            null,
+            false,
+          );
+
+          sun_depth.addAssign(
+            there.water.x
+              .add(there.water.y)
+              .add(there.water.z)
+              .add(there.ice)
+              .add(there.rain)
+              .mul(size),
+          );
+          along.addAssign(size);
         });
 
-        // A pixel's footprint, or, if longer, the shortest step that still
-        // reaches the end in the steps left: a ray cut short is a cloud seen
-        // through, where a long step is only a coarser one, its light
-        // integrated over it all the same. The steps left grow by a constant
-        // ratio, short near the eye and long far off, and a ray far longer
-        // than its neighbour, over the horizon, steps near the eye almost as
-        // it does
-        const left = steps.sub(taken).max(1);
-        const near = t.add(STEPS_FROM_M);
-        const enough = near.mul(
-          pow(end.add(STEPS_FROM_M).div(near), left.reciprocal()).sub(1),
-        );
-        const step = max(t.mul(this.#pixel_angle), this.#min_step, enough)
-          .min(end.sub(t))
-          .toVar();
+        return sun_depth;
+      };
 
-        taken.addAssign(1);
+      // A walk from one distance to another in some steps: near, through the
+      // clouds' shapes, the sun marched; far, through their mean
+      const walk = (
+        from: F,
+        to: F,
+        count: Uniform<number, Node<"int">>,
+        mean: boolean,
+      ) => {
+        const t = from.toVar();
+        const taken = float(0).toVar();
+        const steps = float(count);
 
-        const p = eye.add(direction.mul(t.add(step.mul(jitter)))).toVar();
-        const altitude = altitude_of(p).toVar();
-        const column = map_column(field, p.xz as unknown as V2);
-
-        // The detail, faded out towards the end of its reach
-        const detail_share = this.#detail
-          .sub(t)
-          .div(this.#detail.mul(DETAIL_FADE))
-          .clamp(0, 1) as F;
-        const cloud = cloud_at(field, p, altitude, column, detail_share, true);
-        const sigma = cloud.water.x
-          .add(cloud.water.y)
-          .add(cloud.water.z)
-          .add(cloud.ice)
-          .add(cloud.rain)
-          .toVar();
-
-        If(sigma.greaterThan(0), () => {
-          // The sun through the cloud towards it
-          const sun_depth = float(0).toVar();
-          const along = float(0).toVar();
-
-          Loop(LIGHT_STEPS, ({ i }: { i: Node<"int"> }) => {
-            const size = exp2(float(i)).mul(LIGHT_FIRST_M);
-            const q = p
-              .add(this.#sun_direction.mul(along.add(size.mul(0.5))))
-              .toVar();
-            const there = cloud_at(
-              field,
-              q as unknown as V3,
-              altitude_of(q as unknown as V3),
-              map_column(field, q.xz as unknown as V2),
-              null,
-              false,
-            );
-
-            sun_depth.addAssign(
-              there.water.x
-                .add(there.water.y)
-                .add(there.water.z)
-                .add(there.ice)
-                .add(there.rain)
-                .mul(size),
-            );
-            along.addAssign(size);
+        Loop(count, () => {
+          If(t.greaterThanEqual(to).or(through.lessThan(OPAQUE)), () => {
+            Break();
           });
 
-          // Scattered once, by each scatterer's phase, and many times, as
-          // the diffuse light the cloud holds
-          const sunlit = dot(cloud.water, water_phases)
-            .add(cloud.ice.mul(ice_phase))
-            .add(cloud.rain.mul(rain_phase))
-            .mul(exp(sun_depth.negate()))
-            .add(sigma.mul(scattered_many(sun_depth, cloud.up.add(cloud.down))))
+          // A pixel's footprint, or, if longer, the shortest step that still
+          // reaches the end in the steps left: a ray cut short is a cloud
+          // seen through, where a long step is only a coarser one, its light
+          // integrated over it all the same. The steps left grow by a
+          // constant ratio, short near the eye and long far off, and a ray
+          // far longer than its neighbour, over the horizon, steps near the
+          // eye almost as it does
+          const left = steps.sub(taken).max(1);
+          const near = t.add(STEPS_FROM_M);
+          const enough = near.mul(
+            pow(to.add(STEPS_FROM_M).div(near), left.reciprocal()).sub(1),
+          );
+          const step = max(t.mul(this.#pixel_angle), this.#min_step, enough)
+            .min(to.sub(t))
             .toVar();
 
-          // The sky's and the ground's, each half the sphere, through the
-          // cloud over and under
-          const ambient = this.#sky
-            .mul(diffuse(cloud.up))
-            .add(this.#ground_light.mul(diffuse(cloud.down)))
-            .mul(0.5 * ALBEDO)
-            .mul(sigma);
+          taken.addAssign(1);
 
-          // The flashes': each its light over 4π r², through the cloud
-          // between as a diffuse light, scattered every way alike
-          const flashes = float(0).toVar();
+          const p = eye.add(direction.mul(t.add(step.mul(jitter)))).toVar();
+          const altitude = altitude_of(p).toVar();
+          const column = map_column(field, p.xz as unknown as V2, mean);
 
-          for (const flash of this.#lights) {
-            If(flash.w.greaterThan(0), () => {
-              const apart = flash.xyz.sub(p);
-              const r2 = dot(apart, apart).max(1e4);
-              const between = sigma
-                .sub(cloud.rain)
-                .add(cloud.rainMean)
-                .mul(sqrt(r2))
-                .mul(LIGHTNING_PATH_SHARE);
+          // The detail, faded out towards the end of its reach
+          const detail_share = mean
+            ? null
+            : (this.#detail
+                .sub(t)
+                .div(this.#detail.mul(DETAIL_FADE))
+                .clamp(0, 1) as F);
+          const cloud = cloud_at(
+            field,
+            p,
+            altitude,
+            column,
+            detail_share,
+            true,
+            mean,
+          );
+          const sigma = cloud.water.x
+            .add(cloud.water.y)
+            .add(cloud.water.z)
+            .add(cloud.ice)
+            .add(cloud.rain)
+            .toVar();
 
-              flashes.addAssign(
-                flash.w
-                  .div(r2.mul(4 * Math.PI))
-                  .mul(diffuse(between as F))
-                  .mul(sigma.div(4 * Math.PI)),
-              );
-            });
-          }
+          If(sigma.greaterThan(0), () => {
+            // The sun through the cloud towards it. Far off, through the
+            // layer over the point, slanted to the sun, as far as the light
+            // march would have reached
+            const sun_depth = mean
+              ? (cloud.up
+                  .div(this.#sun_direction.y.max(1e-3))
+                  .min(sigma.mul(LIGHT_REACH_M))
+                  .toVar() as unknown as F)
+              : light_march(
+                  p as unknown as V3,
+                  (detail_share as F).lessThan(jitter),
+                );
 
-          const source = this.#sun
-            .mul(sunlit.mul(ALBEDO))
-            .add(ambient)
-            .add(vec3(flashes.mul(ALBEDO)));
+            // Scattered once, by each scatterer's phase, and many times, as
+            // the diffuse light the cloud holds
+            const sunlit = dot(cloud.water, water_phases)
+              .add(cloud.ice.mul(ice_phase))
+              .add(cloud.rain.mul(rain_phase))
+              .mul(exp(sun_depth.negate()))
+              .add(
+                sigma.mul(scattered_many(sun_depth, cloud.up.add(cloud.down))),
+              )
+              .toVar();
 
-          // Hillaire's integration over the step
-          const kept = exp(sigma.mul(step).negate());
-          const lost = through.mul(kept.oneMinus());
+            // The sky's and the ground's, each half the sphere, through the
+            // cloud over and under
+            const ambient = this.#sky
+              .mul(diffuse(cloud.up))
+              .add(this.#ground_light.mul(diffuse(cloud.down)))
+              .mul(0.5 * ALBEDO)
+              .mul(sigma);
 
-          light.addAssign(source.mul(kept.oneMinus()).div(sigma).mul(through));
-          front.addAssign(t.add(step.mul(0.5)).mul(lost));
-          seen.addAssign(lost);
-          through.mulAssign(kept);
+            // The flashes': each its light over 4π r², through the cloud
+            // between as a diffuse light, scattered every way alike
+            const flashes = float(0).toVar();
+
+            for (const flash of this.#lights) {
+              If(flash.w.greaterThan(0), () => {
+                const apart = flash.xyz.sub(p);
+                const r2 = dot(apart, apart).max(1e4);
+                const between = sigma
+                  .sub(cloud.rain)
+                  .add(cloud.rainMean)
+                  .mul(sqrt(r2))
+                  .mul(LIGHTNING_PATH_SHARE);
+
+                flashes.addAssign(
+                  flash.w
+                    .div(r2.mul(4 * Math.PI))
+                    .mul(diffuse(between as F))
+                    .mul(sigma.div(4 * Math.PI)),
+                );
+              });
+            }
+
+            const source = this.#sun
+              .mul(sunlit.mul(ALBEDO))
+              .add(ambient)
+              .add(vec3(flashes.mul(ALBEDO)));
+
+            // Hillaire's integration over the step
+            const kept = exp(sigma.mul(step).negate());
+            const lost = through.mul(kept.oneMinus());
+
+            light.addAssign(
+              source.mul(kept.oneMinus()).div(sigma).mul(through),
+            );
+            front.addAssign(t.add(step.mul(0.5)).mul(lost));
+            seen.addAssign(lost);
+            through.mulAssign(kept);
+          });
+
+          t.addAssign(step);
         });
+      };
 
-        t.addAssign(step);
-      });
+      // Through the shapes to the handoff, then through their mean. Far off
+      // a step is kilometres long, through many billows and the gaps between:
+      // their mean's extinction over it dims the ray more than they would,
+      // gaps and all, but at that distance a layer is seen edge on, through
+      // so much cloud that it is all but opaque either way
+      walk(start, min(end, handoff) as F, this.#steps, false);
+      walk(max(start, handoff) as F, end, this.#far_steps, true);
 
       const distance = select(
         seen.greaterThan(0),
@@ -835,11 +1098,13 @@ export class CloudsNode extends TempNode {
       // still seen past the visibility, where a black one is not, and the
       // march's range would cut it off there, a line along the far cloud.
       // So the air lets nothing through by the range: less what it lets
-      // through there, made up to one again. There along the level, the
-      // longest path through the haze the range holds: a ray climbing out
-      // of the haze is through nearly all of its own within a few
+      // through there, made up to one again. There along the level or the
+      // ray's own path to its end, whichever holds more haze: a ray climbing
+      // out of the haze is through nearly all of its own within a few
       // kilometres, and measured against its own it would turn every cloud
-      // past them to haze
+      // past them to haze; one looking down into it from above meets more
+      // than the level there holds, and measured against the level every
+      // cloud under it would be haze
       const at_eye = this.#haze_extinction.mul(
         exp(eye_altitude.sub(this.#ground).max(0).div(-AEROSOL_SCALE_M)),
       );
@@ -853,7 +1118,10 @@ export class CloudsNode extends TempNode {
 
         return at_eye.mul(d).mul(spread) as F;
       };
-      const to_range = at_eye.mul(this.#range).toVar();
+      const to_range = max(
+        at_eye.mul(this.#range),
+        optical_depth(scene.min(this.#range) as F),
+      ).toVar();
       const to_cloud = optical_depth(distance.min(this.#range) as F);
       const at_range = exp(to_range.negate());
       const air = select(
@@ -893,6 +1161,7 @@ export class CloudsNode extends TempNode {
     const quality = this.quality;
 
     weather.resize_map(quality.mapSize, quality.mapExtentM);
+    weather.resize_far_map(quality.farMapSize, quality.farMapExtentM);
 
     // The noise: one tile for every seed, baked once
     if (!this.#noise) {
@@ -936,22 +1205,30 @@ export class CloudsNode extends TempNode {
       }
     }
 
-    // The shader, for the map's textures
-    const map = weather.map;
+    // The shader, for the maps' textures
+    const { map, farMap } = weather;
 
-    if (this.#map_textures !== map.textures || !this.#field) {
+    if (
+      this.#map_textures !== map.textures ||
+      this.#far_textures !== farMap.textures ||
+      !this.#field
+    ) {
       this.#map_textures = map.textures;
+      this.#far_textures = farMap.textures;
       this.#field = create_field_nodes({
         shape: this.#noise.shape.texture,
         detail: this.#noise.detail.texture,
         table: this.#table.texture,
         map: map.textures,
+        far: farMap.textures,
       });
       this.#march_material.fragmentNode = this.#march_fragment(
         depth,
         this.#field,
       ) as unknown as V4;
       this.#march_material.needsUpdate = true;
+      this.#resolve_material.fragmentNode = this.#resolve(depth);
+      this.#resolve_material.needsUpdate = true;
     }
 
     // Where the scene is in the air
@@ -962,16 +1239,24 @@ export class CloudsNode extends TempNode {
       weather.climate,
       weather.shapes,
       map.frame,
+      farMap.frame,
     );
 
-    // The shell the clouds fill: down to the ground under any rain, up to
-    // the cirrus or the tropopause over any ice, or a storm's top over it
-    const { bounds } = map;
+    // The shell the clouds fill, in either map: down to the ground under any
+    // rain, up to the cirrus or the tropopause over any ice, or a storm's top
+    // over it
     const { climate } = weather;
+    const shown = [map, farMap].filter(
+      (m) => m.frame && Number.isFinite(m.bounds.lowM),
+    );
 
-    this.#empty = !Number.isFinite(bounds.lowM) || !map.frame;
+    this.#empty = shown.length === 0;
 
-    const low = bounds.rain ? climate.groundM : bounds.lowM;
+    const rain = shown.some((m) => m.bounds.rain);
+    const low = rain
+      ? climate.groundM
+      : Math.min(...shown.map((m) => m.bounds.lowM));
+    const high = Math.max(...shown.map((m) => m.bounds.highM));
     let overshot = 0;
 
     for (const cell of weather.cells) {
@@ -985,7 +1270,7 @@ export class CloudsNode extends TempNode {
 
     this.#low.value = Number.isFinite(low) ? Math.floor(low) : 0;
     this.#ground.value = climate.groundM;
-    this.#high.value = Math.ceil(Math.min(bounds.highM, ceiling));
+    this.#high.value = this.#empty ? 0 : Math.ceil(Math.min(high, ceiling));
   }
 
   /**
@@ -1022,8 +1307,14 @@ export class CloudsNode extends TempNode {
     const width = Math.max(Math.round(size.x * quality.resolutionScale), 1);
     const height = Math.max(Math.round(size.y * quality.resolutionScale), 1);
 
-    if (this.#march.width !== width || this.#march.height !== height) {
-      this.#march.setSize(width, height);
+    const march_width = Math.ceil(width / UPSCALE);
+    const march_height = Math.ceil(height / UPSCALE);
+
+    if (
+      this.#history[0].width !== width ||
+      this.#history[0].height !== height
+    ) {
+      this.#march.setSize(march_width, march_height);
 
       for (const target of this.#history) target.setSize(width, height);
 
@@ -1031,6 +1322,12 @@ export class CloudsNode extends TempNode {
     }
 
     this.#resolution.value.set(width, height);
+    this.#march_resolution.value.set(march_width, march_height);
+
+    // Which texel of each block is marched
+    const [ox, oy] = ORDER[this.#tick++ % ORDER.length];
+
+    this.#offset.value.set(ox, oy);
 
     // The camera
     this.#projection_inverse.value.copy(camera.projectionMatrixInverse);
@@ -1053,11 +1350,20 @@ export class CloudsNode extends TempNode {
       look.visibilityM > 0 ? KOSCHMIEDER / look.visibilityM : 0;
 
     this.#steps.value = quality.steps;
+    this.#far_steps.value = quality.farSteps;
     this.#min_step.value = quality.minStepM;
+    this.#shape.value = quality.shapeM;
     this.#range.value = quality.rangeM;
     this.#detail.value = quality.detailM;
+    // A texel's ray, each time it is marched, is blended over its history by
+    // the quality's share: a ray samples its steps at one place along each,
+    // through billows smaller than they are, and alone it is grain. Takram's
+    // upscale keeps it whole, its rays smoother than these; here a texel is
+    // the mean of its last 2 / blend − 1 rays, nineteen at a tenth, which the
+    // clip lets go of as soon as its neighbours see something else
     this.#blend.value = quality.blend;
-    this.#frame_index.value = (this.#frame_index.value + 1) % 64;
+    this.#frame_index.value =
+      (this.#frame_index.value + 1) % (64 * ORDER.length);
 
     // The flashes, brightest first, in the scene
     const lux = look_lux(look);
@@ -1115,14 +1421,16 @@ export class CloudsNode extends TempNode {
       this.#quad.render(renderer);
 
       // Resolve into one history, from the other
-      this.#history_node.value = read.texture;
+      this.#history_node.value = read.textures[0];
+      this.#history_air.value = read.textures[1];
       renderer.setRenderTarget(write);
       this.#quad.material = this.#resolve_material;
       this.#quad.render(renderer);
       this.#had_history.value = 1;
     }
 
-    this.#texture_node.value = write.texture;
+    this.#texture_node.value = write.textures[0];
+    this.#air_node.value = write.textures[1];
     this.#current = 1 - this.#current;
 
     this.#previous_view_projection.value.multiplyMatrices(
