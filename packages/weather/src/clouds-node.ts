@@ -25,6 +25,7 @@ import {
   hash,
   If,
   int,
+  ivec2,
   Loop,
   max,
   min,
@@ -39,6 +40,7 @@ import {
   sqrt,
   struct,
   texture,
+  textureLoad,
   uniform,
   vec2,
   vec3,
@@ -137,8 +139,11 @@ const AEROSOL_SCALE_M = 1200;
 // kilometres across: there the ray takes a few long steps through their mean,
 // read from a coarser map that reaches to the horizon, lit as layers of it.
 //
-// Each frame marches one texel of every two by two, in turn, and the resolve
-// fills the others from their history: a quarter of the rays.
+// Each frame marches one texel of every four by four, in a Bayer order, and
+// the resolve fills the others from their history, as Takram's clouds do: a
+// sixteenth of the rays, into a history at the clouds' whole resolution. A
+// texel's ray is its own, through its centre, so over sixteen frames every
+// texel is seen sharp, not a coarser march's blur.
 //
 // Then the frames are blended: each texel's last value is found where the
 // cloud it saw was the frame before, and kept unless it strays outside what
@@ -158,9 +163,12 @@ const OPAQUE = 0.01;
 // The golden ratio, whose fractions of a frame count fill a step evenly
 const GOLDEN_RATIO = (1 + Math.sqrt(5)) / 2;
 
-// How many deviations from its neighbours' mean a texel's history may stray:
-// one, as Salvi (2016) has it
-const CLIP_DEVIATIONS = 1;
+// How many deviations from its neighbours' mean a texel's history may stray.
+// Salvi (2016) has one, for neighbours a texel apart; here they are four, a
+// coarser and noisier neighbourhood, and one would clip the history to its
+// grain. Two, as Takram's upscale has it: a cloud's slow change hides what
+// little more it lags
+const CLIP_DEVIATIONS = 2;
 
 // How much of the detail's reach it fades out over, towards its end: a share
 // of it, so its edge is not a line
@@ -175,14 +183,21 @@ const HANDOFF = 0.2;
 // far as this, the same reach
 const LIGHT_REACH_M = LIGHT_FIRST_M * (2 ** LIGHT_STEPS - 1);
 
-// The order each two by two texels are marched in: each frame the one
-// diagonally across from the last, so a frame's rays are spread evenly
-const CHECKER = [
-  [0, 0],
-  [1, 1],
-  [1, 0],
-  [0, 1],
-] as const;
+// The texels a side of each block one ray is marched in a frame
+const UPSCALE = 4;
+
+// The order each block's texels are marched in: Bayer's, each frame's as far
+// from the last ones as can be, so a frame's rays are spread evenly and any
+// four in a row cover the block as a two by two would
+const BAYER = [
+  [0, 8, 2, 10],
+  [12, 4, 14, 6],
+  [3, 11, 1, 9],
+  [15, 7, 13, 5],
+];
+const ORDER = BAYER.flatMap((row, y) => row.map((at, x) => ({ at, x, y })))
+  .sort((a, b) => a.at - b.at)
+  .map(({ x, y }) => [x, y] as const);
 
 /** The most flashes lighting the clouds at once */
 export const LIGHTS = 4;
@@ -443,10 +458,8 @@ export class CloudsNode extends TempNode {
   #range = float_uniform(500_000);
   #detail = float_uniform(8000);
   #blend = float_uniform(0.1);
-  #fresh_blend = float_uniform(0.34);
 
   #texture_node: TextureNode;
-  #march_color = texture(this.#march.textures[0]) as unknown as TextureNode;
   #march_info = texture(this.#march.textures[1]) as unknown as TextureNode;
   #history_node = texture(this.#history[0].texture) as unknown as TextureNode;
 
@@ -474,8 +487,6 @@ export class CloudsNode extends TempNode {
       this as unknown as Parameters<typeof passTexture>[0],
       this.#history[0].texture,
     ) as unknown as TextureNode;
-
-    this.#resolve_material.fragmentNode = this.#resolve();
   }
 
   /**
@@ -551,7 +562,7 @@ export class CloudsNode extends TempNode {
       const cloud = sum.div(total.max(1e-6));
 
       // The air before it, from the march's own texels round the pixel, as
-      // the same: they are every other texel, this frame's
+      // the same: they are one texel in every four by four, this frame's
       const offset = this.#offset;
       const march_resolution = this.#march_resolution;
       const in_march = this.#march_uv(screenUV as unknown as V2)
@@ -573,7 +584,12 @@ export class CloudsNode extends TempNode {
           i === 1 ? march_between.x : march_between.x.oneMinus()
         ).mul(j === 1 ? march_between.y : march_between.y.oneMinus()) as F;
         const weight = weigh(
-          texel.mul(2).add(offset).add(0.5).div(resolution).clamp(0, 1) as V2,
+          texel
+            .mul(UPSCALE)
+            .add(offset)
+            .add(0.5)
+            .div(resolution)
+            .clamp(0, 1) as V2,
           bilinear,
         );
         const uv = texel.add(0.5).div(march_resolution).clamp(0, 1);
@@ -612,55 +628,94 @@ export class CloudsNode extends TempNode {
   /**
    * The resolve: this frame's rays over the last frames', where the cloud
    * they saw was.
+   * @param depth_node The scene's depth
    * @returns Its fragment
    */
-  #resolve(): V4 {
+  #resolve(depth_node: TextureNode): V4 {
     return Fn(() => {
       const uv = screenUV as unknown as V2;
-
-      // This frame's ray, if this texel was marched, or else its
-      // neighbours', between
-      const march_uv = this.#march_uv(uv).toVar();
       const fresh = floor(screenCoordinate.xy)
-        .add(2)
+        .add(UPSCALE)
         .sub(this.#offset)
-        .mod(2)
+        .mod(UPSCALE)
         .lessThan(vec2(0.5))
         .all();
-      const now = this.#march_color.sample(march_uv).toVar();
-      const info = this.#march_info.sample(march_uv);
+
+      // How far the scene is here, as the march keeps it
+      const depth = depth_node.sample(uv).x;
+      const own = select(
+        depth.lessThan(1),
+        getViewPosition(uv, depth, this.#projection_inverse).length(),
+        float(NOWHERE),
+      )
+        .min(this.#range)
+        .toVar();
+
+      // The march's four texels round this one, as a bilinear filter would
+      // weigh them, each as far as its ray ended where this one's does: one
+      // that stopped at an aircraft says nothing of the cloud beside it, out
+      // to the ground. Of them, this frame's ray here; their spread, to keep
+      // a stale history inside, their mean give or take its deviations
+      // (Salvi 2016); and how far the cloud they saw is. Four, not the nine
+      // round: they are texels four apart, as wide a neighbourhood as nine
+      // a texel apart, at half the reads
+      const at = this.#march_uv(uv)
+        .mul(this.#march_resolution)
+        .sub(0.5)
+        .toVar();
+      const corner = floor(at).toVar();
+      const now = vec4(0).toVar();
+      const now_total = float(0).toVar();
+      const first = vec4(0).toVar();
+      const second = vec4(0).toVar();
+      const total = float(0).toVar();
+      const cloud = float(0).toVar();
+      const cloud_total = float(0).toVar();
+
+      for (let j = 0; j <= 1; j++) {
+        for (let i = 0; i <= 1; i++) {
+          const texel = corner.add(vec2(i, j));
+          const at_texel = ivec2(
+            texel.clamp(vec2(0), this.#march_resolution.sub(1)),
+          );
+          const color = textureLoad(this.#march.textures[0], at_texel).toVar();
+          const info = textureLoad(this.#march.textures[1], at_texel).toVar();
+          const apart = info.y.sub(own).abs().div(own.mul(0.03).max(1));
+          const alike = exp2(apart.mul(apart).negate()).add(1e-4);
+          const tent = texel.sub(at).abs().oneMinus().max(0).toVar();
+          const bilinear = tent.x.mul(tent.y).mul(alike);
+
+          now.addAssign(color.mul(bilinear));
+          now_total.addAssign(bilinear);
+          first.addAssign(color.mul(alike));
+          second.addAssign(color.mul(color).mul(alike));
+          total.addAssign(alike);
+
+          const seen = select(info.z.lessThan(0.999), bilinear, float(0));
+
+          cloud.addAssign(info.x.mul(seen));
+          cloud_total.addAssign(seen);
+        }
+      }
+
+      now.divAssign(now_total.max(1e-6));
+
+      const mean = first.div(total).toVar();
+      const deviation = sqrt(second.div(total).sub(mean.mul(mean)).max(0)).mul(
+        CLIP_DEVIATIONS,
+      );
 
       // Where the cloud this texel saw is, and where it was on screen
-      const distance = select(info.z.lessThan(0.999), info.x, this.#range) as F;
+      const distance = select(
+        cloud_total.greaterThan(1e-6),
+        cloud.div(cloud_total.max(1e-6)),
+        this.#range,
+      ) as F;
       const point = this.#camera_position.add(this.#ray(uv).mul(distance));
       const clip = this.#previous_view_projection.mul(
         vec4(point.add(this.#moved), 1),
       );
       const then_uv = clip.xy.div(clip.w).mul(vec2(0.5, -0.5)).add(0.5).toVar();
-
-      // The neighbourhood's spread, to keep a stale history inside: its mean
-      // give or take a deviation (Salvi 2016)
-      const texel = vec2(1).div(this.#march_resolution);
-      const first = now.toVar();
-      const second = now.mul(now).toVar();
-
-      for (let j = -1; j <= 1; j++) {
-        for (let i = -1; i <= 1; i++) {
-          if (i === 0 && j === 0) continue;
-
-          const near = this.#march_color.sample(
-            march_uv.add(texel.mul(vec2(i, j))),
-          );
-
-          first.addAssign(near);
-          second.addAssign(near.mul(near));
-        }
-      }
-
-      const mean = first.div(9).toVar();
-      const deviation = sqrt(second.div(9).sub(mean.mul(mean)).max(0)).mul(
-        CLIP_DEVIATIONS,
-      );
 
       const then = catmull_rom(
         this.#history_node,
@@ -675,10 +730,19 @@ export class CloudsNode extends TempNode {
         .and(this.#had_history.greaterThan(0.5));
 
       // A marched texel's ray over its history; one not marched, its history
-      // alone, kept inside what its neighbours see now
+      // alone, kept inside what its neighbours see now. A texel's own ray
+      // comes back once in sixteen frames: once the cloud moves a march texel
+      // a frame, the history it was drawn from has gone by before then, and
+      // the texel is this frame's rays between it, sharp or not
+      const moved = then_uv
+        .sub(uv)
+        .mul(this.#resolution)
+        .length()
+        .div(UPSCALE)
+        .saturate();
       const share = select(
         valid,
-        select(fresh, this.#fresh_blend, float(0)),
+        mix(select(fresh, this.#blend, float(0)), float(1), moved),
         float(1),
       );
 
@@ -688,7 +752,7 @@ export class CloudsNode extends TempNode {
 
   /**
    * Where in the march a point of the clouds' texture is: its texels are
-   * every other one of the clouds', this frame's of each two by two.
+   * one in every four by four of the clouds', this frame's of each block.
    * @param uv The point
    * @returns The point in the march
    */
@@ -697,7 +761,7 @@ export class CloudsNode extends TempNode {
       .mul(this.#resolution)
       .sub(0.5)
       .sub(this.#offset)
-      .mul(0.5)
+      .div(UPSCALE)
       .add(0.5)
       .div(this.#march_resolution) as unknown as V2;
   }
@@ -714,7 +778,10 @@ export class CloudsNode extends TempNode {
 
     const marched = Fn(() => {
       // The texel of the clouds' this one marches this frame
-      const pixel = floor(screenCoordinate.xy).mul(2).add(this.#offset).toVar();
+      const pixel = floor(screenCoordinate.xy)
+        .mul(UPSCALE)
+        .add(this.#offset)
+        .toVar();
       const uv = pixel.add(0.5).div(this.#resolution).toVar() as unknown as V2;
       const direction = this.#ray(uv).toVar();
       const eye = this.#camera_position;
@@ -788,13 +855,13 @@ export class CloudsNode extends TempNode {
       const front = float(0).toVar();
       const seen = float(0).toVar();
 
-      // Where in its step each sample is, somewhere different each frame: a
+      // Where in its step each sample is, somewhere different each time: a
       // hash's white noise, not a gradient's, whose lines show where the
-      // history is let go. Each frame on by the golden ratio, so a texel's
-      // samples spread evenly along its steps over the frames
+      // history is let go. Each time the texel is marched on by the golden
+      // ratio, so its samples spread evenly along its steps over the frames
       const seed = pixel.x.add(pixel.y.mul(4099)).toVar();
       const jitter = hash(seed)
-        .add(this.#frame_index.mul(GOLDEN_RATIO - 1))
+        .add(floor(this.#frame_index.div(ORDER.length)).mul(GOLDEN_RATIO - 1))
         .fract();
 
       // Where the clouds' shapes hand over to their mean: somewhere over the
@@ -1142,6 +1209,8 @@ export class CloudsNode extends TempNode {
         this.#field,
       ) as unknown as V4;
       this.#march_material.needsUpdate = true;
+      this.#resolve_material.fragmentNode = this.#resolve(depth);
+      this.#resolve_material.needsUpdate = true;
     }
 
     // Where the scene is in the air
@@ -1220,8 +1289,8 @@ export class CloudsNode extends TempNode {
     const width = Math.max(Math.round(size.x * quality.resolutionScale), 1);
     const height = Math.max(Math.round(size.y * quality.resolutionScale), 1);
 
-    const march_width = Math.ceil(width / 2);
-    const march_height = Math.ceil(height / 2);
+    const march_width = Math.ceil(width / UPSCALE);
+    const march_height = Math.ceil(height / UPSCALE);
 
     if (
       this.#history[0].width !== width ||
@@ -1237,8 +1306,8 @@ export class CloudsNode extends TempNode {
     this.#resolution.value.set(width, height);
     this.#march_resolution.value.set(march_width, march_height);
 
-    // Which texel of each two by two is marched
-    const [ox, oy] = CHECKER[this.#tick++ % CHECKER.length];
+    // Which texel of each block is marched
+    const [ox, oy] = ORDER[this.#tick++ % ORDER.length];
 
     this.#offset.value.set(ox, oy);
 
@@ -1268,12 +1337,15 @@ export class CloudsNode extends TempNode {
     this.#shape.value = quality.shapeM;
     this.#range.value = quality.rangeM;
     this.#detail.value = quality.detailM;
+    // A texel's ray, each time it is marched, is blended over its history by
+    // the quality's share: a ray samples its steps at one place along each,
+    // through billows smaller than they are, and alone it is grain. Takram's
+    // upscale keeps it whole, its rays smoother than these; here a texel is
+    // the mean of its last 2 / blend − 1 rays, nineteen at a tenth, which the
+    // clip lets go of as soon as its neighbours see something else
     this.#blend.value = quality.blend;
-
-    // A texel is marched one frame in every four, so its ray is kept over
-    // its history as much as four frames' would be
-    this.#fresh_blend.value = 1 - (1 - quality.blend) ** CHECKER.length;
-    this.#frame_index.value = (this.#frame_index.value + 1) % 64;
+    this.#frame_index.value =
+      (this.#frame_index.value + 1) % (64 * ORDER.length);
 
     // The flashes, brightest first, in the scene
     const lux = look_lux(look);

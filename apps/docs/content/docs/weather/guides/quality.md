@@ -8,7 +8,7 @@ description: "How finely the clouds are drawn, against how fast."
 
 | setting           | low    | medium   | high     | what it is                                           |
 | ----------------- | ------ | -------- | -------- | ---------------------------------------------------- |
-| `resolutionScale` | 0.35   | 0.5      | 0.6      | The clouds' resolution against the frame's, per axis |
+| `resolutionScale` | 0.75   | 1        | 1        | The clouds' resolution against the frame's, per axis |
 | `steps`           | 132    | 171      | 240      | The most steps a ray takes to `shapeM`               |
 | `farSteps`        | 28     | 32       | 33       | The most it takes past it, to `rangeM`               |
 | `minStepM`        | 8      | 5        | 3        | The finest step, metres                              |
@@ -19,7 +19,7 @@ description: "How finely the clouds are drawn, against how fast."
 | `mapExtentM`      | 144 km | 192 km   | 288 km   | The ground it spans                                  |
 | `farMapSize`      | 160    | 224      | 352      | The far map's texels a side                          |
 | `farMapExtentM`   | 720 km | 1 200 km | 1 920 km | The ground it spans                                  |
-| `blend`           | 0.08   | 0.1      | 0.12     | Each frame's share over the history                  |
+| `blend`           | 0.08   | 0.1      | 0.12     | A ray's share over its texel's history               |
 
 ```tsx
 import { WEATHER_QUALITY } from "@aeronautic/weather";
@@ -31,12 +31,13 @@ const clouds = useClouds({
 
 ## Where the time goes
 
-- **The march** is the cost: a ray for one texel of every two by two at the
-  reduced resolution each frame, in turn, the others kept from their history
-  where the cloud they saw has moved to, so halving `resolutionScale`
-  quarters it. Each frame samples its steps at new places along them and is
-  blended over the last, so a low step count resolves over a few frames
-  rather than banding.
+- **The march** is the cost: a ray for one texel of every four by four each
+  frame, in a Bayer order, the others kept from their history where the
+  cloud they saw has moved to, as Takram's clouds upscale. Every texel is its
+  own ray within sixteen frames, so the clouds are as sharp as the history,
+  at a sixteenth of the rays; halving `resolutionScale` quarters them. Each
+  frame samples its steps at new places along them, so a low step count
+  resolves over the frames rather than banding.
 - **The steps** to `shapeM` are as many as it takes to reach it with none
   longer than 5, 4 or 3 % of its distance: `steps_to(shapeM, share)`. A ray
   that needs more than it has stretches its steps by a constant ratio, so it

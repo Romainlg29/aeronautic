@@ -39,7 +39,11 @@ export type WeatherLook = {
  * How finely the clouds are drawn, against how fast.
  */
 export type WeatherQuality = {
-  /** The clouds' resolution against the frame's, per axis */
+  /**
+   * The clouds' resolution against the frame's, per axis. A ray is marched
+   * for one texel in every four by four each frame, the rest kept from the
+   * last frames: a sixteenth of this many rays
+   */
   resolutionScale: number;
 
   /** The most steps a ray takes to `shapeM` */
@@ -71,7 +75,7 @@ export type WeatherQuality = {
   farMapSize: number;
   farMapExtentM: number;
 
-  /** The share of each frame's ray kept over the history: lower is smoother */
+  /** The share of a texel's ray kept over its history: lower is smoother */
   blend: number;
 };
 
@@ -119,7 +123,7 @@ const FAR_EXTENT = 2.4;
 
 export const WEATHER_QUALITY: Record<WeatherQualityName, WeatherQuality> = {
   low: {
-    resolutionScale: 0.35,
+    resolutionScale: 0.75,
     // A step at most 5 % of its distance: 150 m at 3 km
     steps: steps_to(60_000, 0.05),
     farSteps: steps_to(300_000, FAR_SHARE, 60_000),
@@ -134,7 +138,7 @@ export const WEATHER_QUALITY: Record<WeatherQualityName, WeatherQuality> = {
     blend: 0.08,
   },
   medium: {
-    resolutionScale: 0.5,
+    resolutionScale: 1,
     steps: steps_to(80_000, 0.04),
     farSteps: steps_to(500_000, FAR_SHARE, 80_000),
     minStepM: 5,
@@ -148,7 +152,7 @@ export const WEATHER_QUALITY: Record<WeatherQualityName, WeatherQuality> = {
     blend: 0.1,
   },
   high: {
-    resolutionScale: 0.6,
+    resolutionScale: 1,
     steps: steps_to(120_000, 0.03),
     farSteps: steps_to(800_000, FAR_SHARE, 120_000),
     minStepM: 3,
