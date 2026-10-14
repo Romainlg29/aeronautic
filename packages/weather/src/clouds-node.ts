@@ -170,6 +170,16 @@ const GOLDEN_RATIO = (1 + Math.sqrt(5)) / 2;
 // little more it lags
 const CLIP_DEVIATIONS = 2;
 
+// Where the clip's bounds are read round a pixel, in march texels: it and
+// the four beside it, as Takram's
+const CLIP_TAPS = [
+  [0, 0],
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+] as const;
+
 // How much of the detail's reach it fades out over, towards its end: a share
 // of it, so its edge is not a line
 const DETAIL_FADE = 0.3;
@@ -211,6 +221,7 @@ const LIGHTNING_PATH_SHARE = 0.5;
 // What a ray hands back: its light and its alpha, and where it saw cloud,
 // where the scene was, and what it saw through
 const MARCHED = struct({ color: "vec4", info: "vec4" }, "CloudsMarched");
+const RESOLVED = struct({ color: "vec4", air: "vec4" }, "CloudsResolved");
 
 // The scene's depth of nothing: the sky
 const NOWHERE = 1e9;
@@ -382,6 +393,7 @@ export class CloudsNode extends TempNode {
   #history = [0, 1].map(
     () =>
       new RenderTarget(1, 1, {
+        count: 2,
         type: HalfFloatType,
         format: RGBAFormat,
         depthBuffer: false,
@@ -460,8 +472,13 @@ export class CloudsNode extends TempNode {
   #blend = float_uniform(0.1);
 
   #texture_node: TextureNode;
-  #march_info = texture(this.#march.textures[1]) as unknown as TextureNode;
-  #history_node = texture(this.#history[0].texture) as unknown as TextureNode;
+  #history_node = texture(
+    this.#history[0].textures[0],
+  ) as unknown as TextureNode;
+  #history_air = texture(
+    this.#history[0].textures[1],
+  ) as unknown as TextureNode;
+  #air_node = texture(this.#history[0].textures[1]) as unknown as TextureNode;
 
   /**
    * @param weather The weather
@@ -480,12 +497,16 @@ export class CloudsNode extends TempNode {
 
     this.#march.textures[0].name = "clouds.light";
     this.#march.textures[1].name = "clouds.depth";
+    for (const target of this.#history) {
+      target.textures[0].name = "clouds.history";
+      target.textures[1].name = "clouds.air";
+    }
     this.#march_material.name = "clouds.march";
     this.#resolve_material.name = "clouds.resolve";
 
     this.#texture_node = passTexture(
       this as unknown as Parameters<typeof passTexture>[0],
-      this.#history[0].texture,
+      this.#history[0].textures[0],
     ) as unknown as TextureNode;
   }
 
@@ -512,6 +533,7 @@ export class CloudsNode extends TempNode {
     this.depthNode = depth;
 
     const clouds = this.#texture_node;
+    const air_node = this.#air_node;
     const near = this.#near;
     const far = this.#far;
     const resolution = this.#resolution;
@@ -529,6 +551,7 @@ export class CloudsNode extends TempNode {
       const base = floor(at);
       const between = fract(at);
       const sum = vec4(0).toVar();
+      const air = float(0).toVar();
       const total = float(0).toVar();
       const weigh = (uv: V2, bilinear: F): F => {
         const apart = scene_z(uv)
@@ -556,52 +579,17 @@ export class CloudsNode extends TempNode {
         const weight = weigh(uv, bilinear);
 
         sum.addAssign(clouds.sample(uv).mul(weight));
+        air.addAssign(air_node.sample(uv).x.mul(weight));
         total.addAssign(weight);
       }
 
+      // The cloud, and the air before it
       const cloud = sum.div(total.max(1e-6));
-
-      // The air before it, from the march's own texels round the pixel, as
-      // the same: they are one texel in every four by four, this frame's
-      const offset = this.#offset;
-      const march_resolution = this.#march_resolution;
-      const in_march = this.#march_uv(screenUV as unknown as V2)
-        .mul(march_resolution)
-        .sub(0.5);
-      const march_base = floor(in_march);
-      const march_between = fract(in_march);
-      const air = float(0).toVar();
-      const air_total = float(0).toVar();
-
-      for (const [i, j] of [
-        [0, 0],
-        [1, 0],
-        [0, 1],
-        [1, 1],
-      ] as const) {
-        const texel = march_base.add(vec2(i, j));
-        const bilinear = (
-          i === 1 ? march_between.x : march_between.x.oneMinus()
-        ).mul(j === 1 ? march_between.y : march_between.y.oneMinus()) as F;
-        const weight = weigh(
-          texel
-            .mul(UPSCALE)
-            .add(offset)
-            .add(0.5)
-            .div(resolution)
-            .clamp(0, 1) as V2,
-          bilinear,
-        );
-        const uv = texel.add(0.5).div(march_resolution).clamp(0, 1);
-
-        air.addAssign(this.#march_info.sample(uv).w.mul(weight));
-        air_total.addAssign(weight);
-      }
 
       // Behind the cloud as much as it hides, and in the air before it what
       // that air takes of it: a cloud the air has all taken is the air's own
       // light, by default what lies behind it
-      const taken = cloud.a.mul(air.div(air_total.max(1e-6)).oneMinus());
+      const taken = cloud.a.mul(air.div(total.max(1e-6)).oneMinus());
       const shown = airlight ? vec3(airlight) : behind.rgb;
 
       return vec4(
@@ -632,7 +620,8 @@ export class CloudsNode extends TempNode {
    * @returns Its fragment
    */
   #resolve(depth_node: TextureNode): V4 {
-    return Fn(() => {
+    const march_color = texture(this.#march.textures[0]);
+    const resolved = Fn(() => {
       const uv = screenUV as unknown as V2;
       const fresh = floor(screenCoordinate.xy)
         .add(UPSCALE)
@@ -654,21 +643,14 @@ export class CloudsNode extends TempNode {
       // The march's four texels round this one, as a bilinear filter would
       // weigh them, each as far as its ray ended where this one's does: one
       // that stopped at an aircraft says nothing of the cloud beside it, out
-      // to the ground. Of them, this frame's ray here; their spread, to keep
-      // a stale history inside, their mean give or take its deviations
-      // (Salvi 2016); and how far the cloud they saw is. Four, not the nine
-      // round: they are texels four apart, as wide a neighbourhood as nine
-      // a texel apart, at half the reads
-      const at = this.#march_uv(uv)
-        .mul(this.#march_resolution)
-        .sub(0.5)
-        .toVar();
+      // to the ground. Of them, this frame's ray here, and how far the cloud
+      // they saw is
+      const march_uv = this.#march_uv(uv).toVar();
+      const at = march_uv.mul(this.#march_resolution).sub(0.5).toVar();
       const corner = floor(at).toVar();
       const now = vec4(0).toVar();
+      const air_now = float(0).toVar();
       const now_total = float(0).toVar();
-      const first = vec4(0).toVar();
-      const second = vec4(0).toVar();
-      const total = float(0).toVar();
       const cloud = float(0).toVar();
       const cloud_total = float(0).toVar();
 
@@ -686,10 +668,8 @@ export class CloudsNode extends TempNode {
           const bilinear = tent.x.mul(tent.y).mul(alike);
 
           now.addAssign(color.mul(bilinear));
+          air_now.addAssign(info.w.mul(bilinear));
           now_total.addAssign(bilinear);
-          first.addAssign(color.mul(alike));
-          second.addAssign(color.mul(color).mul(alike));
-          total.addAssign(alike);
 
           const seen = select(info.z.lessThan(0.999), bilinear, float(0));
 
@@ -699,11 +679,34 @@ export class CloudsNode extends TempNode {
       }
 
       now.divAssign(now_total.max(1e-6));
+      air_now.divAssign(now_total.max(1e-6));
 
-      const mean = first.div(total).toVar();
-      const deviation = sqrt(second.div(total).sub(mean.mul(mean)).max(0)).mul(
-        CLIP_DEVIATIONS,
-      );
+      // What the history may be: the march round this pixel, read where the
+      // pixel is and a march texel either side, filtered, their mean give or
+      // take their deviations (Salvi 2016), as Takram's upscale clips. Read
+      // where the pixel is, the bounds change smoothly from one to the next;
+      // from the march's texels themselves, they would step every four, and
+      // the history kept inside them would show the march's blocks
+      const march_size = vec2(1).div(this.#march_resolution).toVar();
+      const first = vec4(0).toVar();
+      const second = vec4(0).toVar();
+
+      for (const [x, y] of CLIP_TAPS) {
+        const color = march_color.sample(
+          march_uv.add(march_size.mul(vec2(x, y))),
+        );
+
+        first.addAssign(color);
+        second.addAssign(color.mul(color));
+      }
+
+      const mean = first.div(CLIP_TAPS.length).toVar();
+      const deviation = sqrt(
+        second.div(CLIP_TAPS.length).sub(mean.mul(mean)).max(0),
+      )
+        .mul(CLIP_DEVIATIONS)
+        .add(1e-6)
+        .toVar();
 
       // Where the cloud this texel saw is, and where it was on screen
       const distance = select(
@@ -717,11 +720,17 @@ export class CloudsNode extends TempNode {
       );
       const then_uv = clip.xy.div(clip.w).mul(vec2(0.5, -0.5)).add(0.5).toVar();
 
-      const then = catmull_rom(
+      // Clipped towards the mean, to where the line to it leaves the bounds:
+      // its hue kept, where a clamp of each channel would shift it
+      const kept = catmull_rom(
         this.#history_node,
         then_uv as unknown as V2,
         this.#resolution as unknown as V2,
-      ).clamp(mean.sub(deviation), mean.add(deviation));
+      ).toVar();
+      const off = kept.sub(mean).toVar();
+      const ratio = off.abs().div(deviation).toVar();
+      const out = max(max(ratio.x, ratio.y), max(ratio.z, ratio.w)).max(1);
+      const then = mean.add(off.div(out));
       const valid = then_uv
         .greaterThanEqual(vec2(0))
         .all()
@@ -730,24 +739,33 @@ export class CloudsNode extends TempNode {
         .and(this.#had_history.greaterThan(0.5));
 
       // A marched texel's ray over its history; one not marched, its history
-      // alone, kept inside what its neighbours see now. A texel's own ray
-      // comes back once in sixteen frames: once the cloud moves a march texel
-      // a frame, the history it was drawn from has gone by before then, and
-      // the texel is this frame's rays between it, sharp or not
-      const moved = then_uv
-        .sub(uv)
-        .mul(this.#resolution)
-        .length()
-        .div(UPSCALE)
-        .saturate();
+      // alone, kept inside what its neighbours see now, as Takram's: however
+      // fast the cloud goes by, the clip lets go of what is no longer there,
+      // and a single ray is never drawn as it is, grain
       const share = select(
         valid,
-        mix(select(fresh, this.#blend, float(0)), float(1), moved),
+        select(fresh, this.#blend, float(0)),
         float(1),
       );
 
-      return mix(then, now, share);
-    })() as unknown as V4;
+      // The air before the cloud as the cloud is kept: from this frame's
+      // texels alone, the march's grid moves under the pixel each frame, and
+      // where the air differs most, at the horizon, it would flicker
+      const air_then = this.#history_air.sample(then_uv as unknown as V2).x;
+
+      return RESOLVED(
+        mix(then, now, share),
+        vec4(mix(air_then, air_now, share), 0, 0, 1),
+      );
+    })() as unknown as { toConst: () => { get: (name: string) => V4 } };
+
+    // The fragment's outputs must be its last node, as the march's
+    const result = resolved.toConst();
+
+    return outputStruct(
+      result.get("color"),
+      result.get("air"),
+    ) as unknown as V4;
   }
 
   /**
@@ -1403,14 +1421,16 @@ export class CloudsNode extends TempNode {
       this.#quad.render(renderer);
 
       // Resolve into one history, from the other
-      this.#history_node.value = read.texture;
+      this.#history_node.value = read.textures[0];
+      this.#history_air.value = read.textures[1];
       renderer.setRenderTarget(write);
       this.#quad.material = this.#resolve_material;
       this.#quad.render(renderer);
       this.#had_history.value = 1;
     }
 
-    this.#texture_node.value = write.texture;
+    this.#texture_node.value = write.textures[0];
+    this.#air_node.value = write.textures[1];
     this.#current = 1 - this.#current;
 
     this.#previous_view_projection.value.multiplyMatrices(
