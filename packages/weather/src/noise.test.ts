@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RAIN_SHAFTS_MEAN } from "./density";
+import { EDGE_SOFTNESS, mean_density, RAIN_SHAFTS_MEAN } from "./density";
 import { random } from "./lightning";
 import {
   detail_channels,
@@ -140,5 +140,45 @@ describe("the rain's shafts", () => {
     }
 
     expect(sum / count).toBeCloseTo(RAIN_SHAFTS_MEAN, 1);
+  });
+});
+
+describe("the clouds' mean, far off", () => {
+  it("is the noise's mean density at a cut", () => {
+    const rng = random(11);
+    const count = 50_000;
+    const edge = 0.45;
+    let linear = 0;
+    let two_thirds = 0;
+
+    for (let i = 0; i < count; i++) {
+      const n = shape_noise(
+        shape_union(rng() * 8, rng() * 8, rng() * 8, SHAPE_SALT),
+      );
+      const d = Math.min(Math.max((n - edge) / EDGE_SOFTNESS, 0), 1);
+
+      linear += d;
+      two_thirds += Math.cbrt(d) ** 2;
+    }
+
+    const [m23, m1] = mean_density(edge);
+
+    expect(m1).toBeCloseTo(linear / count, 2);
+    expect(m23).toBeCloseTo(two_thirds / count, 2);
+  });
+
+  it("thins as the cut rises, to none at the noise's peak", () => {
+    let last = Infinity;
+
+    for (let edge = -0.5; edge <= SHAPE_PEAK; edge += 0.05) {
+      const [m23, m1] = mean_density(edge);
+
+      expect(m1).toBeLessThanOrEqual(last);
+      expect(m23).toBeGreaterThanOrEqual(m1);
+      last = m1;
+    }
+
+    expect(mean_density(-0.5)[1]).toBeCloseTo(1, 2);
+    expect(mean_density(SHAPE_PEAK)[1]).toBeLessThan(1e-3);
   });
 });

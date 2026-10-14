@@ -17,6 +17,8 @@ import type { Climate } from "../climate";
 import {
   CIRRUS_STRETCH,
   EDGE_SOFTNESS,
+  MEAN_FROM,
+  MEAN_TO,
   RAIN_COEFFICIENT,
   RAIN_EXPONENT,
   RAIN_SHAFTS_MEAN,
@@ -75,6 +77,11 @@ export type FieldNodes = {
   mapOrigin: Uniform<Vector2, V2>;
   mapExtent: Uniform<number, F>;
 
+  /** The far map's, the same */
+  far: { covers: Texture; heights: Texture; rest: Texture };
+  farOrigin: Uniform<Vector2, V2>;
+  farExtent: Uniform<number, F>;
+
   /**
    * The scene's origin in each noise's tile, 0 to 1 each way: the cumulus',
    * the sheets', the altostratus', the cirrus', the rain's, the detail's.
@@ -129,6 +136,7 @@ export const create_field_nodes = (textures: {
   detail: Texture;
   table: Texture;
   map: readonly [Texture, Texture, Texture];
+  far: readonly [Texture, Texture, Texture];
 }): FieldNodes => ({
   shape: textures.shape,
   detail: textures.detail,
@@ -138,6 +146,13 @@ export const create_field_nodes = (textures: {
   rest: textures.map[2],
   mapOrigin: v2(),
   mapExtent: f1(1),
+  far: {
+    covers: textures.far[0],
+    heights: textures.far[1],
+    rest: textures.far[2],
+  },
+  farOrigin: v2(),
+  farExtent: f1(1),
   cumulusOrigin: union_origin(),
   stratusOrigin: union_origin(),
   altoOrigin: union_origin(),
@@ -166,6 +181,7 @@ const fract = (v: number) => v - Math.floor(v);
  * @param climate The climate
  * @param shapes The noise's frame
  * @param map Where the map is
+ * @param far Where the far map is
  */
 export const update_field_nodes = (
   nodes: FieldNodes,
@@ -174,18 +190,28 @@ export const update_field_nodes = (
   climate: Climate,
   shapes: ShapeFrame,
   map: MapFrame | null,
+  far: MapFrame | null,
 ): void => {
   const [x, z] = air;
   const { scales, offset } = shapes;
   const [ox, oy, oz] = offset;
 
-  if (map) {
-    nodes.mapOrigin.value.set(x - map.x, z - map.z);
-    nodes.mapExtent.value = map.extentM;
-  } else {
-    // No map yet: far off it, where it holds nothing
-    nodes.mapOrigin.value.set(1e7, 1e7);
-  }
+  // No map yet: far off it, where it holds nothing
+  const place = (
+    origin: Uniform<Vector2, V2>,
+    extent: Uniform<number, F>,
+    frame: MapFrame | null,
+  ) => {
+    if (frame) {
+      origin.value.set(x - frame.x, z - frame.z);
+      extent.value = frame.extentM;
+    } else {
+      origin.value.set(1e9, 1e9);
+    }
+  };
+
+  place(nodes.mapOrigin, nodes.mapExtent, map);
+  place(nodes.farOrigin, nodes.farExtent, far);
 
   // The origin's place in the union's two reads, from where it is in tiles,
   // unwrapped: a wrap of a whole tile would move the turned read, which
@@ -276,15 +302,23 @@ export type ColumnNodes = {
  * The column over a point of the scene: the map's, bilinearly.
  * @param nodes The field
  * @param xz The point, in the scene
+ * @param far Whether from the far map
  * @returns Its column
  */
-export const map_column = (nodes: FieldNodes, xz: V2): ColumnNodes => {
-  const uv = xz.add(nodes.mapOrigin).div(nodes.mapExtent).add(0.5) as V2;
+export const map_column = (
+  nodes: FieldNodes,
+  xz: V2,
+  far = false,
+): ColumnNodes => {
+  const origin = far ? nodes.farOrigin : nodes.mapOrigin;
+  const extent = far ? nodes.farExtent : nodes.mapExtent;
+  const maps = far ? nodes.far : nodes;
+  const uv = xz.add(origin).div(extent).add(0.5) as V2;
 
   return {
-    covers: texture(nodes.covers, uv).toVar() as unknown as V4,
-    heights: texture(nodes.heights, uv).toVar() as unknown as V4,
-    rest: texture(nodes.rest, uv).toVar() as unknown as V4,
+    covers: texture(maps.covers, uv).toVar() as unknown as V4,
+    heights: texture(maps.heights, uv).toVar() as unknown as V4,
+    rest: texture(maps.rest, uv).toVar() as unknown as V4,
   };
 };
 
@@ -362,6 +396,28 @@ const threshold = (nodes: FieldNodes, cover: F): F =>
 const saturate = (x: F): F => x.clamp(0, 1) as F;
 
 /**
+ * The mean, over the billows, of the density a cut leaves and of its ⅔
+ * power: density.ts's `mean_density`, from the table.
+ * @param nodes The field
+ * @param edge The cut
+ * @returns The mean of d^⅔ in x, of d in y
+ */
+const mean_at = (nodes: FieldNodes, edge: F): V2 =>
+  texture(
+    nodes.table,
+    vec2(
+      edge
+        .sub(MEAN_FROM)
+        .div(MEAN_TO - MEAN_FROM)
+        .mul(TABLE_SIZE - 1)
+        .clamp(0, TABLE_SIZE - 1)
+        .add(0.5)
+        .div(TABLE_SIZE),
+      (TABLE_ROWS.mean + 0.5) / TABLE_ROW_COUNT,
+    ),
+  ).xy as unknown as V2;
+
+/**
  * The cloud at a point, as it is drawn.
  */
 export type CloudNodes = {
@@ -389,6 +445,8 @@ export type CloudNodes = {
  * @param detail_share How much of the detail noise wears it: 1 near, 0 past
  *   the detail's reach, where its mean does instead and it is not sampled
  * @param lit Whether its light is wanted: the cloud over and under it
+ * @param mean Whether as the mean of its billows, as a far step through many
+ *   of them sees it: no noise is read
  * @returns The cloud there
  */
 export const cloud_at = (
@@ -398,6 +456,7 @@ export const cloud_at = (
   column: ColumnNodes,
   detail_share: F | null,
   lit: boolean,
+  mean = false,
 ): CloudNodes => {
   const { covers, heights, rest } = column;
   const water = vec3(0).toVar();
@@ -407,6 +466,7 @@ export const cloud_at = (
   const up = float(0).toVar();
   const down = float(0).toVar();
   const a = altitude;
+  const shares = mean ? null : detail_share;
 
   // The point, its height measured as its altitude above the origin's: the
   // layers follow the earth's curve
@@ -417,13 +477,13 @@ export const cloud_at = (
   const detail = float(0).toVar();
   const sampled = float(0).toVar();
   const detail_value = (): F => {
-    if (detail_share) {
-      If(sampled.equal(0).and(detail_share.greaterThan(0)), () => {
+    if (shares) {
+      If(sampled.equal(0).and(shares.greaterThan(0)), () => {
         const at = q
           .mul(nodes.detailTile)
           .add(nodes.detailOrigin) as unknown as V3;
 
-        detail.assign(detail_noise(nodes, at).mul(detail_share));
+        detail.assign(detail_noise(nodes, at).mul(shares));
         sampled.assign(1);
       });
     }
@@ -431,35 +491,75 @@ export const cloud_at = (
     return detail;
   };
 
-  // The density, from the noise lifted by the detail: only where the most
-  // detail could make cloud is it sampled
+  // A layer's water, its droplets going as d^⅔ and its ice as d
+  const deposit = (
+    row: number,
+    base: F,
+    top: F,
+    liquid_share: F,
+    frozen_share: F,
+    channel: "x" | "y" | "z" | null,
+  ) => {
+    const coefficients = table_at(nodes, row, a.sub(base)).toVar();
+    const liquid = coefficients.x.mul(liquid_share);
+    const frozen = coefficients.y.mul(frozen_share);
+    const here = liquid.add(frozen);
+
+    if (channel === "x") water.addAssign(vec3(liquid, 0, 0));
+    else if (channel === "y") water.addAssign(vec3(0, liquid, 0));
+    else if (channel === "z") water.addAssign(vec3(0, 0, liquid));
+    else ice.addAssign(liquid);
+
+    ice.addAssign(frozen);
+
+    if (lit) {
+      up.addAssign(here.mul(top.sub(a).max(0)));
+      down.addAssign(here.mul(a.sub(base).max(0)));
+    }
+  };
+
+  // A layer cut from its noise at an edge, its density shaped by a profile
+  // through it. Near, from the noise lifted by the detail, only sampled
+  // where the most detail could make cloud; far, the mean of what the cut
+  // leaves, the profile being smooth over a billow
   const add = (
     row: number,
     base: F,
     top: F,
-    density_of: (shift: F | number) => F,
+    noise: () => F,
+    edge: F,
+    profile: F | null,
     channel: "x" | "y" | "z" | null,
   ) => {
-    If(density_of(detail_share ? DETAIL_REACH : 0).greaterThan(0), () => {
+    if (mean) {
+      const m = mean_at(nodes, edge).toVar();
+
+      If(m.y.greaterThan(0), () => {
+        deposit(
+          row,
+          base,
+          top,
+          (profile ? m.x.mul(pow(profile, 2 / 3)) : m.x) as F,
+          (profile ? m.y.mul(profile) : m.y) as F,
+          channel,
+        );
+      });
+
+      return;
+    }
+
+    const n = noise().toVar();
+    const density_of = (shift: F | number): F => {
+      const d = saturate(n.add(shift).sub(edge).div(EDGE_SOFTNESS) as F);
+
+      return (profile ? d.mul(profile) : d) as F;
+    };
+
+    If(density_of(shares ? DETAIL_REACH : 0).greaterThan(0), () => {
       const d = density_of(detail_value()).toVar();
 
       If(d.greaterThan(0), () => {
-        const coefficients = table_at(nodes, row, a.sub(base)).toVar();
-        const liquid = coefficients.x.mul(pow(d, 2 / 3));
-        const frozen = coefficients.y.mul(d);
-        const here = liquid.add(frozen);
-
-        if (channel === "x") water.addAssign(vec3(liquid, 0, 0));
-        else if (channel === "y") water.addAssign(vec3(0, liquid, 0));
-        else if (channel === "z") water.addAssign(vec3(0, 0, liquid));
-        else ice.addAssign(liquid);
-
-        ice.addAssign(frozen);
-
-        if (lit) {
-          up.addAssign(here.mul(top.sub(a).max(0)));
-          down.addAssign(here.mul(a.sub(base).max(0)));
-        }
+        deposit(row, base, top, pow(d, 2 / 3) as F, d as F, channel);
       });
     });
   };
@@ -477,16 +577,12 @@ export const cloud_at = (
 
   // density.ts's sheet_density: the cut rising to the noise's peak away from
   // where the sheet saturates first
-  const sheet = (n: F, h: F, cover: F, lid: SheetLid) => {
+  const sheet_edge = (h: F, cover: F, lid: SheetLid): F => {
     const t = threshold(nodes, cover);
     const away =
       lid === "top" ? saturate(h).oneMinus() : saturate(h).mul(2).sub(1).abs();
-    const edge = t.add(float(SHAPE_PEAK).sub(t).mul(away));
 
-    return (shift: F | number): F =>
-      saturate(n.add(shift).sub(edge).div(EDGE_SOFTNESS)).mul(
-        sheet_profile(h),
-      ) as F;
+    return t.add(float(SHAPE_PEAK).sub(t).mul(away)) as F;
   };
 
   // Cumulus
@@ -496,11 +592,6 @@ export const cloud_at = (
   If(
     covers.x.greaterThan(0.001).and(a.greaterThan(base)).and(a.lessThan(top)),
     () => {
-      const n = shape_noise(
-        nodes,
-        nodes.cumulusOrigin,
-        in_tile(nodes.tiles.x as F, 1),
-      );
       const h = a.sub(base).div(top.sub(base).max(1));
       const k = saturate(rest.w.div(TOWER_UPDRAFT_M_S))
         .mul(TOWER_SHAPE - SHALLOW_SHAPE)
@@ -509,14 +600,21 @@ export const cloud_at = (
       const edge = t.add(
         float(SHAPE_PEAK)
           .sub(t)
-          .mul(pow(saturate(h), k)),
+          .mul(pow(saturate(h as F), k)),
       );
 
       add(
         TABLE_ROWS.cumulus,
         base as F,
         top as F,
-        (shift) => saturate(n.add(shift).sub(edge).div(EDGE_SOFTNESS)),
+        () =>
+          shape_noise(
+            nodes,
+            nodes.cumulusOrigin,
+            in_tile(nodes.tiles.x as F, 1),
+          ),
+        edge as F,
+        null,
         "x",
       );
     },
@@ -532,22 +630,20 @@ export const cloud_at = (
       .and(a.greaterThan(deck_base))
       .and(a.lessThan(deck_top)),
     () => {
-      const n = shape_noise(
-        nodes,
-        nodes.stratusOrigin,
-        in_tile(nodes.tiles.y as F, nodes.flatten),
-      );
+      const h = a.sub(deck_base).div(deck_top.sub(deck_base).max(1)) as F;
 
       add(
         TABLE_ROWS.stratus,
         deck_base as F,
         deck_top as F,
-        sheet(
-          n,
-          a.sub(deck_base).div(deck_top.sub(deck_base).max(1)) as F,
-          covers.y as F,
-          "top",
-        ),
+        () =>
+          shape_noise(
+            nodes,
+            nodes.stratusOrigin,
+            in_tile(nodes.tiles.y as F, nodes.flatten),
+          ),
+        sheet_edge(h, covers.y as F, "top"),
+        sheet_profile(h),
         "y",
       );
     },
@@ -563,22 +659,20 @@ export const cloud_at = (
       .and(a.greaterThan(alto_base))
       .and(a.lessThan(alto_top)),
     () => {
-      const n = shape_noise(
-        nodes,
-        nodes.altoOrigin,
-        in_tile(nodes.tiles.z as F, nodes.flatten),
-      );
+      const h = a.sub(alto_base).div(alto_top.sub(alto_base).max(1)) as F;
 
       add(
         TABLE_ROWS.alto,
         alto_base as F,
         alto_top as F,
-        sheet(
-          n,
-          a.sub(alto_base).div(alto_top.sub(alto_base).max(1)) as F,
-          covers.z as F,
-          "none",
-        ),
+        () =>
+          shape_noise(
+            nodes,
+            nodes.altoOrigin,
+            in_tile(nodes.tiles.z as F, nodes.flatten),
+          ),
+        sheet_edge(h, covers.z as F, "none"),
+        sheet_profile(h),
         "z",
       );
     },
@@ -593,23 +687,24 @@ export const cloud_at = (
       .and(a.greaterThan(nodes.cirrusBase))
       .and(a.lessThan(cirrus_top)),
     () => {
-      const u = nodes.upper;
-      const along = q.x.mul(u.x).add(q.z.mul(u.y)).div(CIRRUS_STRETCH);
-      const across = q.z.mul(u.x).sub(q.x.mul(u.y));
-      const at = vec3(along, q.y.mul(nodes.flatten), across).mul(
-        nodes.tiles.w,
-      ) as unknown as V3;
+      const h = a.sub(nodes.cirrusBase).div(nodes.cirrusDepth) as F;
 
       add(
         TABLE_ROWS.cirrus,
         nodes.cirrusBase,
         cirrus_top as F,
-        sheet(
-          shape_noise(nodes, nodes.cirrusOrigin, at),
-          a.sub(nodes.cirrusBase).div(nodes.cirrusDepth) as F,
-          covers.w as F,
-          "none",
-        ),
+        () => {
+          const u = nodes.upper;
+          const along = q.x.mul(u.x).add(q.z.mul(u.y)).div(CIRRUS_STRETCH);
+          const across = q.z.mul(u.x).sub(q.x.mul(u.y));
+          const at = vec3(along, q.y.mul(nodes.flatten), across).mul(
+            nodes.tiles.w,
+          ) as unknown as V3;
+
+          return shape_noise(nodes, nodes.cirrusOrigin, at);
+        },
+        sheet_edge(h, covers.w as F, "none"),
+        sheet_profile(h),
         null,
       );
     },
@@ -625,17 +720,20 @@ export const cloud_at = (
       .and(a.greaterThan(anvil_base))
       .and(a.lessThan(nodes.tropopause)),
     () => {
-      const n = shape_noise(
-        nodes,
-        nodes.stratusOrigin,
-        in_tile(nodes.tiles.y as F, nodes.flatten),
-      );
+      const h = a.sub(anvil_base).div(anvil) as F;
 
       add(
         TABLE_ROWS.anvil,
         anvil_base as F,
         nodes.tropopause,
-        sheet(n, a.sub(anvil_base).div(anvil) as F, float(0.95), "top"),
+        () =>
+          shape_noise(
+            nodes,
+            nodes.stratusOrigin,
+            in_tile(nodes.tiles.y as F, nodes.flatten),
+          ),
+        sheet_edge(h, float(0.95), "top"),
+        sheet_profile(h),
         null,
       );
     },
@@ -652,36 +750,48 @@ export const cloud_at = (
     ).toVar();
 
     If(a.lessThan(from).and(a.greaterThan(nodes.ground)), () => {
-      // Under a cumulus, only where there is cloud at its base to fall from
+      // Under a cumulus, only where there is cloud at its base to fall from:
+      // far off, the share of its base there is
       const under = float(1).toVar();
 
       If(covers.x.greaterThan(0.01).and(covers.x.lessThan(0.99)), () => {
-        const at = vec3(q.x, from.add(1).sub(nodes.altitude), q.z).mul(
-          nodes.tiles.x,
-        ) as unknown as V3;
+        const cut = threshold(nodes, covers.x as F);
 
-        under.assign(
-          saturate(
-            shape_noise(nodes, nodes.cumulusOrigin, at)
-              .sub(threshold(nodes, covers.x as F))
-              .div(EDGE_SOFTNESS),
-          ),
-        );
+        if (mean) {
+          under.assign(mean_at(nodes, cut).y);
+        } else {
+          const at = vec3(q.x, from.add(1).sub(nodes.altitude), q.z).mul(
+            nodes.tiles.x,
+          ) as unknown as V3;
+
+          under.assign(
+            saturate(
+              shape_noise(nodes, nodes.cumulusOrigin, at)
+                .sub(cut)
+                .div(EDGE_SOFTNESS) as F,
+            ),
+          );
+        }
       });
-
-      const shafts = shape_noise(
-        nodes,
-        nodes.rainOrigin,
-        vec3(q.x, q.y.div(6), q.z).mul(nodes.rainTile) as unknown as V3,
-      );
 
       const unshafted = pow(rate, RAIN_EXPONENT)
         .mul(RAIN_COEFFICIENT)
         .mul(under)
         .toVar();
 
-      rain.assign(unshafted.mul(saturate(shafts.mul(1.6).sub(0.2))));
       rain_mean.assign(unshafted.mul(RAIN_SHAFTS_MEAN));
+
+      if (mean) {
+        rain.assign(rain_mean);
+      } else {
+        const shafts = shape_noise(
+          nodes,
+          nodes.rainOrigin,
+          vec3(q.x, q.y.div(6), q.z).mul(nodes.rainTile) as unknown as V3,
+        );
+
+        rain.assign(unshafted.mul(saturate(shafts.mul(1.6).sub(0.2) as F)));
+      }
     });
   });
 

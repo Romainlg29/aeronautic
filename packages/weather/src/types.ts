@@ -42,13 +42,22 @@ export type WeatherQuality = {
   /** The clouds' resolution against the frame's, per axis */
   resolutionScale: number;
 
-  /** The most steps a ray takes */
+  /** The most steps a ray takes to `shapeM` */
   steps: number;
+
+  /** The most it takes past `shapeM`, to `rangeM` */
+  farSteps: number;
 
   /** The shortest step, metres */
   minStepM: number;
 
-  /** How far the clouds are drawn to, metres */
+  /**
+   * How far the clouds are drawn as themselves, metres: past it, as their
+   * mean, from the far map, lit as layers
+   */
+  shapeM: number;
+
+  /** How far the clouds are drawn to at all, metres */
   rangeM: number;
 
   /** How near the detail noise wears the clouds' edges, metres */
@@ -57,6 +66,10 @@ export type WeatherQuality = {
   /** The weather map's texels a side, and how much of the air it spans */
   mapSize: number;
   mapExtentM: number;
+
+  /** The far map's, for the clouds past `shapeM` */
+  farMapSize: number;
+  farMapExtentM: number;
 
   /** The share of each frame's ray kept over the history: lower is smoother */
   blend: number;
@@ -79,43 +92,73 @@ export const STEPS_FROM_M = 100;
  * missed by the next's, flickering as they go by.
  * @param range_m How far the ray goes, metres
  * @param share The longest step, as a share of its distance
+ * @param start_m Where it starts, metres: by default at the eye
  * @returns The steps
  */
-export const steps_to = (range_m: number, share: number): number =>
+export const steps_to = (range_m: number, share: number, start_m = 0): number =>
   Math.ceil(
-    Math.log((range_m + STEPS_FROM_M) / STEPS_FROM_M) / Math.log(1 + share),
+    Math.log((range_m + STEPS_FROM_M) / (start_m + STEPS_FROM_M)) /
+      Math.log(1 + share),
   );
+
+// The far steps' share of their distance. Past the clouds' shapes their mean
+// is smooth over the far map's texels, kilometres, and a step 6 % of its
+// distance long still finds a storm there two or three times
+const FAR_SHARE = 0.06;
+
+// How far a cloud is seen: over the horizon, √(2 R h) from the eye and as
+// far again from the cloud's top. From the 13 km the examples fly to, to a
+// storm's top as high, some 800 km; from a cruise's 11 km to a cumulus's
+// 2 km top, 535 km. The far map spans the range on every side, and the fade
+// at its edge past it
+const FAR_EXTENT = 2.4;
+
+// Each quality's `shapeM` is inside its near map, short of where its edge
+// begins to fade, 0.88 of its half-width: the clouds' shapes never thin out
+// before they hand over to their mean
 
 export const WEATHER_QUALITY: Record<WeatherQualityName, WeatherQuality> = {
   low: {
     resolutionScale: 0.35,
     // A step at most 5 % of its distance: 150 m at 3 km
     steps: steps_to(60_000, 0.05),
+    farSteps: steps_to(300_000, FAR_SHARE, 60_000),
     minStepM: 8,
-    rangeM: 60_000,
+    shapeM: 60_000,
+    rangeM: 300_000,
     detailM: 4000,
     mapSize: 192,
     mapExtentM: 144_000,
+    farMapSize: 160,
+    farMapExtentM: 300_000 * FAR_EXTENT,
     blend: 0.08,
   },
   medium: {
     resolutionScale: 0.5,
     steps: steps_to(80_000, 0.04),
+    farSteps: steps_to(500_000, FAR_SHARE, 80_000),
     minStepM: 5,
-    rangeM: 80_000,
+    shapeM: 80_000,
+    rangeM: 500_000,
     detailM: 8000,
     mapSize: 256,
     mapExtentM: 192_000,
+    farMapSize: 224,
+    farMapExtentM: 500_000 * FAR_EXTENT,
     blend: 0.1,
   },
   high: {
     resolutionScale: 0.6,
     steps: steps_to(120_000, 0.03),
+    farSteps: steps_to(800_000, FAR_SHARE, 120_000),
     minStepM: 3,
-    rangeM: 120_000,
+    shapeM: 120_000,
+    rangeM: 800_000,
     detailM: 16_000,
     mapSize: 384,
     mapExtentM: 288_000,
+    farMapSize: 352,
+    farMapExtentM: 800_000 * FAR_EXTENT,
     blend: 0.12,
   },
 };
